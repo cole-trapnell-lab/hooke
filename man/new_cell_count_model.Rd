@@ -4,7 +4,14 @@
 \alias{new_cell_count_model}
 \title{Create a new cell_count_model object.}
 \usage{
-new_cell_count_model(ccs, model_formula_str, penalty_matrix = NULL)
+new_cell_count_model(
+  ccs,
+  model_formula_str,
+  penalty_matrix = NULL,
+  whitelist = NULL,
+  blacklist = NULL,
+  ...
+)
 }
 \arguments{
 \item{ccs}{A Hooke cell_count_set object.}

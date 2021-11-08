@@ -4,7 +4,12 @@
 \alias{collect_pln_graph_edges}
 \title{Orient graph edges from a PLNnetwork using a contrast between conditions}
 \usage{
-collect_pln_graph_edges(ccm, cond_b_vs_a_tbl, log_abundance_thresh = 1 - 5)
+collect_pln_graph_edges(
+  ccm,
+  umap_centers,
+  cond_b_vs_a_tbl,
+  log_abundance_thresh = 1 - 5
+)
 }
 \arguments{
 \item{ccm}{A cell_count_model}

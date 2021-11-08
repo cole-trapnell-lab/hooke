@@ -34,7 +34,7 @@ cds <- function( ccm ) {
 centroids <- function(ccs, reduction_method="UMAP") {
   # TODO: checks that reduction_method is valid, exists in cds, etc.
 
-  coord_matrix = reducedDims(cds(ccm))[[reduction_method]] %>% as.data.frame
+  coord_matrix = reducedDims(ccs@cds)[[reduction_method]] %>% as.data.frame
   grp_assign = ccs@metadata[["cell_group_assignments"]]
   grp_assign = grp_assign %>% dplyr::select(cell_group)
   coord_matrix = cbind(grp_assign, coord_matrix[row.names(grp_assign),])

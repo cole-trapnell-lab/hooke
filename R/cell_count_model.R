@@ -201,9 +201,9 @@ new_cell_count_model <- function(ccs, model_formula_str, penalty_matrix = NULL, 
 
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs),
                                       covariates = colData(ccs) %>% as.data.frame,
-                                      offset = "none")#size_factors(ccs))
+                                      offset = size_factors(ccs))
 
-  model_formula_str = paste("Abundance", model_formula_str)
+  model_formula_str = paste("Abundance", model_formula_str, " + offset(log(Offset))")
   model_formula = as.formula(model_formula_str)
   #pln_data <- as.name(deparse(substitute(pln_data)))
 

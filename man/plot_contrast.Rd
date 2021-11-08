@@ -9,7 +9,6 @@ plot_contrast(
   cond_b_vs_a_tbl,
   log_abundance_thresh = -5,
   scale_shifts_by = c("receiver", "sender", "none"),
-  cell_group = "cluster",
   edge_size = 2,
   cell_size = 1
 )
