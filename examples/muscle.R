@@ -31,8 +31,8 @@ ccm  = new_cell_count_model(ccs,
                             model_formula_str = "~timepoint + gene_target")
 
 
-cond_a = estimate_abundances(ccm, data.frame(timepoint="18", gene_target="ctrl-inj"))
-cond_b = estimate_abundances(ccm, data.frame(timepoint="24", gene_target="ctrl-inj"))
+cond_a = estimate_abundances(ccm, tibble::tibble(timepoint="18", gene_target="ctrl-inj"))
+cond_b = estimate_abundances(ccm, tibble::tibble(timepoint="24", gene_target="ctrl-inj"))
 #plot_abundance_shift(meso_cds, best_model_umap, umap_centers, time_a, time_b, log_abundance_thresh=-1, scale_shifts_by="receiver", edge_size=2)
 
 cond_b_vs_a_tbl = compare_abundances(ccm, cond_a, cond_b)
@@ -51,8 +51,8 @@ ccm  = new_cell_count_model(ccs,
                             base_penalty=1)
 
 
-cond_a = estimate_abundances(ccm, tibble(timepoint="18", gene_target="ctrl-inj"))
-cond_b = estimate_abundances(ccm, tibble(timepoint="24", gene_target="ctrl-inj"))
+cond_a = estimate_abundances(ccm, tibble::tibble(timepoint="18", gene_target="ctrl-inj"))
+cond_b = estimate_abundances(ccm, tibble::tibble(timepoint="24", gene_target="ctrl-inj"))
 #plot_abundance_shift(meso_cds, best_model_umap, umap_centers, time_a, time_b, log_abundance_thresh=-1, scale_shifts_by="receiver", edge_size=2)
 
 cond_b_vs_a_tbl = compare_abundances(ccm, cond_a, cond_b)
@@ -60,8 +60,8 @@ cond_b_vs_a_tbl = compare_abundances(ccm, cond_a, cond_b)
 plot_contrast(ccm, cond_b_vs_a_tbl)
 
 
-cond_a = estimate_abundances(ccm, tibble(timepoint="24", gene_target="ctrl-inj"))
-cond_b = estimate_abundances(ccm, tibble(timepoint="24", gene_target="tbx16"))
+cond_a = estimate_abundances(ccm, tibble::tibble(timepoint="24", gene_target="ctrl-inj"))
+cond_b = estimate_abundances(ccm, tibble::tibble(timepoint="24", gene_target="tbx16"))
 #plot_abundance_shift(meso_cds, best_model_umap, umap_centers, time_a, time_b, log_abundance_thresh=-1, scale_shifts_by="receiver", edge_size=2)
 
 cond_b_vs_a_tbl = compare_abundances(ccm, cond_a, cond_b)
