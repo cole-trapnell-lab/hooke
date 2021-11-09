@@ -287,8 +287,8 @@ new_cell_count_model <- function(ccs, model_formula_str, penalty_matrix = NULL, 
 #' @export
 select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0)
 {
-  best_model <- PLNmodels::getBestModel(pln_model, criterion)
-  best_model <- PLNmodels::getModel(pln_model, var=best_model$penalty * sparsity_factor)
+  best_model <- PLNmodels::getBestModel(ccm@model_family, criterion)
+  best_model <- PLNmodels::getModel(ccm@model_family, var=best_model$penalty * sparsity_factor)
   ccm@best_model = best_model
   return(ccm)
 }
