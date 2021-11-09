@@ -37,14 +37,21 @@ plot_contrast <- function(ccm,
       dplyr::mutate(flow_factor = -pmin(0, pcor),
              total_weight = sum(flow_factor),
              scaled_weight  = flow_factor / total_weight)
+    undirected_edge_df = undirected_edge_df %>%
+      dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
   }else if (scale_shifts_by == "receiver"){
     directed_edge_df = directed_edge_df %>%
       dplyr::group_by(from) %>%
       dplyr::mutate(flow_factor = -pmin(0, pcor),
              total_weight = sum(flow_factor),
              scaled_weight  = flow_factor / total_weight)
+    undirected_edge_df = undirected_edge_df %>%
+      dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
   }else{
-
+    directed_edge_df = directed_edge_df %>%
+      dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
+    undirected_edge_df = undirected_edge_df %>%
+      dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
   }
 
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
@@ -106,8 +113,9 @@ plot_contrast <- function(ccm,
                  aes(x = umap_to_1,
                      y = umap_to_2,
                      xend=umap_from_1,
-                     yend = umap_from_2,),
-                 size=edge_size / 4,
+                     yend = umap_from_2,
+                     size=edge_size * scaled_weight),
+                 #size=edge_size / 4,
                  color="lightgray") +
     geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
                  aes(x = umap_to_1,
