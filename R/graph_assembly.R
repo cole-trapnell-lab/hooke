@@ -40,6 +40,19 @@ collect_pln_graph_edges <- function(ccm,
       from_delta_log_abund < 0 & to_delta_log_abund < 0 & pcor < 0 ~ "undirected",
       TRUE ~ "hidden"
     ))
+
+  # Fix the edges so all directed edges are directed_from_to:
+  backwards_edges = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type == "directed_to_from")
+  ok_edges = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type != "directed_to_from")
+
+  be_colnames = colnames(backwards_edges)
+  be_colnames = unlist(lapply(be_colnames, stringr::str_replace, "to", "from"))
+  from_cols = grepl("from", colnames(backwards_edges))
+  be_colnames[from_cols] = unlist(lapply(be_colnames[from_cols], stringr::str_replace, "from", "to"))
+  colnames(backwards_edges) = be_colnames
+  backwards_edges$edge_type = "directed_from_to"
+  backwards_edges = backwards_edges[colnames(ok_edges)]
+  corr_edge_coords_umap_delta_abund = rbind(ok_edges, backwards_edges)
   return (corr_edge_coords_umap_delta_abund)
 }
 
