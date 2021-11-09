@@ -59,7 +59,7 @@ meso_ccm = new_cell_count_model(meso_ccs,
 
 plot(meso_ccm@best_model, output = "corrplot")
 
-coef(meso_ccm@best_model)
+
 
 # do all combinations of contrasts --------------------------------------------
 
@@ -195,7 +195,8 @@ calc_max_flow <- function(edges, source, target) {
                   "umap_to_2"="umap_from_2") %>% 
     mutate(flow = -flow)
   max_flow_edge_df = rbind(filter(new_pos_edge_coords_df, flow >=0), 
-                           switch_dir_df)
+                           switch_dir_df) %>%
+                     filter(flow > 0)
   return(max_flow_edge_df)
   
 }
@@ -204,7 +205,7 @@ max_flow_edge_df = calc_max_flow(pos_edge_coords_df, source = "4", target = "1")
 
 
 # find positive correlations
-pos_edge_coords_df = corr_edge_coords_umap_delta_abund %>% filter(pcor > 0 )
+pos_edge_coords_df = corr_edge_coords_umap_delta_abund_18_24 %>% filter(pcor > 0 )
 
 plot_cells(meso_18_24_cds, color_cells_by = "cluster")
 
@@ -238,7 +239,7 @@ ggplot(data = max_flow_edge_df %>% arrange(-flow) %>% head(10)) +
   monocle3:::monocle_theme_opts() 
 
 
-# cMST ------------------------------------------------------------------------
+# MST ------------------------------------------------------------------------
 
 
 calc_mst <- function(edges) {
@@ -251,22 +252,106 @@ calc_mst <- function(edges) {
 
 mst_df <- calc_mst(pos_edge_coords_df)
 
-bp + 
-  geom_segment(data = mst_df, 
-    aes(x = umap_to_1,
-        y = umap_to_2,
-        xend=(umap_to_1+umap_from_1)/2,
-        yend = (umap_to_2+umap_from_2)/2),
-    color="black",
-    linejoin='mitre',
-    arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))+
-  geom_segment(data = mst_df, 
-    aes(x = umap_to_1,
-        y = umap_to_2,
-        xend=umap_from_1,
-        yend = umap_from_2, 
-        color=flow), 
-    color="black") + 
-  monocle3:::monocle_theme_opts() 
+plot_edges <- function(df, bp) {
+  
+  show(
+    # bp +
+    ggplot(data =df)+
+    geom_segment(aes(x = umap_to_1,
+                     y = umap_to_2,
+                     xend=(umap_to_1+umap_from_1)/2,
+                     yend = (umap_to_2+umap_from_2)/2),
+                 color="black",
+                 linejoin='mitre',
+                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))+
+    geom_segment( aes(x = umap_to_1,
+                     y = umap_to_2,
+                     xend=umap_from_1,
+                     yend = umap_from_2, 
+                     color=flow), 
+                 color="black") + 
+    monocle3:::monocle_theme_opts() )
+}
 
 
+
+
+
+# try with paga also ----------------------------------------------------------
+
+paga_graph = hooke:::get_paga_graph(meso_ccs@cds)
+edge_whitelist = igraph::as_data_frame(paga_graph)
+edge_blacklist = igraph::as_data_frame(igraph::complementer(paga_graph))
+
+meso_ccm_paga  = new_cell_count_model(meso_ccs,
+                                      model_formula_str = "~ as.factor(timepoint)",
+                                      whitelist=edge_whitelist,
+                                      base_penalty=1)
+
+plot(meso_ccm_paga@best_model, output = "corrplot")
+
+time_18_paga = estimate_abundances(meso_ccm_paga, data.frame(timepoint="18"))
+time_20_paga = estimate_abundances(meso_ccm_paga, data.frame(timepoint="20"))
+time_22_paga = estimate_abundances(meso_ccm_paga, data.frame(timepoint="22"))
+time_24_paga = estimate_abundances(meso_ccm_paga, data.frame(timepoint="24"))
+
+
+# large neg combo -------------------------------------------------------------
+
+cond_18_vs_24_tbl_paga = compare_abundances(meso_ccm_paga, time_18_paga, time_24_paga)
+plot_contrast(meso_ccm_paga, cond_18_vs_24_tbl_paga)
+
+# all combos in between ---------------------------------------------------------
+
+cond_18_vs_20_tbl_paga = compare_abundances(meso_ccm_paga, time_18_paga, time_20_paga)
+plot_contrast(meso_ccm_paga, cond_18_vs_20_tbl_paga)
+
+cond_18_vs_22_tbl_paga = compare_abundances(meso_ccm_paga, time_18_paga, time_22_paga)
+plot_contrast(meso_ccm_paga, cond_18_vs_22_tbl_paga)
+
+cond_20_vs_22_tbl_paga = compare_abundances(meso_ccm_paga, time_20_paga, time_22_paga)
+plot_contrast(meso_ccm_paga, cond_20_vs_22_tbl_paga)
+
+cond_20_vs_24_tbl_paga = compare_abundances(meso_ccm_paga, time_20_paga, time_24_paga)
+plot_contrast(meso_ccm_paga, cond_20_vs_24_tbl_paga)
+
+cond_22_vs_24_tbl_paga = compare_abundances(meso_ccm_paga, time_22_paga, time_24_paga)
+plot_contrast(meso_ccm_paga, cond_22_vs_24_tbl_paga)
+
+
+corr_edge_coords_umap_delta_abund_18_24_paga = collect_pln_graph_edges(meso_ccm_paga,
+                                                                  umap_centers,
+                                                                  cond_18_vs_24_tbl_paga,
+                                                                  log_abundance_thresh)
+
+
+corr_edge_coords_umap_delta_abund_18_20_paga = collect_pln_graph_edges(meso_ccm_paga,
+                                                                  umap_centers,
+                                                                  cond_18_vs_20_tbl_paga,
+                                                                  log_abundance_thresh)
+
+corr_edge_coords_umap_delta_abund_18_22_paga = collect_pln_graph_edges(meso_ccm_paga,
+                                                                       umap_centers,
+                                                                       cond_18_vs_22_tbl_paga,
+                                                                       log_abundance_thresh)
+
+
+corr_edge_coords_umap_delta_abund_20_22_paga = collect_pln_graph_edges(meso_ccm_paga,
+                                                                       umap_centers,
+                                                                       cond_20_vs_22_tbl_paga,
+                                                                       log_abundance_thresh)
+
+corr_edge_coords_umap_delta_abund_20_24_paga = collect_pln_graph_edges(meso_ccm_paga,
+                                                                       umap_centers,
+                                                                       cond_20_vs_24_tbl_paga,
+                                                                       log_abundance_thresh)
+
+pos_edge_df = corr_edge_coords_umap_delta_abund_18_20_paga %>% 
+  filter(pcor > 0) 
+
+pos_edge_df %>% arrange(-pcor) %>% head(5)
+calc_max_flow(pos_edge_df, source = "8", target = "9") %>% 
+  # filter(flow > 0.1) %>% 
+  plot_edges() 
+  
+  
