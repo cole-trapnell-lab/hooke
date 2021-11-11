@@ -70,7 +70,7 @@ new_cell_count_set <- function(cds,
                                cell_metadata = NULL) {
 
   coldata_df = colData(cds) %>% tibble::as_tibble()
-  coldata_df$cluster = clusters(cds)
+  coldata_df$cluster = monocle3::clusters(cds)
   coldata_df$partition = partitions(cds)
 
   coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = cell_group)
@@ -323,8 +323,8 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     return(out)
   }
 
-  penalty_matrix = base_penalty * (1 + get_rho_mat(dist_matrix, distance_parameter=1, s=2))
-
+  penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, distance_parameter=1, s=2))
+  
   # FIXME: This might only actually work when grouping cells by clusters and cluster names are
   # integers. We should make sure this generalizes when making white/black lists of cell groups
   # by type or other groupings
@@ -339,7 +339,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     penalty_matrix[as.matrix(blacklist[,c(2,1)])] = max_penalty
   }
 
-  # TODO: add support for whitelisting and blacklistint
+  # TODO: add support for whitelisting and blacklisting
   #qplot(as.numeric(dist_matrix), as.numeric(out))
   return(penalty_matrix)
 }
