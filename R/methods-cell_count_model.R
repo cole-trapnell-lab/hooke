@@ -38,6 +38,7 @@ centroids <- function(ccs, reduction_method="UMAP") {
   grp_assign = ccs@metadata[["cell_group_assignments"]]
   grp_assign = grp_assign %>% dplyr::select(cell_group)
   coord_matrix = cbind(grp_assign, coord_matrix[row.names(grp_assign),])
-  centroid_coords = aggregate(.~cell_group, data=coord_matrix, FUN=mean)
+  centroid_coords = aggregate(.~cell_group, data=coord_matrix, FUN=mean) %>% 
+    column_to_rownames("cell_group")
   return (centroid_coords)
 }
