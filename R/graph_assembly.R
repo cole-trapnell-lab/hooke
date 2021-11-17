@@ -50,7 +50,9 @@ collect_pln_graph_edges <- function(ccm,
   from_cols = grepl("from", colnames(backwards_edges))
   be_colnames[from_cols] = unlist(lapply(be_colnames[from_cols], stringr::str_replace, "from", "to"))
   colnames(backwards_edges) = be_colnames
-  backwards_edges$edge_type = "directed_from_to"
+  if (nrow(backwards_edges) != 0) {
+    backwards_edges$edge_type = "directed_from_to"
+  }
   backwards_edges = backwards_edges[colnames(ok_edges)]
   corr_edge_coords_umap_delta_abund = rbind(ok_edges, backwards_edges)
   return (corr_edge_coords_umap_delta_abund)

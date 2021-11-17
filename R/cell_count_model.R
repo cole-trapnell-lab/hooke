@@ -70,8 +70,9 @@ new_cell_count_set <- function(cds,
                                cell_metadata = NULL) {
 
   coldata_df = colData(cds) %>% tibble::as_tibble()
-  coldata_df$cluster = monocle3::clusters(cds)
-  coldata_df$partition = partitions(cds)
+  # current commented out bc mess w projection clusters
+  # coldata_df$cluster = monocle3::clusters(cds)
+  # coldata_df$partition = partitions(cds)
 
   coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = cell_group)
 
@@ -302,10 +303,10 @@ select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0)
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
 init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
   cell_group_centroids = centroids(ccs)
-  dist_matrix = as.matrix(dist(cell_group_centroids, method = "euclidean", upper=T, diag = T))
+  dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
 
-  row.names(dist_matrix) <- row.names(cell_group_centroids)
-  colnames(dist_matrix) <- row.names(cell_group_centroids)
+  row.names(dist_matrix) <- cell_group_centroids$cell_group
+  colnames(dist_matrix) <- cell_group_centroids$cell_group
 
   # TODO: do I need this? Probably the caller can and should do this.
   #dist_matrix = dist_matrix[colnames(data$Abundance), colnames(data$Abundance)]
