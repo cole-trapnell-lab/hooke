@@ -1,6 +1,10 @@
 library(monocle3)
 library(hooke)
 setwd("~/OneDrive/UW/Trapnell/hooke/")
+# devtools::load_all("~/OneDrive/UW/Trapnell/hooke/")
+# actually i should switch the branch of this
+# devtools::load_all("~/OneDrive/UW/Trapnell/bin/monocle3-dev/")
+# devtools::load_all("~/OneDrive/UW/Trapnell/bin/monocle3-dev-test/")
 
 # get WT time series data -----------------------------------------------------
  
@@ -17,12 +21,19 @@ setwd("~/OneDrive/UW/Trapnell/hooke/")
 # meso_time_cds = ref_cds[,colData(ref_cds)$cell_type_broad %in% meso_cell_types]
 # meso_time_cds = meso_time_cds[, !is.na(meso_time_cds$timepoint)]
 # 
-# meso_time_cds = preprocess_cds(meso_time_cds, num_dim = 50) %>%
-#             align_cds(residual_model_formula_str = "~log.n.umi") %>%
-#             reduce_dimension(max_components = 3, preprocess_method = "Aligned")
-# 
-# meso_time_cds = cluster_cells(meso_time_cds, random_seed = 42, resolution = 1e-4)
-#  
+meso_time_cds = preprocess_cds(meso_time_cds, num_dim = 50) %>%
+            align_cds(residual_model_formula_str = "~log.n.umi") %>%
+            reduce_dimension(max_components = 3, 
+                             preprocess_method = "Aligned", 
+                             build_nn_index = T)
+ 
+meso_time_cds = cluster_cells(meso_time_cds, random_seed = 42, resolution = 1e-4)
+# meso_time_cds@preprocess_aux$gene_loadings = NULL
+# meso_time_cds@preprocess_aux$prop_var_expl = NULL
+# meso_time_cds@preprocess_aux$beta = NULL
+
+# save_transform_models(meso_time_cds, "../my_R_objects/ref-meso-all-timepoint-models-new")
+ 
 # colData(meso_time_cds)$cluster = monocle3::clusters(meso_time_cds)
 # colData(meso_time_cds)$partition = partitions(meso_time_cds)
 # colData(meso_time_cds)$Size_Factor = size_factors(meso_time_cds)
@@ -34,21 +45,30 @@ meso_time_cds <- readRDS("~/OneDrive/UW/Trapnell/gap-notebook-ct-1/my_R_objects/
 
 # I'm just going to use timepoints between 18 and 24 hpf here for now ---------
 
-meso_18_24_cds <- meso_time_cds[,colData(meso_time_cds)$timepoint <= 24]
+# meso_18_24_cds <- meso_time_cds[,colData(meso_time_cds)$timepoint <= 24]
+# 
+# meso_18_24_cds = preprocess_cds(meso_18_24_cds, num_dim = 50) %>%
+#               align_cds(residual_model_formula_str = "~log.n.umi") %>%
+#               reduce_dimension(max_components = 3, 
+#                                preprocess_method = "Aligned",
+#                                build_nn_index = T)
+# 
+# save_transform_models(meso_18_24_cds, "../my_R_objects/ref-meso-18-24-models")
+# 
+# meso_18_24_cds = cluster_cells(meso_18_24_cds, random_seed = 42, resolution = 1e-4)
+# 
+# colData(meso_18_24_cds)$cluster = monocle3::clusters(meso_18_24_cds)
+# 
+# plot_cells(meso_18_24_cds) %>% ggsave(filename = "examples/meso_18_24_by_cluster.png")
 
-meso_18_24_cds = preprocess_cds(meso_18_24_cds, num_dim = 50) %>%
-              align_cds(residual_model_formula_str = "~log.n.umi") %>%
-              reduce_dimension(max_components = 3, preprocess_method = "Aligned")
+# saveRDS(meso_18_24_cds, "../gap-notebook-ct-1/my_R_objects/meso_18_24_cds.rds")
 
-meso_18_24_cds = cluster_cells(meso_18_24_cds, random_seed = 42, resolution = 1e-4)
+meso_18_24_cds <- readRDS("../gap-notebook-ct-1/my_R_objects/meso_18_24_cds.rds")
 
-colData(meso_18_24_cds)$cluster = monocle3::clusters(meso_18_24_cds)
 
-saveRDS(meso_18_24_cds)
+# project the mutant data into wt space and transfer cluster labels -----------
 
-plot_cells(meso_18_24_cds) %>% ggsave(filename = "examples/meso_18_24_by_cluster.png")
 
-saveRDS(meso_18_24_cds, "../gap-notebook-ct-1/my_R_objects/meso_18_24_cds.rds")
 
 
 # run hooke -------------------------------------------------------------------
@@ -108,10 +128,42 @@ plot_contrast(meso_ccm, cond_22_vs_24_tbl)
 # -----------------------------------------------------------------------------
 
 umap_centers = centroids(meso_ccm@ccs)
+
+
+
+# create a matrix Z
+# zero out the values in the WT pcor matrix 
+# that aren't included in the green edges
+
+# zero out bottom half 
+zero_out_pcor_matrix <- function(cmm, green_edges=NULL) {
+  
+  pcor_matrix = as.matrix(cmm@best_model$latent_network(type="partial_cor"))
+  
+  if (!is.null(green_edges)) {
+    pcor_matrix = pcor_matrix %>%
+      as.data.frame() %>%
+      rownames_to_column("from") %>%
+      pivot_longer(-"from", names_to = "to") %>%
+      mutate(value = case_when(
+        from %in% green_edges$from & to %in% green_edges$to ~ value,
+        TRUE ~ 0
+      )) %>%
+      pivot_wider(names_from = "to", values_from = value) %>%
+      column_to_rownames("from")
+  } else {
+    pcor_matrix[lower.tri(pcor_matrix)] = 0
+  }
+  
+  
+  return(pcor_matrix)
+}
+
 return_baseplot <- function(ccm, 
                             cond_b_vs_a_tbl, 
                             cell_size=1,
-                            edge_size=2) {
+                            edge_size=2, 
+                            legend_position="none") {
   
   
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
@@ -125,12 +177,12 @@ return_baseplot <- function(ccm,
                              cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                              by=c("cell_group"="cell_group"))
   
-  geom_segment(data = pos_edge_coords_df,
-               aes(x = umap_to_1,
-                   y = umap_to_2,
-                   xend=umap_from_1,
-                   yend = umap_from_2),
-               color="black")
+  # geom_segment(data = pos_edge_coords_df,
+  #              aes(x = umap_to_1,
+  #                  y = umap_to_2,
+  #                  xend=umap_from_1,
+  #                  yend = umap_from_2),
+  #              color="black")
   
   gp = ggplot() +
     geom_point(
@@ -159,10 +211,11 @@ return_baseplot <- function(ccm,
       low = "#122985",
       mid = "white",
       high = "red4",
-      na.value = "white"
+      na.value = "white",
+      # limits=c(-3,3)
     ) +
     theme_void() +
-    theme(legend.position = "none") +
+    theme(legend.position = legend_position) +
     monocle3:::monocle_theme_opts() 
   return(gp)
 }
@@ -511,7 +564,7 @@ corr_edge_coords_umap_delta_abund_18_24_paga = collect_pln_graph_edges(meso_ccm_
 neg_edges = corr_edge_coords_umap_delta_abund_18_24_paga %>% 
   filter(edge_type!="undirected")
 
-edge_4_to_9_df =filter(corr_edge_coords_umap_delta_abund_18_24_paga,from == "4", to == "9")
+edge_4_to_9_df =filter(corr_edge_coords_umap_delta_abund_18_24_paga,from == "4", to == "")
 
 # plot this only 
 bp_18_24_paga = return_baseplot(meso_ccm_paga,cond_18_vs_24_tbl_paga)
@@ -609,11 +662,15 @@ get_pos_pcor_edges <- function(umap_centers,
                                gamma = 1, 
                                sum_weights = F) {
   
-  dist_df = dist(umap_centers, method = "euclidean", upper=T, diag = T) %>% 
+  row.names(umap_centers) <- umap_centers$cell_group
+  
+  dist_df = dist(umap_centers[,-1], method = "euclidean", upper=T, diag = T) %>% 
     as.matrix() %>% 
     as.data.frame() %>% 
     rownames_to_column("from") %>% 
     pivot_longer(-from, names_to = "to", values_to = "z")
+  
+  
   
   pos_edge_df = corr_edge_coords_umap_delta_abund %>% 
     filter(pcor > 0)  %>% 
@@ -633,7 +690,6 @@ get_pos_pcor_edges <- function(umap_centers,
   return(pos_edge_df)
   
 }
-
 
 
 plot_shortest_path <- function(ccm, 
@@ -762,22 +818,34 @@ plot_shortest_path(meso_ccm_paga, cond_18_vs_24_tbl_paga, "6", "10",
 
 # collate green edges ---------------------------------------------------------
 
-green_edges = lapply(1:nrow(neg_edges), function(i) {
-  source = neg_edges[i,]$from
-  target = neg_edges[i,]$to
-  get_pos_pcor_edges(umap_centers, 
-                     corr_edge_coords_umap_delta_abund_18_24_paga, 
-                     alpha = alpha, 
-                     beta = beta, 
-                     gamma = gamma, 
-                     sum_weights=T) %>% 
-  calc_shortest_path(source, target) %>% select(from,to,weight)
-})
 
-green_edge_df = do.call(rbind,green_edges) %>% 
-                group_by(from,to) %>% 
-                summarise(weight=sum(weight), n=n()) %>% 
-                get_umap_coords(umap_centers)
+collate_green_edges <- function(corr_edge_coords_umap_delta_abund, umap_centers) {
+  
+  neg_edges = corr_edge_coords_umap_delta_abund %>% filter(edge_type!="undirected")
+  
+  if (nrow(neg_edges) > 0) {
+    green_edges = lapply(1:nrow(neg_edges), function(i) {
+      source = neg_edges[i,]$from
+      target = neg_edges[i,]$to
+      get_pos_pcor_edges(umap_centers, 
+                         corr_edge_coords_umap_delta_abund, 
+                         alpha = 1, 
+                         beta = 1, 
+                         gamma = 1, 
+                         sum_weights=T) %>% 
+        calc_shortest_path(source, target) %>% select(from,to,weight)
+    })
+    
+    green_edge_df = do.call(rbind,green_edges) %>% 
+      group_by(from,to) %>% 
+      summarise(weight=sum(weight), n=n()) %>% 
+      get_umap_coords(umap_centers)
+    return(green_edge_df)  
+  }
+  
+}
+
+green_edge_df = collate_green_edges(corr_edge_coords_umap_delta_abund_18_24_paga, umap_centers)
 
 # plot just the green lines 
 green_line_plot = bp_18_24_paga + 
@@ -800,7 +868,7 @@ green_edge_blacklist = igraph::graph_from_data_frame(green_edge_df) %>%
 meso_ccm_green  = new_cell_count_model(meso_ccs,
                                       model_formula_str = "~ as.factor(timepoint)",
                                       whitelist=green_edge_df,
-                                      blacklist = green_edge_blacklist,
+                                      # blacklist = green_edge_blacklist,
                                       base_penalty=25)
 
 
@@ -811,8 +879,87 @@ time_24_green = estimate_abundances(meso_ccm_green, data.frame(timepoint="24"))
 
 cond_18_vs_24_tbl_green = compare_abundances(meso_ccm_green, time_18_green, time_24_green)
 plot_contrast(meso_ccm_green, cond_18_vs_24_tbl_green)
+# plot_contrast(meso_ccm_paga, cond_18_vs_24_tbl_paga)
+
+# iterate over multiple contrasts ---------------------------------------------
+
+timepoints = unique(colData(meso_18_24_cds)$timepoint) %>% sort()
+timepoint_combos = combn(timepoints, 2) %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  rename("t1"=V1, "t2"=V2)
+i = 1
+
+
+greenedges = lapply(1:nrow(timepoint_combos), function(i) {
+  t1 = timepoint_combos[i,]$t1
+  t2 = timepoint_combos[i,]$t2
+  
+  time_t1 = estimate_abundances(meso_ccm_paga, data.frame(timepoint=t1))
+  time_t2 = estimate_abundances(meso_ccm_paga, data.frame(timepoint=t2))
+  
+  cond_t1_vs_t2_tbl = compare_abundances(meso_ccm_paga, time_t1, time_t2)
+  
+  corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(meso_ccm_paga,
+                                                              umap_centers,
+                                                              cond_t1_vs_t2_tbl,
+                                                              log_abundance_thresh=-5)
+  
+  green_edge_df = collate_green_edges(corr_edge_coords_umap_delta_abund, 
+                                      umap_centers) %>% mutate(timepoint_x=t1, timepoint_y=t2)
+  
+  green_edge_df
+  
+})
+greenedges_time_df = do.call(rbind,greenedges)
+
+total_green_edges = greenedges_time_df %>% 
+  group_by(from,to) %>% 
+  summarise(total_weight = sum(weight), total_n = sum(n)) %>% 
+  get_umap_coords(umap_centers)
+
+
+comb_green_edge_plot = bp_18_24_paga + 
+  geom_segment(data = total_green_edges, 
+               aes(x = umap_from_1,
+                   y = umap_from_2,
+                   xend=umap_to_1,
+                   yend = umap_to_2, 
+                   size = total_weight),
+               color="green4") 
+
+# ggsave(comb_green_edge_plot, filename="examples/muscle_time_plots/comb_green_edge_concat.png")
+
+# add comb green in whitelist 
+
+total_green_edge_blacklist = igraph::graph_from_data_frame(total_green_edges) %>% 
+  igraph::complementer() %>% 
+  igraph::as_data_frame()
+
+
+meso_ccm_green_total = new_cell_count_model(meso_ccs,
+                                       model_formula_str = "~ as.factor(timepoint)",
+                                       whitelist = total_green_edges,
+                                       # blacklist = total_green_edge_blacklist,
+                                       base_penalty=25)
+
+plot(meso_ccm_green_total@best_model, output="corrplot")
+
+time_18_green_total = estimate_abundances(meso_ccm_green_total, data.frame(timepoint="18"))
+time_24_green_total = estimate_abundances(meso_ccm_green_total, data.frame(timepoint="24"))
+
+cond_18_vs_24_tbl_green_total = compare_abundances(meso_ccm_green_total, 
+                                                   time_18_green_total, time_24_green_total)
+
 plot_contrast(meso_ccm_paga, cond_18_vs_24_tbl_paga)
+plot_contrast(meso_ccm_green, cond_18_vs_24_tbl_green)
+plot_contrast(meso_ccm_green_total, cond_18_vs_24_tbl_green_total)
 
-
+# from to       pcor from_delta_log_abund to_delta_log_abund umap_from_1 umap_from_2  umap_to_1 umap_to_2
+# 1    1  5 -0.2684833           -2.0100033          2.2373482    4.149991  -3.0304539  0.7074403  6.825218
+# 2    2 10 -0.1371792           -2.0153915          0.3293776   -7.027485  -0.3268598 -2.3459778  4.619233
+# 3    8 10 -0.0154430           -2.1464688          0.3293776   -6.322590   0.2195906 -2.3459778  4.619233
+# 4    9 10 -0.0477801           -0.9478383          0.3293776    2.967358  -3.8445025 -2.3459778  4.619233
+# 5    9  5 
 
 
