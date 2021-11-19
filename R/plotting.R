@@ -216,34 +216,34 @@ my_plot_cells <- function(data,
   } else {
     print("some error message")
   }
+  
+  
 
   
   plot_df$cell = row.names(plot_df)
-  plot_df$color_cells_by = plot_df[[color_cells_by]]
   plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,1]
   plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,2]
-  
-  
   
   
   # could be an vector that corresponds to a label
   if (!is.null(residuals)) {
     res_df = as.data.frame(residuals) %>% rownames_to_column("cell_group")
-    colnames(res_df)[2] = value
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
     color_cells_by = "residuals"
-
+    
   }
-
-  if (!is.null(cond_b_vs_a_tbl)) {
-
+  
+  else if (!is.null(cond_b_vs_a_tbl)) {
+    
     plot_df = dplyr::left_join(plot_df,
                                cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                                by=c("cell_group"="cell_group"))
     
     color_cells_by = "delta_log_abund"
-
+    
   }
+  
+  plot_df$color_cells_by = plot_df[[color_cells_by]]
 
   gp = ggplot() +
     geom_point(

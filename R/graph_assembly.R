@@ -16,16 +16,12 @@ collect_pln_graph_edges <- function(ccm,
   )
 
   # FIXME: this really doesn't belong here and should be handled by the caller
-  corr_edge_coords_umap_delta_abund = dplyr::left_join(abundance_corr_tbl %>%
-                                                  dplyr::select(from, to, pcor, from_delta_log_abund, to_delta_log_abund),
-                                                umap_centers %>% dplyr::select("from" = cell_group,
-                                                                               "umap_from_1" = V1,
-                                                                               "umap_from_2" = V2))
-  corr_edge_coords_umap_delta_abund = dplyr::left_join(corr_edge_coords_umap_delta_abund ,
-                                                umap_centers %>% dplyr::select("to" = cell_group,
-                                                                               "umap_to_1" = V1,
-                                                                               "umap_to_2" = V2))
-
+  
+  corr_edge_coords_umap_delta_abund = abundance_corr_tbl %>%
+    dplyr::select(from, to) %>% add_umap_coords(umap_centers)
+  corr_edge_coords_umap_delta_abund = abundance_corr_tbl %>% dplyr::select(from, to, pcor, from_delta_log_abund, to_delta_log_abund) %>% 
+    left_join(corr_edge_coords_umap_delta_abund, by = c("from", "to"))
+  
   corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>% dplyr::mutate(scaled_weight = -pcor)
 
   corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
@@ -136,6 +132,8 @@ get_paga_graph <- function(cds, reduction_method = "UMAP") {
   cluster_g <- igraph::set_vertex_attr(cluster_g, "name", value = stringr::str_replace(igraph::V(cluster_g)$name, "cell_membership", ""))
   cluster_g
 }
+
+
 
 
 

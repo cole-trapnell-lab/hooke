@@ -189,3 +189,62 @@ collate_edges_all_combos <- function(ccm,
   return(total_green_edges)
 }
 
+
+update_cofficients <- function(ccm, 
+                               edges, 
+                               covariate = "gene_target", 
+                               group = "tbx16-msgn1", 
+                               wt_ccm = NULL, 
+                               update = T) {
+  
+  model_coef = coef(ccm@best_model)
+  coef_df = as.data.frame(model_coef)[[paste0(covariate, group)]]
+  names(coef_df) = rownames(as.data.frame(model_coef))
+  
+  if (update == F) {
+    return(coef_df)
+  }
+  
+  coef_updated = coef_df
+  
+  for (i in 1:nrow(edges)) {
+    
+    x = edges[i,]$from
+    y = edges[i,]$to
+    
+    if (is.null(wt_ccm)) {
+      coef_updated[y] = coef_df[y] - coef_df[x]
+    } else {
+      coef_updated[y] = coef_df[y] - coef_df[x]*wt_pcor_matrix[x,y]
+    }
+  }
+  return(coef_updated)
+}
+
+edges_across_conditions <- function(ccm, gene_targets) {
+  
+  greenedges = lapply(gene_targets, function(gt) {
+    
+    umap_centers = centroids(ccm@ccs)
+    
+    time_18 = estimate_abundances(ccm, data.frame(timepoint="18", gene_target = gt))
+    time_24 = estimate_abundances(ccm, data.frame(timepoint="24", gene_target = gt))
+    
+    cond_a_vs_b_tbl = compare_abundances(ccm, time_18, time_24)
+    corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
+                                                                umap_centers,
+                                                                cond_a_vs_b_tbl,
+                                                                log_abundance_thresh=-5)
+    
+    green_edge_df = collate_edges(corr_edge_coords_umap_delta_abund, 
+                                  umap_centers)
+    
+  })
+  greenedges_time_df = do.call(rbind, greenedges)
+  
+  total_green_edges = greenedges_time_df %>%
+    group_by(from,to) %>%
+    summarise(total_weight = sum(weight), total_n = sum(n))
+  return(total_green_edges)
+}
+
