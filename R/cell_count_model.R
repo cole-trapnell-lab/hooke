@@ -87,7 +87,7 @@ new_cell_count_set <- function(cds,
     dplyr::group_by_("sample") %>%
     dplyr::summarize(across(where(is.numeric), mean),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
-                     across(where(is.character), function(x) { tail(names(sort(table(x))), 1) } ))
+                     across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) } ))
 
   if (is.null(sample_metadata) == FALSE){
     cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
@@ -103,7 +103,7 @@ new_cell_count_set <- function(cds,
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
-
+  
   # This is super confusing because of the way the arguments are named in new_cell_data_set.
   # We are making a matrix of dimension MxN, where M are cell types and N are samples (e.g. embryos, replicates, etc).
   # The "gene" metadata monocle normally expects will actually be used to hold
