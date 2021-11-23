@@ -58,6 +58,8 @@ cond_b = estimate_abundances(ccm, tibble::tibble(timepoint="24", gene_target="ct
 cond_b_vs_a_tbl = compare_abundances(ccm, cond_a, cond_b)
 
 plot_contrast(ccm, cond_b_vs_a_tbl)
+plot_contrast(select_model(ccm, sparsity_factor=1.0), cond_b_vs_a_tbl, scale_shifts_by="sender")
+
 
 
 cond_a = estimate_abundances(ccm, tibble::tibble(timepoint="24", gene_target="ctrl-inj"))
@@ -69,3 +71,27 @@ cond_b_vs_a_tbl = compare_abundances(ccm, cond_a, cond_b)
 plot_contrast(ccm, cond_b_vs_a_tbl)
 
 #hooke:::get_paga_graph(ccm)
+
+
+# Can we subset to build a PLN model out of only wild-type cells without needing to recluster?
+
+ccs_wt = new_cell_count_set(meso_cds[,colData(meso_cds)$gene_target == "ctrl-inj"],
+                         sample_group = "Oligo",
+                         cell_group = "cluster")
+
+
+ccm_wt  = new_cell_count_model(ccs_wt,
+                               model_formula_str = "~timepoint",
+                               whitelist=edge_whitelist
+                               )
+
+
+cond_a = estimate_abundances(ccm_wt, tibble::tibble(timepoint="18", gene_target="ctrl-inj"))
+cond_b = estimate_abundances(ccm_wt, tibble::tibble(timepoint="24", gene_target="ctrl-inj"))
+#plot_abundance_shift(meso_cds, best_model_umap, umap_centers, time_a, time_b, log_abundance_thresh=-1, scale_shifts_by="receiver", edge_size=2)
+
+cond_b_vs_a_tbl = compare_abundances(ccm_wt, cond_a, cond_b)
+
+plot_contrast(select_model(ccm_wt, sparsity_factor = 1), cond_b_vs_a_tbl, scale_shifts_by="sender")
+
+
