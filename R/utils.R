@@ -1,5 +1,5 @@
 #' adds umap coords to a data frame
-#' 
+#' @import dplyr 
 add_umap_coords <- function(df, umap_centers) {
   
   from_df = left_join(df, umap_centers, by = c("from"= "cell_group")) %>% 
@@ -13,8 +13,22 @@ add_umap_coords <- function(df, umap_centers) {
 }
 
 #' return the complementing edges
+#' @import igraph 
 blacklist <- function(edges) {
   igraph::graph_from_data_frame(edges) %>% 
     igraph::complementer() %>% 
     igraph::as_data_frame()
 }
+
+#' returns edges based on pcor values
+get_pcor_edges <- function(ccm) {
+  ccm@best_model$latent_network() %>% 
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column("from") %>% 
+    pivot_longer(-c("from"), names_to = "to") %>% 
+    filter(from!=to, value!=0)
+}
+
+
+

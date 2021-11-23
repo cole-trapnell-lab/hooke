@@ -39,6 +39,7 @@ calc_mst <- function(edges) {
 #' @param source 
 #' @param target
 #' @return data frame containing the shortest path
+#' @export
 calc_shortest_path <- function(edges, source, target) {
   edges = edges %>% dplyr::select(from, to, x, y, z, x_z, y_z, z_z, weight)
   G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
@@ -53,8 +54,13 @@ calc_shortest_path <- function(edges, source, target) {
 }
 
 
-
-
+#' @param umap_centers
+#' @param corr_edge_coords_umap_delta_abund
+#' @param alpha coefficient to weight 
+#' @param beta coefficient to weight pcor 
+#' @param gamma coefficient to weight distance 
+#' @importFrom tidyr pivot_longer
+#' @importFrom tibble rownames_to_column
 get_pos_pcor_edges <- function(umap_centers, 
                                corr_edge_coords_umap_delta_abund, 
                                alpha= 1, 
@@ -88,6 +94,8 @@ get_pos_pcor_edges <- function(umap_centers,
   return(pos_edge_df)
   
 }
+
+
 
 
 get_shortest_path <- function(ccm, 
@@ -173,6 +181,8 @@ collate_edges_all_combos <- function(ccm,
                                                                 cond_t1_vs_t2_tbl,
                                                                 log_abundance_thresh=-5)
     
+    
+    
     green_edge_df = collate_green_edges(corr_edge_coords_umap_delta_abund, umap_centers) %>% 
                     mutate(timepoint_x=t1, timepoint_y=t2)
     
@@ -220,6 +230,7 @@ update_cofficients <- function(ccm,
   }
   return(coef_updated)
 }
+
 
 edges_across_conditions <- function(ccm, gene_targets) {
   
