@@ -103,7 +103,7 @@ new_cell_count_set <- function(cds,
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
-  
+
   # This is super confusing because of the way the arguments are named in new_cell_data_set.
   # We are making a matrix of dimension MxN, where M are cell types and N are samples (e.g. embryos, replicates, etc).
   # The "gene" metadata monocle normally expects will actually be used to hold
@@ -191,13 +191,20 @@ new_cell_count_set <- function(cds,
 #' @param penalty_matrix A numeric NxN symmetric matrix specifying penalties for
 #'   the PLN model, where N is the number of cell types. Entries must be
 #'   positive. Use to specify an undirected graph prior for the PLN model.
+#' @param sparsity_factor A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
 #' @return a new cell_count_model object
 #' @importFrom PLNmodels prepare_data
 #' @importFrom PLNmodels PLNnetwork
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
-new_cell_count_model <- function(ccs, model_formula_str, penalty_matrix = NULL, whitelist=NULL, blacklist=NULL, ...) {
+new_cell_count_model <- function(ccs,
+                                 model_formula_str,
+                                 penalty_matrix = NULL,
+                                 whitelist=NULL,
+                                 blacklist=NULL,
+                                 sparsity_factor=0.1,
+                                 ...) {
 
 
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs),
@@ -220,7 +227,7 @@ new_cell_count_model <- function(ccs, model_formula_str, penalty_matrix = NULL, 
 
   # Choose a model that isn't very aggressively sparsified
   best_model <- PLNmodels::getBestModel(pln_model, "EBIC")
-  best_model <- PLNmodels::getModel(pln_model, var=best_model$penalty/10)
+  best_model <- PLNmodels::getModel(pln_model, var=best_model$penalty * sparsity_factor)
 
   # assertthat::assert_that(class(expression_data) == "matrix" ||
   #                           is_sparse_matrix(expression_data),
@@ -325,7 +332,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
   }
 
   penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, distance_parameter=1, s=2))
-  
+
   # FIXME: This might only actually work when grouping cells by clusters and cluster names are
   # integers. We should make sure this generalizes when making white/black lists of cell groups
   # by type or other groupings
