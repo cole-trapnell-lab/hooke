@@ -13,9 +13,13 @@ plot_contrast <- function(ccm,
                           scale_shifts_by=c("receiver", "sender", "none"),
                           #cell_group="cluster",
                           edge_size=2,
-                          cell_size=1){
+                          cell_size=1,
+                          p_value_thresh = 1.0){
 
   umap_centers = centroids(ccm@ccs)
+
+  #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_p_value, method = "BH")
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
 
   corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
                                                               umap_centers,
@@ -23,7 +27,7 @@ plot_contrast <- function(ccm,
                                                               log_abundance_thresh)
   directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
   undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
-  
+
   umap_centers_delta_abund = umap_centers
   umap_centers_delta_abund = dplyr::left_join(umap_centers_delta_abund, cond_b_vs_a_tbl, by=c("cell_group"="cell_group"))
   umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(max_log_abund = pmax(log_abund_x, log_abund_y))
@@ -96,7 +100,7 @@ plot_contrast <- function(ccm,
       mid = "white",
       high = "red4",
       na.value = "white"
-    )  + 
+    )  +
     theme_void() +
     theme(legend.position = "none") +
 
@@ -150,31 +154,31 @@ plot_contrast <- function(ccm,
                  linejoin='mitre',
                  arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
     scale_size_identity()
-  
+
   return(gp)
 }
 
 get_colors <- function(num_colors, type = "rainbow") {
-  
-  
+
+
   if (type == "rainbow") {
-    
-    colors = 
-      c("18h" = "#DF4828", 
-        "24h" = "#E78C35", 
-        "36h" = "#F6C141", 
-        "48h" = "#4EB265", 
+
+    colors =
+      c("18h" = "#DF4828",
+        "24h" = "#E78C35",
+        "36h" = "#F6C141",
+        "48h" = "#4EB265",
         "72h" = "#1965B0")
-    
+
   } else if (type == "vibrant")  {
-    
+
     colors =
       c('#EE7733', '#0077BB', '#228833', '#33BBEE', '#EE3377', '#CC3311',
         '#AA3377', '#009988', '#004488', '#DDAA33', '#99CC66','#D590DD')
-    
+
   } else {
-    
-    colors = 
+
+    colors =
         c('#4477AA',
           '#EE6677',
           '#228833',
@@ -184,24 +188,24 @@ get_colors <- function(num_colors, type = "rainbow") {
           '#BBBBBB')
 
   }
-  
-  full_spectrum =  colorRampPalette(colors)(num_colors) 
-  
+
+  full_spectrum =  colorRampPalette(colors)(num_colors)
+
   return(full_spectrum)
-  
-  
+
+
 }
 
 
-#' rename this later? 
+#' rename this later?
 #' probably needs fixing
-my_plot_cells <- function(data, 
+my_plot_cells <- function(data,
                       color_cells_by = "cluster",
                       cell_size=1,
-                      legend_position="none", 
-                      residuals = NULL, 
+                      legend_position="none",
+                      residuals = NULL,
                       cond_b_vs_a_tbl = NULL) {
-  
+
   if (class(data) == "cell_count_set") {
     cds = data@cds
     plot_df = as.data.frame(colData(cds))
@@ -216,33 +220,33 @@ my_plot_cells <- function(data,
   } else {
     print("some error message")
   }
-  
-  
 
-  
+
+
+
   plot_df$cell = row.names(plot_df)
   plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,1]
   plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,2]
-  
-  
+
+
   # could be an vector that corresponds to a label
   if (!is.null(residuals)) {
     res_df = as.data.frame(residuals) %>% rownames_to_column("cell_group")
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
     color_cells_by = "residuals"
-    
+
   }
-  
+
   else if (!is.null(cond_b_vs_a_tbl)) {
-    
+
     plot_df = dplyr::left_join(plot_df,
                                cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                                by=c("cell_group"="cell_group"))
-    
+
     color_cells_by = "delta_log_abund"
-    
+
   }
-  
+
   plot_df$color_cells_by = plot_df[[color_cells_by]]
 
   gp = ggplot() +
@@ -332,58 +336,58 @@ my_plot_cells <- function(data,
   }
 
   return(gp)
-  
+
 }
 
 
 plot_path <- function(data,
                       path_df = path_df,
-                      edge_size=2, 
-                      path_color = "black", 
-                      color_cells_by = "cluster", 
+                      edge_size=2,
+                      path_color = "black",
+                      color_cells_by = "cluster",
                       color_path_by = NULL,
-                      residuals = NULL, 
+                      residuals = NULL,
                       cond_b_vs_a_tbl = NULL) {
 
 
   gp = my_plot_cells(data, color_cells_by = color_cells_by, residuals = residuals, cond_b_vs_a_tbl = cond_b_vs_a_tbl)
-  
+
   if (class(data) == "cell_count_set") {
     umap_centers = centroids(data)
   } else if (class(data) == "cell_count_model") {
     umap_centers = centroids(data@ccs)
   }
-  
+
   path_df = add_umap_coords(path_df, umap_centers)
-  
-  
+
+
   if (is.null(color_path_by) == FALSE) {
-    
-    gp = gp + 
-      new_scale_color() + 
+
+    gp = gp +
+      new_scale_color() +
       geom_segment(data = path_df,
                            aes(x = umap_to_1,
                                y = umap_to_2,
                                xend=umap_from_1,
-                               yend = umap_from_2, 
+                               yend = umap_from_2,
                                color = get(color_path_by)),
-                           size=2 ) + 
+                           size=2 ) +
       geom_segment(data = path_df,
                    aes(x = umap_from_1,
                        y = umap_from_2,
                        xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2, 
-                       color = get(color_path_by)), 
+                       yend = (umap_to_2+umap_from_2)/2,
+                       color = get(color_path_by)),
                    size=2,
                    linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) + 
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
       scale_color_gradient2(
         low = "#122985",
         mid = "white",
         high = "red4",
         na.value = "white"
-      ) 
-    
+      )
+
   } else {
     gp = gp + geom_segment(data = path_df,
                            aes(x = umap_to_1,
@@ -391,7 +395,7 @@ plot_path <- function(data,
                                xend=umap_from_1,
                                yend = umap_from_2),
                            color = path_color,
-                           size = 2 ) + 
+                           size = 2 ) +
       geom_segment(data = path_df,
                    aes(x = umap_from_1,
                        y = umap_from_2,
@@ -402,10 +406,8 @@ plot_path <- function(data,
                    linejoin='mitre',
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
   }
-  
-  
+
+
   return(gp)
 
 }
-
-

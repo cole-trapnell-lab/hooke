@@ -10,13 +10,16 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   pred_out = predict(model(ccm), newdata=newdata)
   #pred_out = max(pred_out, -5)
   log_abund = pred_out[1,]
+  log_abund_sd = sqrt(diag(coef(model(ccm), type="covariance")))
+
   log_abund[log_abund < min_log_abund] = min_log_abund
   #max_log_abundances = log(matrixStats::colMaxs(pln_model$fitted))
   #min_log_abundances = log(matrixStats::colMins(pln_model$fitted))
   #percent_max = 100 * (exp(log_abund)/exp(max_log_abundances))
   #percent_range = 100 * (exp(log_abund) - exp(min_log_abundances)) / (exp(max_log_abundances) - exp(min_log_abundances))
   pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out),
-                        log_abund)
+                        log_abund,
+                        log_abund_sd)
   #max_log_abundances,
   #min_log_abundances,
   #percent_max,
@@ -35,7 +38,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
 #' @export
 compare_abundances <- function(ccm, cond_x, cond_y){
   contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by="cell_group")
-  contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x)
+  contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
+                                                delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_sd_y^2 + log_abund_sd_x^2), lower.tail=FALSE))
   return(contrast_tbl)
 }
 
