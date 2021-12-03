@@ -204,6 +204,9 @@ new_cell_count_model <- function(ccs,
                                  whitelist=NULL,
                                  blacklist=NULL,
                                  sparsity_factor=0.1,
+                                 min_penalty=0.01,
+                                 max_penalty=1e6,
+                                 verbose=FALSE,
                                  ...) {
 
 
@@ -215,15 +218,40 @@ new_cell_count_model <- function(ccs,
   model_formula = as.formula(model_formula_str)
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
-  initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, ...)
+  if (is.null(penalty_matrix)){
+    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, min_penalty=min_penalty, max_penalty=max_penalty, ...)
+    initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+  }else{
+    # TODO: check and validate dimensions of the user-provided penaties
+    initial_penalties = penalty_matrix
+  }
+
+  # FIXME: This might only actually work when grouping cells by clusters and cluster names are
+  # integers. We should make sure this generalizes when making white/black lists of cell groups
+  # by type or other groupings
+  if (is.null(whitelist) == FALSE){
+    initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
+    initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
+
+  }
+
+  if (is.null(blacklist) == FALSE){
+    initial_penalties[as.matrix(blacklist[,c(1,2)])] = max_penalty
+    initial_penalties[as.matrix(blacklist[,c(2,1)])] = max_penalty
+  }
+
+  #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
   initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula
   # created with as.formula (e.g. after pasting).
   pln_model <- do.call(PLNmodels::PLNnetwork, args=list(model_formula,
                                      data=pln_data,
                                      control_init=list(min.ratio=0.001),
-                                     control_main=list(penalty_weights=initial_penalties)))
+                                     control_main=list(penalty_weights=initial_penalties,
+                                                       trace = ifelse(verbose, 2, 0)),
+                                     ...),)
 
   # Choose a model that isn't very aggressively sparsified
   best_model <- PLNmodels::getBestModel(pln_model, "EBIC")
@@ -332,20 +360,6 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
   }
 
   penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, distance_parameter=1, s=2))
-
-  # FIXME: This might only actually work when grouping cells by clusters and cluster names are
-  # integers. We should make sure this generalizes when making white/black lists of cell groups
-  # by type or other groupings
-  if (is.null(whitelist) == FALSE){
-    penalty_matrix[as.matrix(whitelist[,c(1,2)])] = min_penalty
-    penalty_matrix[as.matrix(whitelist[,c(2,1)])] = min_penalty
-
-  }
-
-  if (is.null(blacklist) == FALSE){
-    penalty_matrix[as.matrix(blacklist[,c(1,2)])] = max_penalty
-    penalty_matrix[as.matrix(blacklist[,c(2,1)])] = max_penalty
-  }
 
   # TODO: add support for whitelisting and blacklisting
   #qplot(as.numeric(dist_matrix), as.numeric(out))
