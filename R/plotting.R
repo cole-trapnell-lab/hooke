@@ -14,19 +14,10 @@ plot_contrast <- function(ccm,
                           #cell_group="cluster",
                           edge_size=2,
                           cell_size=1,
-                          p_value_thresh = 1.0){
+                          p_value_thresh = 1.0,
+                          group_label_size=2){
 
   umap_centers = centroids(ccm@ccs)
-
-  #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_p_value, method = "BH")
-  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
-
-  corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
-                                                              umap_centers,
-                                                              cond_b_vs_a_tbl,
-                                                              log_abundance_thresh)
-  directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
-  undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
 
   umap_centers_delta_abund = umap_centers
   umap_centers_delta_abund = dplyr::left_join(umap_centers_delta_abund, cond_b_vs_a_tbl, by=c("cell_group"="cell_group"))
@@ -34,6 +25,19 @@ plot_contrast <- function(ccm,
   umap_centers_delta_abund = umap_centers_delta_abund %>%
     dplyr::mutate(max_log_abund = ifelse(max_log_abund < log_abundance_thresh, log_abundance_thresh, max_log_abund))
 
+  #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_p_value, method = "BH")
+  umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
+
+  corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
+                                                              umap_centers_delta_abund,
+                                                              log_abundance_thresh)
+  directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
+  undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
+
+
+  # corr_edge_coords_umap_delta_abund = left_join(corr_edge_coords_umap_delta_abund,
+  #                                               umap_centers,
+  #                                               by=c("from"="cell_group"))
 
   if (scale_shifts_by == "sender"){
     directed_edge_df = directed_edge_df %>%
@@ -114,46 +118,50 @@ plot_contrast <- function(ccm,
 
   gp = gp  +
     geom_segment(data = undirected_edge_df,
-                 aes(x = umap_to_1,
-                     y = umap_to_2,
-                     xend=umap_from_1,
-                     yend = umap_from_2,
+                 aes(x = to_umap_1,
+                     y = to_umap_2,
+                     xend=from_umap_1,
+                     yend = from_umap_2,
                      size=edge_size * scaled_weight),
                  #size=edge_size / 4,
                  color="lightgray") +
     geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                 aes(x = umap_to_1,
-                     y = umap_to_2,
-                     xend=umap_from_1,
-                     yend = umap_from_2,
+                 aes(x = to_umap_1,
+                     y = to_umap_2,
+                     xend=from_umap_1,
+                     yend = from_umap_2,
                      size=edge_size * scaled_weight),
                  color="black") +
     geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                 aes(x = umap_to_1,
-                     y = umap_to_2,
-                     xend=(umap_to_1+umap_from_1)/2,
-                     yend = (umap_to_2+umap_from_2)/2,
+                 aes(x = to_umap_1,
+                     y = to_umap_2,
+                     xend=(to_umap_1+from_umap_1)/2,
+                     yend = (to_umap_2+from_umap_2)/2,
                      size=edge_size * scaled_weight),
                  color="black",
                  linejoin='mitre',
                  arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
     geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                 aes(x = umap_from_1,
-                     y = umap_from_2,
-                     xend=umap_to_1,
-                     yend = umap_to_2,
+                 aes(x = from_umap_1,
+                     y = from_umap_2,
+                     xend=to_umap_1,
+                     yend = to_umap_2,
                      size=edge_size * scaled_weight),
                  color="black") +
     geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                 aes(x = umap_from_1,
-                     y = umap_from_2,
-                     xend=(umap_from_1+umap_to_1)/2,
-                     yend = (umap_from_2+umap_to_2)/2,
+                 aes(x = from_umap_1,
+                     y = from_umap_2,
+                     xend=(from_umap_1+to_umap_1)/2,
+                     yend = (from_umap_2+to_umap_2)/2,
                      size=edge_size * scaled_weight),
                  color="black",
                  linejoin='mitre',
                  arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
     scale_size_identity()
+  gp <- gp + ggrepel::geom_label_repel(data = umap_centers_delta_abund %>% filter(delta_log_abund != 0),
+                                       mapping = aes(umap_1, umap_2, label=cell_group),
+                                       size=I(group_label_size),
+                                       fill = "white")
 
   return(gp)
 }
