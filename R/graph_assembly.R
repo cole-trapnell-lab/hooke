@@ -3,7 +3,6 @@
 #'@param ccm A cell_count_model
 #'@param cond_b_vs_a_tbl A contrast between two conditions as returned by compare_abundances()
 collect_pln_graph_edges <- function(ccm,
-                                    umap_centers,
                                     cond_b_vs_a_tbl,
                                     log_abundance_thresh = 1-5){
   pln_model = model(ccm)
@@ -15,16 +14,11 @@ collect_pln_graph_edges <- function(ccm,
       (from_log_abund_x > log_abundance_thresh | from_log_abund_y > log_abundance_thresh) # Keep if the "to" node is above abundance thresh in at least one condition
   )
 
-  # FIXME: this really doesn't belong here and should be handled by the caller
-  
-  corr_edge_coords_umap_delta_abund = abundance_corr_tbl %>%
-    dplyr::select(from, to) %>% add_umap_coords(umap_centers)
-  corr_edge_coords_umap_delta_abund = abundance_corr_tbl %>% dplyr::select(from, to, pcor, from_delta_log_abund, to_delta_log_abund) %>% 
-    left_join(corr_edge_coords_umap_delta_abund, by = c("from", "to"))
-  
-  corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>% dplyr::mutate(scaled_weight = -pcor)
+  corr_edge_delta_abund = abundance_corr_tbl
 
-  corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
+  corr_edge_delta_abund = corr_edge_delta_abund %>% dplyr::mutate(scaled_weight = -pcor)
+
+  corr_edge_delta_abund = corr_edge_delta_abund %>%
     dplyr::mutate(edge_type = dplyr::case_when(
       from_delta_log_abund > 0 & to_delta_log_abund > 0 & pcor > 0 ~ "undirected",
       from_delta_log_abund > 0 & to_delta_log_abund < 0 & pcor > 0 ~ "undirected",
@@ -38,8 +32,8 @@ collect_pln_graph_edges <- function(ccm,
     ))
 
   # Fix the edges so all directed edges are directed_from_to:
-  backwards_edges = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type == "directed_to_from")
-  ok_edges = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type != "directed_to_from")
+  backwards_edges = corr_edge_delta_abund %>% dplyr::filter(edge_type == "directed_to_from")
+  ok_edges = corr_edge_delta_abund %>% dplyr::filter(edge_type != "directed_to_from")
 
   be_colnames = colnames(backwards_edges)
   be_colnames = unlist(lapply(be_colnames, stringr::str_replace, "to", "from"))
