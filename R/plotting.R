@@ -15,7 +15,8 @@ plot_contrast <- function(ccm,
                           edge_size=2,
                           cell_size=1,
                           p_value_thresh = 1.0,
-                          group_label_size=2){
+                          group_label_size=2, 
+                          plot_labels = TRUE){
 
   umap_centers = centroids(ccm@ccs)
 
@@ -158,10 +159,14 @@ plot_contrast <- function(ccm,
                  linejoin='mitre',
                  arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
     scale_size_identity()
-  gp <- gp + ggrepel::geom_label_repel(data = umap_centers_delta_abund %>% filter(delta_log_abund != 0),
-                                       mapping = aes(umap_1, umap_2, label=cell_group),
-                                       size=I(group_label_size),
-                                       fill = "white")
+  
+  if (plot_labels) {
+    gp <- gp + ggrepel::geom_label_repel(data = umap_centers_delta_abund %>% filter(delta_log_abund != 0),
+                                         mapping = aes(umap_1, umap_2, label=cell_group),
+                                         size=I(group_label_size),
+                                         fill = "white")
+  }
+  
 
   return(gp)
 }
@@ -240,6 +245,7 @@ my_plot_cells <- function(data,
   # could be an vector that corresponds to a label
   if (!is.null(residuals)) {
     res_df = as.data.frame(residuals) %>% rownames_to_column("cell_group")
+    colnames(res_df)[1] = "residuals"
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
     color_cells_by = "residuals"
 
