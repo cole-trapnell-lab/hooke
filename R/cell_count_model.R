@@ -207,10 +207,11 @@ new_cell_count_model <- function(ccs,
                                  min_penalty=0.01,
                                  max_penalty=1e6,
                                  verbose=FALSE,
+                                 pseudocount=0,
                                  ...) {
 
-
-  pln_data <- PLNmodels::prepare_data(counts = counts(ccs),
+  
+  pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
                                       covariates = colData(ccs) %>% as.data.frame,
                                       offset = size_factors(ccs))
 
