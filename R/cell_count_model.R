@@ -208,9 +208,11 @@ new_cell_count_model <- function(ccs,
                                  max_penalty=1e6,
                                  verbose=FALSE,
                                  pseudocount=0,
+                                 pln_min_ratio=0.001,
+                                 pln_num_penalties=30,
                                  ...) {
 
-  
+
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
                                       covariates = colData(ccs) %>% as.data.frame,
                                       offset = size_factors(ccs))
@@ -249,7 +251,7 @@ new_cell_count_model <- function(ccs,
   # created with as.formula (e.g. after pasting).
   pln_model <- do.call(PLNmodels::PLNnetwork, args=list(model_formula,
                                      data=pln_data,
-                                     control_init=list(min.ratio=0.001),
+                                     control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
                                      control_main=list(penalty_weights=initial_penalties,
                                                        trace = ifelse(verbose, 2, 0)),
                                      ...),)
