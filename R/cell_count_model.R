@@ -204,6 +204,7 @@ new_cell_count_model <- function(ccs,
                                  whitelist=NULL,
                                  blacklist=NULL,
                                  sparsity_factor=0.1,
+                                 base_penalty = 1,
                                  min_penalty=0.01,
                                  max_penalty=1e6,
                                  verbose=FALSE,
@@ -222,7 +223,7 @@ new_cell_count_model <- function(ccs,
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, min_penalty=min_penalty, max_penalty=max_penalty, ...)
+    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
     # TODO: check and validate dimensions of the user-provided penaties
