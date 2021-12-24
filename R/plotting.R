@@ -21,13 +21,14 @@ plot_contrast <- function(ccm,
   umap_centers = centroids(ccm@ccs)
 
   umap_centers_delta_abund = umap_centers
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
   umap_centers_delta_abund = dplyr::left_join(umap_centers_delta_abund, cond_b_vs_a_tbl, by=c("cell_group"="cell_group"))
   umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(max_log_abund = pmax(log_abund_x, log_abund_y))
   umap_centers_delta_abund = umap_centers_delta_abund %>%
     dplyr::mutate(max_log_abund = ifelse(max_log_abund < log_abundance_thresh, log_abundance_thresh, max_log_abund))
 
   #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_p_value, method = "BH")
-  umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
+  # umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
 
   corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
                                                               umap_centers_delta_abund,
@@ -69,13 +70,21 @@ plot_contrast <- function(ccm,
   plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,1]
   plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
 
-  #cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% mutate(cluster = stringr::str_split_fixed(cell_group, "\\.", 3)[,3])
   plot_df = dplyr::left_join(plot_df,
                       cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                       by=c("cell_group"="cell_group"))
 
-  #directed_edge_df = directed_edge_df %>% filter(edge_type %in% c("directed_to_from", "directed_from_to"))
-
+  
+  if (is.null(fc_limits)) {
+    fc_limits = range(plot_df$delta_log_abund)
+  } else {
+    min = fc_limits[1]
+    max = fc_limits[2]
+    plot_df = plot_df %>% 
+      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  }
+  
   # plot
   gp = ggplot() +
     geom_point(
@@ -104,18 +113,12 @@ plot_contrast <- function(ccm,
       low = "#122985",
       mid = "white",
       high = "red4",
-      na.value = "white"
+      na.value = "white", 
+      limits = fc_limits
     )  +
     theme_void() +
     theme(legend.position = "none") +
-
-    #plot_oriented_pln_network(directed_edge_df) +
-
-    #geom_point(data = umap_centers_delta_abund, aes(umap2D_1, umap2D_2, color=delta_log_abund, size=max_log_abund)) +
-    # #geom_text(data = umap_centers_delta_abund, aes(umap2D_1, umap2D_2, color=delta_log_abund, label=label)) +
-    #scale_color_gradient2(low = 'steelblue', mid = 'grey', high = 'darkred') +
-    # #theme(legend.position = "none") +
-    monocle3:::monocle_theme_opts() #+ ggtitle(paste(cond_b, "vs",cond_a, "pos partial corr w/ umap penalty"))
+    monocle3:::monocle_theme_opts() 
 
   gp = gp  +
     geom_segment(data = undirected_edge_df,
