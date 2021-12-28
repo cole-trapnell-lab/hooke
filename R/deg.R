@@ -1,7 +1,8 @@
 
-# ablation 
-
-
+# given gene short names, return a dataframe that contains 
+# the samples in which to ablate the counts
+#' @param ccs a cell_count_set object
+#' @param genes a list of genes to ablate
 get_ablation_samples <- function(ccs, genes) {
   
   experiment_samples = ccs@metadata[["cell_group_assignments"]] %>% pull(sample) %>% unique()
@@ -29,6 +30,8 @@ get_ablation_samples <- function(ccs, genes) {
 
 
 ### This function takes as input and zeros out the specified genes in the specified samples
+#' @param agg_expr_mat aggregate gene expression matrix
+#' @param ablation_df data frame of specified genes + samples to be zeroed out
 ablate_expression <- function(agg_expr_mat, ablation_df){
   agg_expr_mat[which(row.names(agg_expr_mat) %in% ablation_df$gene_id),
                which(colnames(agg_expr_mat) %in% ablation_df$groups_to_ablate)] = 0
@@ -73,23 +76,22 @@ pseudobulk <- function(ccs,
 
 }
 
+#' @param from_state
+#' @param to_state
 collect_transition_states = function(from_state, to_state){
   return (as.character(unique(c(from_state, to_state))))
 }
 
 
 
-
-# # This could be expanded to look collect all states along a path from from_state to to_state in the CCM's PLN network
-# if (between) {
-#   positive_edges = hooke:::collect_pln_graph_edges(ccm, cond_18_vs_24_tbl) %>% 
-#     as_tibble %>%
-#     filter(pcor > 0)
-#   
-# }
-
-
 # This function compares two cell states to find genes that differ between them
+#' @param states
+#' @param cds
+#' @param model_formula_str
+#' @param gene_whitelist
+#' @param q_value_thresh
+#' @param effect_thresh
+#' @param cores
 find_degs_between_states = function(states,
                                     cds,
                                     model_formula_str = "~cell_group",
@@ -111,8 +113,8 @@ find_degs_between_states = function(states,
 
 
 #' @param genes
-#' @param states
-#' @param pb_cds pseudobulked cds
+#' @param states only build model on specified cell states 
+#' @param pb_cds A pseudobulked Monocole cell data set object
 #' @param regulatory_genes
 #' @param model_str
 #' @param gene_module_df
@@ -215,8 +217,12 @@ build_pln_model_on_genes = function(genes,
 }
 
 
-# Rank the genes based on their degree in the PLN network, with edges weighted
-# by partial correlation
+#' Rank the genes based on their degree in the PLN network, with edges weighted
+#' by partial correlation
+#' @param states
+#' @param gene_model_ccm a cell_count_model object
+#' @param cds A Monocle cell data set object
+#' @param log_abundance_thresh
 rank_regulators = function(states, gene_model_ccm, cds, log_abundance_thresh=1e-5){
   from_state = states[1]
   to_state = states[2]
@@ -259,7 +265,13 @@ rank_regulators = function(states, gene_model_ccm, cds, log_abundance_thresh=1e-
 }
 
 
-# Now plot a comparison of the fold change of each gene vs. its "regulator score"
+
+#' Plots a comparison of the fold change of each gene vs. its "regulator score" 
+#' @param regulator_df
+#' @param cds
+#' @param group_label_size
+#' @param resid_std_devs
+#' @param abund_lfc_range
 plot_top_regulators = function(regulator_df, cds, group_label_size=2, resid_std_devs=1, abund_lfc_range=c(-5,5)){
   regulator_df$label = rowData(cds)[regulator_df$gene_id,]$gene_short_name
   regulator_df = regulator_df %>% mutate(delta_log_abund = ifelse(delta_log_abund < min(abund_lfc_range),

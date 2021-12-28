@@ -174,6 +174,9 @@ plot_contrast <- function(ccm,
   return(gp)
 }
 
+#' returns different color palettes 
+#' @param num_colors the number of colors needed
+#' @param 
 get_colors <- function(num_colors, type = "rainbow") {
 
 
@@ -336,6 +339,8 @@ my_plot_cells <- function(data,
         na.value = "white",
         # limits=c(-3,3)
       )
+  } else if (color_cells_by == "none") {
+    # do nothing
   }
   else {
     num_colors = unique(plot_df[[color_cells_by]]) %>% sort() %>% length()
@@ -357,6 +362,14 @@ my_plot_cells <- function(data,
 }
 
 
+#' plots a path on top of 
+#' @param data
+#' @param path_df
+#' @param edge_size
+#' @param path_color
+#' @param color_cells_by
+#' @param residuals
+#' @param cond_b_vs_a_tbl
 plot_path <- function(data,
                       path_df = path_df,
                       edge_size=2,
@@ -377,11 +390,10 @@ plot_path <- function(data,
 
   path_df = add_umap_coords(path_df, umap_centers)
 
-
   if (is.null(color_path_by) == FALSE) {
 
     gp = gp +
-      new_scale_color() +
+      ggnewscale::new_scale_color() +
       geom_segment(data = path_df,
                            aes(x = umap_to_1,
                                y = umap_to_2,
@@ -424,7 +436,86 @@ plot_path <- function(data,
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
   }
 
-
   return(gp)
 
 }
+
+
+add_edge <- function(gp, 
+                     path_df, 
+                     umap_centers,
+                     size = 1, 
+                     color = "black") {
+    path_df = add_umap_coords(path_df, umap_centers)
+  
+    gp = gp + 
+      geom_segment(data = path_df,
+              aes(x = umap_to_1,
+                  y = umap_to_2,
+                  xend = umap_from_1,
+                  yend = umap_from_2),
+              size = size, 
+              color = color) +
+      geom_segment(data = path_df,
+              aes(x = umap_from_1,
+                  y = umap_from_2,
+                  xend = (umap_to_1+umap_from_1)/2,
+                  yend = (umap_to_2+umap_from_2)/2),
+              size = size,
+              color = color,
+              linejoin='mitre',
+              arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
+    
+    return(gp)
+}
+
+
+# plot igraph
+#' plots the resulting path as an igraph 
+#' instead of as a UMAP 
+#' @param data
+#' @param edges
+#' @param color_nodes_by
+#' @param arrow.gap
+#' @param scale
+plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale = F) {
+  
+  if (class(data) == "cell_count_set") {
+    ccs = data
+    plot_df = as.data.frame(colData(cds))
+  } else if (class(data) == "cell_count_model") {
+    ccs = data@ccs
+  } else {
+    print("some error message")
+  }
+  
+  umap_centers = centroids(ccs)
+  cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  nodes = data.frame(id = cell_groups)
+  if ("source" %in% colnames(edges)) {
+    edges = edges %>% rename("from" = source, "to" = target)
+  }
+  edges = edges %>% select(from,to)
+  
+  no_edge = setdiff(nodes$id, union(edges$from, edges$to))
+  edges = rbind(edges, data.frame("from" = no_edge, "to" = no_edge))
+  n = network(edges %>% dplyr::select(from,to), directed = T, loops = T)
+  nodes = nodes[match(network.vertex.names(n), nodes$id),]
+  n %v% "id" = network.vertex.names(n)
+  
+  merged_coords = ggnetwork(n) %>% select(id, vertex.names) %>% unique() %>% 
+    left_join(umap_centers, by = c("id"="cell_group"))
+  rownames(merged_coords) = merged_coords$id
+  coords = merged_coords[network.vertex.names(n),] %>% select(umap_1,umap_2)
+  geo = as.matrix(sapply(coords, as.numeric))  
+  
+  g <- ggnetwork(x = n, layout = geo, arrow.gap=arrow.gap, scale = scale)
+  
+  show(ggplot(g, aes(x, y, xend = xend, yend = yend)) +
+          geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
+          geom_nodes(size = 7,colour="black",shape=21) +
+          geom_nodetext_repel(aes(label = id), size=3) + 
+          theme_blank())
+  
+}
+
