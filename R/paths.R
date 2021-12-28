@@ -103,4 +103,48 @@ get_shortest_path <- function(from, to, weighted_edges) {
 }
 
 
+#'
+#' @param ccm
+#' @param cond_a_vs_tbl
+#' @param p_value_threshold
+#' 
+get_path <- function(ccm, cond_a_vs_b_tbl, p_value_threshold = 1.0) {
+
+  pos_edges = hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
+    as_tibble %>%
+    filter(pcor > 0 &
+           to_delta_p_value < p_value_threshold &
+           from_delta_p_value < p_value_threshold)
+  
+  assertthat::assert_that(
+    tryCatch(expr = nrow(pos_edges) != 0, 
+             error = function(e) FALSE), 
+    msg = "no significant positive edges found")
+  
+  weighted_edges = get_weighted_edges(ccm, pos_edges)
+  
+  neg_rec_edges = hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
+    as_tibble %>%
+    filter(edge_type != "undirected" &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold) 
+  
+  assertthat::assert_that(
+    tryCatch(expr = nrow(neg_rec_edges) != 0, 
+             error = function(e) FALSE), 
+    msg = "no significant negative reciprocal edges found")
+  
+  edge_path = neg_rec_edges %>%
+    dplyr::mutate(shortest_path = purrr::map2(.f = 
+                                                purrr::possibly(get_shortest_path, NA_real_), 
+                                              .x = from, .y = to, 
+                                              weighted_edges)) %>% 
+    select(shortest_path) %>%
+    tidyr::unnest(shortest_path) %>% 
+    select(-weight) %>%
+    distinct()
+  
+  return(edge_path)
+}
+
          
