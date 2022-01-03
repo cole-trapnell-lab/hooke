@@ -102,7 +102,6 @@ get_shortest_path <- function(from, to, weighted_edges) {
   return(shortest_path_df)
 }
 
-
 #'
 #' @param ccm
 #' @param cond_a_vs_tbl
@@ -110,7 +109,7 @@ get_shortest_path <- function(from, to, weighted_edges) {
 #' 
 get_path <- function(ccm, cond_a_vs_b_tbl, p_value_threshold = 1.0) {
 
-  pos_edges = hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
+  pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_a_vs_b_tbl) %>%
     as_tibble %>%
     filter(pcor > 0 &
            to_delta_p_value < p_value_threshold &
@@ -123,7 +122,7 @@ get_path <- function(ccm, cond_a_vs_b_tbl, p_value_threshold = 1.0) {
   
   weighted_edges = get_weighted_edges(ccm, pos_edges)
   
-  neg_rec_edges = hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
+  neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_a_vs_b_tbl) %>%
     as_tibble %>%
     filter(edge_type != "undirected" &
              to_delta_p_value < p_value_threshold &
