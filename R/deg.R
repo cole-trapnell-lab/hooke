@@ -38,16 +38,26 @@ ablate_expression <- function(agg_expr_mat, ablation_df){
   return(agg_expr_mat)
 }
 
-#'
-#' @param ccs
+#' Returns a pseudobulked cell count dataset object based on cell count set groupings
+#' @param ccs a cell count set object
 #' @param gene_ids gene ids to ablate
+#' @param norm_method
+#' @param scale_agg_values
+#' @param cell_agg_fun
+#' @param cell_group_threshold 
+#' @param cell_state_threshold filters cell groups that have low counts
 #' @export
 pseudobulk <- function(ccs, 
                        gene_ids = NULL,
                        norm_method="size_only",
                        scale_agg_values = FALSE,
                        pseudocount = 0, 
-                       cell_agg_fun = "mean") {
+                       cell_agg_fun = "mean",
+                       total_cell_threshold = 25,
+                       num_cells_in_group_threshold = 5) {
+  
+  # get rid of samples with low counts
+  ccs = ccs[, Matrix::colSums(counts(ccs)) >= total_cell_threshold]
   
   agg_expr_mat = monocle3::aggregate_gene_expression(ccs@cds,
                                                      cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]]),
@@ -60,7 +70,9 @@ pseudobulk <- function(ccs,
   agg_coldata = ccs@metadata[["cell_group_assignments"]] %>%
     dplyr::group_by(group_id, cell_group) %>%
     dplyr::summarize(num_cells_in_group = n()) %>%
-    as.data.frame
+    as.data.frame %>% 
+    filter(num_cells_in_group >= num_cells_in_group_threshold)
+  
   agg_expr_mat = agg_expr_mat[,agg_coldata$group_id]
   row.names(agg_coldata) = colnames(agg_expr_mat)
 
@@ -68,8 +80,9 @@ pseudobulk <- function(ccs,
     ablation_df = get_ablation_samples(ccs, gene_ids)
     agg_expr_mat = ablate_expression(agg_expr_mat, ablation_df)
   }
-
+  
   pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccs@cds) %>% as.data.frame)
+  pseudobulk_cds = pseudobulk_cds[,Matrix::colSums(exprs(pseudobulk_cds)) != 0]
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
   pseudobulk_cds = preprocess_cds(pseudobulk_cds)
   pseudobulk_cds = reduce_dimension(pseudobulk_cds)
@@ -82,6 +95,11 @@ collect_transition_states = function(from_state, to_state){
   return (as.character(unique(c(from_state, to_state))))
 }
 
+
+collect_between_transition_states = function(shortest_path) {
+  states = shortest_path %>% select(from,to) %>% t %>% c 
+  return(as.character(unique(states)))
+}
 
 
 # This function compares two cell states to find genes that differ between them
@@ -105,7 +123,9 @@ find_degs_between_states = function(states,
                                 weights=colData(cds_states_tested)$num_cells_in_group,
                                 cores=cores)
   coefs = monocle3::coefficient_table(models) %>%
-    filter(grepl("cell_group", term) & q_value < q_value_thresh & abs(normalized_effect) > effect_thresh)
+    filter(!grepl("Intercept", term) & 
+           q_value < q_value_thresh & 
+           abs(normalized_effect) > effect_thresh)
   gene_ids = coefs %>% pull(gene_id)
   gene_ids = c(gene_ids, gene_whitelist) %>% unique
   return(gene_ids)
