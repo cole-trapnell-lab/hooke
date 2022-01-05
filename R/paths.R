@@ -36,8 +36,8 @@ calc_mst <- function(edges) {
 
 #' Calculate the shortest path between two points
 #' @param edges data frame of edges with edge weights
-#' @param source
-#' @param target
+#' @param from
+#' @param to 
 #' @return data frame containing the shortest path
 #' @export
 calc_shortest_path <- function(edges, from, to) {
@@ -107,9 +107,9 @@ get_shortest_path <- function(from, to, weighted_edges) {
 #' @param cond_a_vs_tbl
 #' @param p_value_threshold
 #' 
-get_path <- function(ccm, cond_a_vs_b_tbl, p_value_threshold = 1.0) {
+get_path <- function(ccm, cond_b_vs_a_tbl, p_value_threshold = 1.0) {
 
-  pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_a_vs_b_tbl) %>%
+  pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
     filter(pcor > 0 &
            to_delta_p_value < p_value_threshold &
@@ -122,7 +122,7 @@ get_path <- function(ccm, cond_a_vs_b_tbl, p_value_threshold = 1.0) {
   
   weighted_edges = get_weighted_edges(ccm, pos_edges)
   
-  neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_a_vs_b_tbl) %>%
+  neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
     filter(edge_type != "undirected" &
              to_delta_p_value < p_value_threshold &
@@ -145,5 +145,84 @@ get_path <- function(ccm, cond_a_vs_b_tbl, p_value_threshold = 1.0) {
   
   return(edge_path)
 }
+
+#' Find degs either along an entire path or between adjacent pairs
+#' @param ccm a cell count model object
+#' @param cond_b_vs_a_tbl
+#' @param p_value_threshold p_value threshold for inclusion of edges
+#' @param adj_pairs If TRUE, does the DEG testing between adjacent pairs. If FALSE, includes all states in the deg testing. 
+find_deg_path = function(ccm, 
+                         cond_b_vs_a_tbl, 
+                         p_value_threshold = 1.0,
+                         adj_pairs = FALSE, 
+                         ...) {
+  
+  # 1. find all the negative reciprocal edges
+  neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>% 
+    as_tibble %>%
+    filter(edge_type != "undirected" &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold) 
+  
+  assertthat::assert_that(
+    tryCatch(expr = nrow(neg_rec_edges) != 0, 
+             error = function(e) FALSE), 
+    msg = "no significant negative reciprocal edges found")
+  
+  pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
+    as_tibble %>%
+    filter(pcor > 0 &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold)
+  
+  assertthat::assert_that(
+    tryCatch(expr = nrow(pos_edges) != 0, 
+             error = function(e) FALSE), 
+    msg = "no significant positive edges found")
+  
+  weighted_edges = get_weighted_edges(ccm, pos_edges)
+  
+  # 2. find the shortest path between those edges
+  neg_rec_edges = neg_rec_edges %>% 
+    dplyr::mutate(shortest_path = purrr::map2(.f = purrr::possibly(get_shortest_path, NA_real_), 
+                                              .x = from, .y = to, 
+                                              weighted_edges)) %>%
+    dplyr::rename("neg_from" = from, "neg_to" = to) %>%
+    select(neg_from, neg_to, shortest_path) 
+
+  
+  # two options 
+  if (adj_pairs) {
+    
+    # 3. find adjacent pairs along the path
+    neg_rec_edges = neg_rec_edges %>% 
+      select(shortest_path) %>% 
+      tidyr::unnest(shortest_path) %>% 
+      select(-weight) %>%
+      distinct() %>% 
+      dplyr::mutate(states = purrr::map(.f = collect_transition_states, 
+                                        .x = from,
+                                        .y = to))
+  } else {
+    
+    # 3. collect the states along each path 
+    
+    neg_rec_edges = neg_rec_edges %>% 
+      dplyr::mutate(states = purrr::map(.f = collect_between_transition_states, 
+                                        .x = shortest_path))
+    
+  }
+  
+  # 4. create pseudobulk cds and run DEG analysis
+  pb_cds = pseudobulk(ccm@ccs, ...)
+  
+  neg_rec_edges = neg_rec_edges  %>% 
+    dplyr::mutate(degs = purrr::map(.f = purrr::possibly(find_degs_between_states, NA_real_), 
+                                    .x = states, 
+                                    pb_cds))
+  
+    
+}
+
 
          
