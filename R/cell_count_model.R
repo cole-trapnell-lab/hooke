@@ -78,6 +78,9 @@ new_cell_count_set <- function(cds,
 
   coldata_df$group_id = coldata_df %>%
     dplyr::group_indices_("sample", "cell_group") %>% as.character
+  
+  # add to cds 
+  colData(cds)$group_id = coldata_df$group_id
 
   cds_summary = coldata_df %>%
     dplyr::group_by_("sample", "cell_group") %>%
