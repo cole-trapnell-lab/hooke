@@ -74,7 +74,7 @@ new_cell_count_set <- function(cds,
   # coldata_df$cluster = monocle3::clusters(cds)
   # coldata_df$partition = partitions(cds)
 
-  coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = cell_group)
+  coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = as.character(cell_group))
 
   coldata_df$group_id = coldata_df %>%
     dplyr::group_indices_("sample", "cell_group") %>% as.character
