@@ -50,5 +50,49 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 }
 
 
+get_neg_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
+  hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
+    as_tibble %>%
+    filter(edge_type != "undirected" &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold) 
+  
+}
+
+get_pos_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
+  hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
+    as_tibble %>%
+    filter(pcor > 0 &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold)
+  
+}
+
+add_covariate <- function(ccs, pb_cds, covariate) {
+  assertthat::assert_that(
+    tryCatch(expr = covariate %in% colnames(colData(ccs@cds)), 
+             error = function(e) FALSE), 
+    msg = "covariate not in colnames")
+  
+  assertthat::assert_that(
+    tryCatch(expr = !covariate %in% colnames(colData(pb_cds)), 
+             error = function(e) FALSE), 
+    msg = "covariate already in colnames")
+  
+  group_to_covariate = colData(ccs@cds) %>% 
+    as.data.frame %>%
+    select(group_id, all_of(covariate)) %>% 
+    distinct()
+  
+  pb_coldata = colData(pb_cds) %>% 
+    as.data.frame %>% 
+    left_join(group_to_covariate, by = "group_id")
+  
+  colData(pb_cds)[[covariate]] =  pb_coldata[[covariate]]
+  
+  return(pb_cds)
+}
+
+
 
 
