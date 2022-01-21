@@ -42,16 +42,16 @@ comp_abund <- function(to, from, ccm) {
 }
 
 
-id_to_shortname = function(gene_ids) {
-  rowData(meso_mt_cds) %>% 
+id_to_shortname = function(cds, gene_ids) {
+  rowData(cds) %>% 
     as.data.frame() %>% 
     select(gene_short_name, id) %>% 
     filter(id %in% gene_ids) %>% 
     pull(gene_short_name)
 }
 
-shortname_to_id = function(short_names) {
-  rowData(meso_mt_cds) %>% 
+shortname_to_id = function(cds, short_names) {
+  rowData(cds) %>% 
     as.data.frame() %>% 
     select(gene_short_name, id) %>% 
     filter(gene_short_name %in% short_names) %>% 

@@ -164,7 +164,7 @@ fm_path = fm_path %>%
 
 # filter edges for larger pcor values 
 fm_path = fm_path %>% 
-  dplyr::mutate(filter_edges = purrr::map(edges, ~filter(., abs(pcor) > 0.03)))
+  dplyr::mutate(filter_edges = purrr::map(edges, ~filter(., abs(pcor) > 0.05)))
 
 # this currently takes in filter_edges
 fm_path = fm_path %>%
@@ -174,7 +174,7 @@ fm_path = fm_path %>%
                              path = fm_path))
 
 
-saveRDS(fm_path, "examples/muscle_grn/transcription_regulators/fm_path.rds")
+# saveRDS(fm_path, "examples/muscle_grn/transcription_regulators/fm_path.rds")
 # fm_path <- readRDS("examples/muscle_grn/transcription_regulators/fm_path.rds")
 
 
@@ -210,7 +210,9 @@ saveRDS(all_dir_edges, "examples/muscle_grn/transcription_regulators/FM_dir_edge
 ensembl_to_shortname = as.data.frame(rowData(meso_mt_cds)) %>% select(id, gene_short_name)
 
 
+
 plot_grn <- function(all_dir_edges, 
+                     path,
                      num_levels = 2,
                      color_nodes_by = NULL,
                      arrow.gap=0.03,
@@ -233,7 +235,7 @@ plot_grn <- function(all_dir_edges,
 
   G = ade %>% select(from, to, edge_type, pcor, scaled_weight)  %>% igraph::graph_from_data_frame(directed = T)
 
-  state_order = fm_path %>% select(to, distance_from_root) %>%
+  state_order = path %>% select(to, distance_from_root) %>%
     rbind(data.frame("to"="4", distance_from_root=0)) %>%
     mutate("cell_group" = paste0("cluster_", to))
 
@@ -247,14 +249,27 @@ plot_grn <- function(all_dir_edges,
     ungroup() %>%  
     tibble::column_to_rownames("name")
   
+  
+  regulator_score_df =
+    path %>%
+    select(regulators) %>%
+    tidyr::unnest(regulators) %>%
+    select(gene_id, regulator_score) %>%
+    group_by(gene_id) %>%
+    arrange(-abs(regulator_score)) %>% # take the highest available score? 
+    slice(1) %>% 
+    ungroup()
+  
 
   # run sugiyama layout
-  lay1 <-  layout_with_sugiyama(G, layers=level_df[V(G)$name,][["group_label"]])
+  lay1 <- layout_with_sugiyama(G, layers=level_df[V(G)$name,][["group_label"]])
 
   g = ggnetwork(igraph::as_data_frame(G), layout = lay1$layout, arrow.gap = arrow.gap)
   
   # add level information
   g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
+  g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
+  
 
   p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend, size = scaled_weight)) +
       # draw unvdirected edges
@@ -272,14 +287,23 @@ plot_grn <- function(all_dir_edges,
   if (is.null(color_nodes_by) == FALSE) {
     
     # if numerical 
-    if (is.numeric(g[["cell_group"]])) {
+    if (color_nodes_by == "cell_group" & is.numeric(g[["cell_group"]])) {
       p = p + geom_nodelabel(data = g,
                              aes(fill = as.factor(get(color_nodes_by)),
                                  label = gene_short_name),
                              size = node_size) + 
         labs(fill = color_nodes_by) + 
         scale_fill_gradient2(low = "darkblue", mid = "white", high="red4")
-    } else {
+    } else if (color_nodes_by == "regulator_score"){
+      p = p + geom_nodelabel(data = g,
+                         aes(fill = regulator_score,
+                             label = gene_short_name, 
+                             size = 3*abs(regulator_score))) + 
+        scale_fill_gradient2(low = "darkblue", mid = "white", high="red4")
+      
+    } 
+    
+    else {
       # if categorical 
       p = p + geom_nodelabel(data = g,
                              aes(fill = as.factor(get(color_nodes_by)),
@@ -303,10 +327,13 @@ plot_grn <- function(all_dir_edges,
 }
 
 
-plot_grn(all_dir_edges %>% 
-           filter(edge_type != "undirected"), 
-         num_levels = 3,
-         color_nodes_by= "cell_group")
+all_dir_edges = all_dir_edges %>% 
+  filter(edge_type != "undirected")
+
+plot_grn(all_dir_edges, 
+         path = fm_path,
+         color_nodes_by = "regulator_score",
+         num_levels = 3)
 
 
 search_edge = function(all_dir_edges, name) {
@@ -328,8 +355,8 @@ rowData(meso_mt_cds) %>% as.data.frame() %>%
   filter(grepl("hif", gene_short_name))
 
 # MYORG not in regulators
-shortname_to_id(genes_to_check) %in% fm_regulators$gene_id
-shortname_to_id("hey1")
+shortname_to_id(meso_mt_cds, genes_to_check) %in% fm_regulators$gene_id
+shortname_to_id(meso_mt_cds, "hey1")
 
 
   
