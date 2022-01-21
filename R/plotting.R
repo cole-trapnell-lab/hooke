@@ -15,8 +15,9 @@ plot_contrast <- function(ccm,
                           edge_size=2,
                           cell_size=1,
                           p_value_thresh = 1.0,
-                          group_label_size=2, 
-                          plot_labels = TRUE){
+                          group_label_size=2,
+                          plot_labels = TRUE,
+                          fc_limits=c(-3,3)){
 
   umap_centers = centroids(ccm@ccs)
 
@@ -74,17 +75,17 @@ plot_contrast <- function(ccm,
                       cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                       by=c("cell_group"="cell_group"))
 
-  
+
   if (is.null(fc_limits)) {
     fc_limits = range(plot_df$delta_log_abund)
   } else {
     min = fc_limits[1]
     max = fc_limits[2]
-    plot_df = plot_df %>% 
+    plot_df = plot_df %>%
       mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
       mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
   }
-  
+
   # plot
   gp = ggplot() +
     geom_point(
@@ -113,12 +114,12 @@ plot_contrast <- function(ccm,
       low = "#122985",
       mid = "white",
       high = "red4",
-      na.value = "white", 
+      na.value = "white",
       limits = fc_limits
     )  +
     theme_void() +
     theme(legend.position = "none") +
-    monocle3:::monocle_theme_opts() 
+    monocle3:::monocle_theme_opts()
 
   gp = gp  +
     geom_segment(data = undirected_edge_df,
@@ -162,21 +163,21 @@ plot_contrast <- function(ccm,
                  linejoin='mitre',
                  arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
     scale_size_identity()
-  
+
   if (plot_labels) {
     gp <- gp + ggrepel::geom_label_repel(data = umap_centers_delta_abund %>% filter(delta_log_abund != 0),
                                          mapping = aes(umap_1, umap_2, label=cell_group),
                                          size=I(group_label_size),
                                          fill = "white")
   }
-  
+
 
   return(gp)
 }
 
-#' returns different color palettes 
+#' returns different color palettes
 #' @param num_colors the number of colors needed
-#' @param 
+#' @param
 get_colors <- function(num_colors, type = "rainbow") {
 
 
@@ -362,7 +363,7 @@ my_plot_cells <- function(data,
 }
 
 
-#' plots a path on top of 
+#' plots a path on top of
 #' @param data
 #' @param path_df
 #' @param edge_size
@@ -441,20 +442,20 @@ plot_path <- function(data,
 }
 
 
-add_edge <- function(gp, 
-                     path_df, 
+add_edge <- function(gp,
+                     path_df,
                      umap_centers,
-                     size = 1, 
+                     size = 1,
                      color = "black") {
     path_df = add_umap_coords(path_df, umap_centers)
-  
-    gp = gp + 
+
+    gp = gp +
       geom_segment(data = path_df,
               aes(x = umap_to_1,
                   y = umap_to_2,
                   xend = umap_from_1,
                   yend = umap_from_2),
-              size = size, 
+              size = size,
               color = color) +
       geom_segment(data = path_df,
               aes(x = umap_from_1,
@@ -465,21 +466,21 @@ add_edge <- function(gp,
               color = color,
               linejoin='mitre',
               arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
-    
+
     return(gp)
 }
 
 
 # plot igraph
-#' plots the resulting path as an igraph 
-#' instead of as a UMAP 
+#' plots the resulting path as an igraph
+#' instead of as a UMAP
 #' @param data
 #' @param edges
 #' @param color_nodes_by
 #' @param arrow.gap
 #' @param scale
 plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale = F) {
-  
+
   if (class(data) == "cell_count_set") {
     ccs = data
     plot_df = as.data.frame(colData(cds))
@@ -488,7 +489,7 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
   } else {
     print("some error message")
   }
-  
+
   umap_centers = centroids(ccs)
   cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   nodes = data.frame(id = cell_groups)
@@ -496,26 +497,26 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
     edges = edges %>% rename("from" = source, "to" = target)
   }
   edges = edges %>% select(from,to)
-  
+
   no_edge = setdiff(nodes$id, union(edges$from, edges$to))
   edges = rbind(edges, data.frame("from" = no_edge, "to" = no_edge))
   n = network(edges %>% dplyr::select(from,to), directed = T, loops = T)
   nodes = nodes[match(network.vertex.names(n), nodes$id),]
   n %v% "id" = network.vertex.names(n)
-  
-  merged_coords = ggnetwork(n) %>% select(id, vertex.names) %>% unique() %>% 
+
+  merged_coords = ggnetwork(n) %>% select(id, vertex.names) %>% unique() %>%
     left_join(umap_centers, by = c("id"="cell_group"))
   rownames(merged_coords) = merged_coords$id
   coords = merged_coords[network.vertex.names(n),] %>% select(umap_1,umap_2)
-  geo = as.matrix(sapply(coords, as.numeric))  
-  
+  geo = as.matrix(sapply(coords, as.numeric))
+
   g <- ggnetwork(x = n, layout = geo, arrow.gap=arrow.gap, scale = scale)
-  
+
   show(ggplot(g, aes(x, y, xend = xend, yend = yend)) +
           geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
           geom_nodes(size = 7,colour="black",shape=21) +
-          geom_nodetext_repel(aes(label = id), size=3) + 
+          geom_nodetext_repel(aes(label = id), size=3) +
           theme_blank())
-  
+
 }
 
