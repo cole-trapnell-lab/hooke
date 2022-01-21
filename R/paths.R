@@ -47,11 +47,41 @@ calc_shortest_path <- function(edges, from, to) {
   mf = igraph::shortest_paths(G, from = from, to = to, weights = igraph::E(G)$weight, output="epath")
   directed_subgraph = igraph::subgraph.edges(G, mf$epath[[1]])
   
+  
   # turn back into a dataframe
   new_pos_edge_coords_df = igraph::as_data_frame(directed_subgraph)
   
   return(new_pos_edge_coords_df)
 }
+
+
+#'
+#' @param edges
+#' 
+distance_to_root <- function(edges) {
+  
+  g = edges %>% select(from,to) %>% graph_from_data_frame()
+  distances = igraph::distances(g) %>% 
+    as.data.frame() %>% 
+    rownames_to_column("to") %>% 
+    pivot_longer(-c("to"), names_to = "from", values_to = "distance_from_root")
+  
+  node_info = as_tbl_graph(g) %>% 
+    tidygraph::activate(nodes) %>%
+    mutate(is_leaf = node_is_leaf(),
+           is_root = node_is_root()) %>%
+    as.data.frame()
+  
+  distance_df = inner_join(distances, 
+             filter(node_info, is_root), 
+             by = c("from"="name")) %>% 
+    select(-c(is_leaf,is_root, from))
+  
+  left_join(edges, distance_df, by = c("to"))
+}
+
+
+
 
 
 
@@ -97,9 +127,30 @@ get_weighted_edges <- function(ccm,
 get_shortest_path <- function(from, to, weighted_edges) {
   
   shortest_path_df = calc_shortest_path(weighted_edges, from, to) %>%
-    select(from, to, weight)
+    select(from, to, weight) %>% 
+    distance_to_root() %>% 
+    arrange(distance_from_root)
+    
   
   return(shortest_path_df)
+}
+
+#'
+#' @param shortest_path
+get_path_order <- function(shortest_path) {
+  state_order = shortest_path %>% 
+    mutate(order = paste(from, to, sep="_")) %>% 
+    pull(order) %>% 
+    stringr::str_split("_") %>%
+    unlist() %>% unique
+  return(state_order)
+}
+
+# select adjacent states 
+select_states <- function(ordered_path, start , n = 3) {
+  i = which(ordered_path == start)
+  j = i + n - 1
+  return(ordered_path[i:j])
 }
 
 #'
