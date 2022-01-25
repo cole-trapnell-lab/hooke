@@ -22,7 +22,14 @@ colData(pap_cds)$Size_Factor = size_factors(pap_cds)
 colData(pap_cds)$experiment = colData(pap_cds)$sample
 colData(pap_cds)$sample = NULL
 
-plot_cells(pap_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE)
+plot_cells(pap_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) +
+  ggsave("pap_cell_types.png", width=3, height=3)
 
 plot_cells(pap_cds, color_cells_by="Genotype", show_trajectory_graph=FALSE) + facet_wrap(~Genotype)
 
@@ -59,7 +66,9 @@ cond_csf2rb = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2rb-/-", Age=
 
 cond_ra_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2ra)
 
-plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="none", p_value_thresh=0.05)
+plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="none", p_value_thresh=0.05, plot_labels="none") +
+  theme_minimal() + monocle3:::monocle_theme_opts() +
+  ggsave("pap_mac_shift.png", width=7, height=6)
 
 cond_rb_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2rb)
 
