@@ -16,8 +16,10 @@ plot_contrast <- function(ccm,
                           cell_size=1,
                           p_value_thresh = 1.0,
                           group_label_size=2,
-                          plot_labels = TRUE,
-                          fc_limits=c(-3,3)){
+                          plot_labels = c("significant", "all", "none"),
+                          fc_limits=c(-3,3),
+                          sender_cell_groups=NULL,
+                          receiver_cell_groups=NULL){
 
   umap_centers = centroids(ccm@ccs)
 
@@ -37,6 +39,15 @@ plot_contrast <- function(ccm,
   directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
   undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
 
+  if (is.null(sender_cell_groups) == FALSE){
+    directed_edge_df = directed_edge_df %>% dplyr::filter(from %in% sender_cell_groups)
+    undirected_edge_df = undirected_edge_df %>% dplyr::filter(from %in% sender_cell_groups | to %in% sender_cell_groups)
+  }
+
+  if (is.null(receiver_cell_groups) == FALSE){
+    directed_edge_df = directed_edge_df %>% dplyr::filter(to %in% receiver_cell_groups)
+    undirected_edge_df = undirected_edge_df %>% dplyr::filter(from %in% receiver_cell_groups | to %in% receiver_cell_groups)
+  }
 
   # corr_edge_coords_umap_delta_abund = left_join(corr_edge_coords_umap_delta_abund,
   #                                               umap_centers,
@@ -117,8 +128,8 @@ plot_contrast <- function(ccm,
       na.value = "white",
       limits = fc_limits
     )  +
-    theme_void() +
-    theme(legend.position = "none") +
+    #theme_void() +
+    #theme(legend.position = "none") +
     monocle3:::monocle_theme_opts()
 
   gp = gp  +
@@ -164,8 +175,11 @@ plot_contrast <- function(ccm,
                  arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
     scale_size_identity()
 
-  if (plot_labels) {
-    gp <- gp + ggrepel::geom_label_repel(data = umap_centers_delta_abund %>% filter(delta_log_abund != 0),
+  if (plot_labels != "none") {
+    label_df = umap_centers_delta_abund
+    if (plot_labels == "significant")
+      label_df = label_df %>% filter(delta_log_abund != 0)
+    gp <- gp + ggrepel::geom_label_repel(data = label_df,
                                          mapping = aes(umap_1, umap_2, label=cell_group),
                                          size=I(group_label_size),
                                          fill = "white")
