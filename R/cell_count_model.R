@@ -31,7 +31,7 @@ setClass("cell_count_set",
 #' and feature metadata.
 #'
 #' @field ccs cell_count_set the underlying object of cell counts this class models.
-#' @field model_formula_str character string, specifies the model for the cell abundances.
+#' @field model_formula specifies the model for the cell abundances.
 #' @field model_family PLNnetworkfamily a family of PLNnetwork models for the cell count data.
 #' @field best_model PLNnetworkfit the current best PLN network model for the cell count data.
 #' @field model_aux SimpleList auxiliary information from from PLN model construction
@@ -42,7 +42,7 @@ setClass("cell_count_set",
 #' @exportClass cell_count_model
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
-                   model_formula_str = "character",
+                   model_formula = "formula",
                    # FIXME: for some reason I can't include these as slots. Maybe because they are R6? dunno. For now, they live in model_aux
                    model_family = "PLNnetworkfamily",
                    best_model = "PLNnetworkfit",
@@ -78,8 +78,8 @@ new_cell_count_set <- function(cds,
 
   coldata_df$group_id = coldata_df %>%
     dplyr::group_indices_("sample", "cell_group") %>% as.character
-  
-  # add to cds 
+
+  # add to cds
   colData(cds)$group_id = coldata_df$group_id
 
   cds_summary = coldata_df %>%
@@ -301,12 +301,16 @@ new_cell_count_model <- function(ccs,
   #                 "named 'gene_short_name' for certain functions."))
   # }
   #
+
+  model_frame = model.frame(model_formula[-2], pln_data)
+  xlevels = .getXlevels(terms(model_frame), model_frame)
+
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
-                      model_formula_str = model_formula_str,
+                      model_formula = model_formula,
                       best_model = best_model,
                       model_family = pln_model,
-                      model_aux = SimpleList()
+                      model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels)
                       )
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
