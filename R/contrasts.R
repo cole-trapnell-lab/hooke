@@ -16,6 +16,28 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   results
 }
 
+compute_vhat = function(ccm) {
+  if (model(ccm)$d > 0) {
+    ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
+    ## safe inversion using Matrix::solve and Matrix::diag and error handling
+    out <- tryCatch(Matrix::solve(vcov(model(ccm))),
+                    error = function(e) {e})
+    if (is(out, "error")) {
+      warning(paste("Inversion of the Fisher information matrix failed with following error message:",
+                    out$message,
+                    "Returning NA",
+                    sep = "\n"))
+      vhat <- matrix(NA, nrow = self$p, ncol = self$d)
+    } else {
+      vhat <- out #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+    }
+    dimnames(vhat) <- dimnames(vcov(model(ccm)))
+  } else {
+    vhat <- NULL
+  }
+  vhat
+}
+
 #' Predict cell type abundances given a PLN model and a set of inputs for its covariates
 #'
 #' @param newdata needs to be suitable input to pln_model
@@ -32,8 +54,11 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
   #                  xlev = ccm@model_aux[["xlevels"]])
   X = Matrix::bdiag(rep.int(list(base_X), ccm@best_model$p))
-  v_hat = vcov(ccm@best_model)
-  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(ccm@best_model$n)
+
+
+
+  v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
+  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(ccm@best_model$n)
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
@@ -69,7 +94,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
 compare_abundances <- function(ccm, cond_x, cond_y){
   contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by="cell_group")
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
-                                                delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_sd_y^2 + log_abund_sd_x^2), lower.tail=FALSE))
+                                                delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
+                                                delta_q_value = p.adjust(delta_p_value))
   return(contrast_tbl)
 }
 
