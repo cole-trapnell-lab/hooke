@@ -86,7 +86,11 @@ pseudobulk <- function(ccs,
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
   pseudobulk_cds = preprocess_cds(pseudobulk_cds)
   pseudobulk_cds = reduce_dimension(pseudobulk_cds)
-
+  
+  # not sure the best place to put this yet
+  colData(pseudobulk_cds)$cell_group = as.character(colData(pseudobulk_cds)$cell_group)
+  
+  return(pseudobulk_cds)
 }
 
 #' @param from_state
@@ -112,7 +116,7 @@ collect_between_transition_states = function(shortest_path) {
 #' @param cores
 find_degs_between_states = function(states,
                                     cds,
-                                    model_formula_str = "~cell_group",
+                                    model_formula_str = "~ cell_group",
                                     gene_whitelist = NULL,
                                     q_value_thresh = 0.05,
                                     effect_thresh = 2,
@@ -132,6 +136,65 @@ find_degs_between_states = function(states,
 }
 
 
+#'
+#' @param pb_cds
+#' @param knockout_genes
+#' 
+get_allowed_regulators = function(pb_cds, knockout_genes, allow_regulators = c("transcription")) {
+  
+  gene_set = msigdbr(species = "Danio rerio", subcategory = "GO:MF")
+  
+  transcription_regulators = list()
+  receptors = list()
+  kinases = list()
+  if ("transcription" %in% allow_regulators){
+    transcription_regulators = gene_set %>%
+      dplyr::select(gs_id, gene_symbol, gs_name) %>%
+      dplyr::filter(grepl("_TRANSCRIPTION", gs_name, ignore.case=TRUE)) %>%
+      pull(gene_symbol) %>% unique %>% sort
+  }
+  
+  if ("receptors" %in% allow_regulators) {
+    receptors = gene_set %>%
+      dplyr::select(gs_id, gene_symbol, gs_name) %>%
+      dplyr::filter(grepl("_RECEPTOR", gs_name, ignore.case=TRUE)) %>%
+      pull(gene_symbol) %>% unique %>% sort
+    
+  }
+  if ("kinases" %in% allow_regulators) {
+    kinases = gene_set %>%
+      dplyr::select(gs_id, gene_symbol, gs_name) %>%
+      dplyr::filter(grepl("_KINASE", gs_name, ignore.case=TRUE)) %>%
+      pull(gene_symbol) %>% unique %>% sort
+  }
+  
+  allowed_regulator_symbols = c(transcription_regulators,
+                                kinases, receptors)
+  
+  allowed_regulator_ids = rowData(pb_cds) %>% 
+    as.data.frame %>% 
+    filter(gene_short_name %in% allowed_regulator_symbols) %>% 
+    pull(id)
+  
+  allowed_regulator_ids = c(allowed_regulator_ids, knockout_genes)
+  return(allowed_regulator_ids)
+  
+} 
+
+#' 
+#' @param pb_cds
+#' @param degs
+#' @param allowed_regulator_ids
+#' 
+get_gene_modules <- function(pb_cds, degs, allowed_regulator_ids) {
+  
+  all_degs = c(degs, allowed_regulator_ids) %>% unique
+  all_gene_modules = monocle3::find_gene_modules(pb_cds[all_degs,], resolution=1e-2)
+  all_gene_modules = left_join(all_gene_modules, rowData(pb_cds) %>% as.data.frame, by="id")
+  return(all_gene_modules)
+}
+
+
 #' @param genes
 #' @param states only build model on specified cell states 
 #' @param pb_cds A pseudobulked Monocole cell data set object
@@ -144,12 +207,18 @@ find_degs_between_states = function(states,
 build_pln_model_on_genes = function(genes,
                                     states,
                                     cds,
+                                    knockout_genes = NULL, 
                                     regulatory_genes = NULL,
                                     model_formula_str = "~cell_state",
                                     gene_module_df = NULL,
                                     sparsity_factor=1,
                                     pln_min_ratio=0.001,
                                     pln_num_penalties=30){
+  
+  # to do: handle knockouts?  
+  if (is.null(knockout_genes) == FALSE) {
+    genes = union(genes, knockout_genes)
+  }
   
   pb_cds = cds[genes, as.character(colData(cds)$cell_group) %in% states]
   
@@ -269,11 +338,11 @@ rank_regulators = function(states, gene_model_ccm, cds, log_abundance_thresh=1e-
   activator_score_df = tibble(gene_id = names(activator_scores), regulator_score = activator_scores)
   
   # get ids of downregulated genes
-  represssors = from_to_cond_diff %>% dplyr::filter(delta_log_abund < 0) %>% pull(cell_group)
+  repressors = from_to_cond_diff %>% dplyr::filter(delta_log_abund < 0) %>% pull(cell_group)
   
   # get the subgraph induced by upregulated genes
   downreg_igraph = hooke:::return_igraph(model(gene_model_ccm))
-  downreg_igraph = igraph::induced_subgraph(downreg_igraph, igraph::V(downreg_igraph)[represssors])
+  downreg_igraph = igraph::induced_subgraph(downreg_igraph, igraph::V(downreg_igraph)[repressors])
   downreg_igraph = igraph::delete_edges(downreg_igraph, igraph::E(downreg_igraph)[weight < 0])
   
   repressor_scores = -igraph::strength(downreg_igraph)

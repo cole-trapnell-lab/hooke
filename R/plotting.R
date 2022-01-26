@@ -14,24 +14,25 @@ plot_contrast <- function(ccm,
                           #cell_group="cluster",
                           edge_size=2,
                           cell_size=1,
-                          p_value_thresh = 1.0,
+                          q_value_thresh = 1.0,
                           group_label_size=2,
                           plot_labels = c("significant", "all", "none"),
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
-                          receiver_cell_groups=NULL){
+                          receiver_cell_groups=NULL,
+                          plot_edges = TRUE){
 
   umap_centers = centroids(ccm@ccs)
 
   umap_centers_delta_abund = umap_centers
-  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
   umap_centers_delta_abund = dplyr::left_join(umap_centers_delta_abund, cond_b_vs_a_tbl, by=c("cell_group"="cell_group"))
   umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(max_log_abund = pmax(log_abund_x, log_abund_y))
   umap_centers_delta_abund = umap_centers_delta_abund %>%
     dplyr::mutate(max_log_abund = ifelse(max_log_abund < log_abundance_thresh, log_abundance_thresh, max_log_abund))
 
-  #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_p_value, method = "BH")
-  # umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(delta_log_abund = ifelse(delta_p_value <= p_value_thresh, delta_log_abund, 0))
+  #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_q_value, method = "BH")
+  # umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
 
   corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
                                                               umap_centers_delta_abund,
@@ -132,48 +133,50 @@ plot_contrast <- function(ccm,
     #theme(legend.position = "none") +
     monocle3:::monocle_theme_opts()
 
-  gp = gp  +
-    geom_segment(data = undirected_edge_df,
-                 aes(x = to_umap_1,
-                     y = to_umap_2,
-                     xend=from_umap_1,
-                     yend = from_umap_2,
-                     size=edge_size * scaled_weight),
-                 #size=edge_size / 4,
-                 color="lightgray") +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                 aes(x = to_umap_1,
-                     y = to_umap_2,
-                     xend=from_umap_1,
-                     yend = from_umap_2,
-                     size=edge_size * scaled_weight),
-                 color="black") +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                 aes(x = to_umap_1,
-                     y = to_umap_2,
-                     xend=(to_umap_1+from_umap_1)/2,
-                     yend = (to_umap_2+from_umap_2)/2,
-                     size=edge_size * scaled_weight),
-                 color="black",
-                 linejoin='mitre',
-                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                 aes(x = from_umap_1,
-                     y = from_umap_2,
-                     xend=to_umap_1,
-                     yend = to_umap_2,
-                     size=edge_size * scaled_weight),
-                 color="black") +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                 aes(x = from_umap_1,
-                     y = from_umap_2,
-                     xend=(from_umap_1+to_umap_1)/2,
-                     yend = (from_umap_2+to_umap_2)/2,
-                     size=edge_size * scaled_weight),
-                 color="black",
-                 linejoin='mitre',
-                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-    scale_size_identity()
+  if (plot_edges) {
+    gp = gp  +
+      geom_segment(data = undirected_edge_df,
+                   aes(x = to_umap_1,
+                       y = to_umap_2,
+                       xend=from_umap_1,
+                       yend = from_umap_2,
+                       size=edge_size * scaled_weight),
+                   #size=edge_size / 4,
+                   color="lightgray") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                   aes(x = to_umap_1,
+                       y = to_umap_2,
+                       xend=from_umap_1,
+                       yend = from_umap_2,
+                       size=edge_size * scaled_weight),
+                   color="black") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                   aes(x = to_umap_1,
+                       y = to_umap_2,
+                       xend=(to_umap_1+from_umap_1)/2,
+                       yend = (to_umap_2+from_umap_2)/2,
+                       size=edge_size * scaled_weight),
+                   color="black",
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                   aes(x = from_umap_1,
+                       y = from_umap_2,
+                       xend=to_umap_1,
+                       yend = to_umap_2,
+                       size=edge_size * scaled_weight),
+                   color="black") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                   aes(x = from_umap_1,
+                       y = from_umap_2,
+                       xend=(from_umap_1+to_umap_1)/2,
+                       yend = (from_umap_2+to_umap_2)/2,
+                       size=edge_size * scaled_weight),
+                   color="black",
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      scale_size_identity()
+  }
 
   if (plot_labels != "none") {
     label_df = umap_centers_delta_abund
@@ -184,8 +187,6 @@ plot_contrast <- function(ccm,
                                          size=I(group_label_size),
                                          fill = "white")
   }
-
-
   return(gp)
 }
 
@@ -534,3 +535,64 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 
 }
 
+
+#' helper function for adding attributes to network node
+#' assumes gene id is in the dataframe
+# add_node_attribute <- function(n, df, colname) {
+#   df = df[match(network.vertex.names(n), df$gene_id),]
+#   n %v% colname = df[[colname]]
+#   return(n)
+# }
+#
+#
+# plot_regulators <- function(edges) {
+#
+#   n = network(edges, directed = F, loops = F)
+#
+#   # add regulator score to the nodes
+#
+#   add_node_attribute <- function(n, df, colname) {
+#     df = df[match(network.vertex.names(n), df$gene_id),]
+#     n %v% colname = reg_score_df[[colname]]
+#     return(n)
+#   }
+#
+#   n = add_node_attribute(n, reg_score_df, "regulator_score")
+#
+#   g = ggnetwork(n, arrow.gap=0.02)
+#
+#   ggplot(mapping=aes(x, y, xend = xend, yend = yend, size = scaled_weight)) +
+#     geom_edges(data = g %>% filter(edge_type == "undirected"), color="gray") +
+#
+#     # geom_edges(data = g %>% filter(edge_type != "undirected"),
+#     #            arrow = arrow(length = unit(3, "pt"), type="closed")) +
+#
+#     geom_edges(data = g %>% filter(edge_type != "undirected"),
+#                arrow = arrow(angle = 90, length = unit(.075, "cm"))) +
+#
+#     geom_nodes(data = g, aes(fill=regulator_score),
+#                # fill = "red4",
+#                size = 3, colour="black",shape=21) +
+#     scale_size_identity() +
+#     scale_fill_gradient2(low = "darkblue", mid = "white", high="red4") +
+#     monocle3:::monocle_theme_opts() + theme_blank()
+#
+# }
+
+
+
+# To add:
+#' #' plot a similar heatmap to lauren's BB testing
+#' #'
+#' plot_heatmap <- function(ccm) {
+#'
+#' }
+#'
+#' plot_heatmap_2 <- function() {
+#'
+#' }
+#'
+#' #' plot normalized counts as boxplots
+#' plot_boxplots <- function() {
+#'
+#' }
