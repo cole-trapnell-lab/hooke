@@ -275,7 +275,7 @@ build_pln_model_on_genes = function(genes,
   gene_ccm = select_model(gene_ccm, sparsity_factor=sparsity_factor)
   return(gene_ccm)
 }
-debug(build_pln_model_on_genes)
+#debug(build_pln_model_on_genes)
 
 # Now let's make a whitelist of regulators:
 gene_set = msigdbr(species = "Mus musculus", subcategory = "GO:MF")
@@ -315,7 +315,7 @@ St_f = St_f %>%
     .x = degs,
     .y = states,
     pseudobulk_cds,
-    "~cell_state",
+    model_formula_str="~cell_state",
     regulatory_genes = allowed_regulator_ids,
     gene_module_df = all_gene_modules,
     sparsity_factor=1,
@@ -394,6 +394,22 @@ plot_top_regulators = function(regulator_df, cds, group_label_size=2, resid_std_
 }
 #debug(plot_top_regulators)
 plot_top_regulators(St_f$regulators[[1]], pseudobulk_cds)
+
+get_neighboring_genes = function(gene_model_ccm, pseudobulk_cds, gene_short_name, pos_p_cor_only=TRUE, min_abs_pcor=0.001){
+  upreg_igraph = hooke:::return_igraph(model(gene_model_ccm))
+  upreg_igraph = igraph::induced_subgraph(upreg_igraph, igraph::V(upreg_igraph))
+  upreg_igraph = igraph::delete_edges(upreg_igraph, igraph::E(upreg_igraph)[abs(weight) < min_abs_pcor])
+  if (pos_p_cor_only)
+    upreg_igraph = igraph::delete_edges(upreg_igraph, igraph::E(upreg_igraph)[weight < 0])
+  source_gene_id = rowData(pseudobulk_cds)[rowData(pseudobulk_cds)$gene_short_name == gene_short_name,] %>% as.data.frame %>% pull(id)
+  n_ids = igraph::V(upreg_igraph)[igraph::neighbors(upreg_igraph, source_gene_id)]$name
+  rowData(pseudobulk_cds)[n_ids,] %>% as.data.frame %>% pull(gene_short_name)
+}
+#debug(get_neighboring_genes)
+get_neighboring_genes(St_f$gene_count_model[[1]], pseudobulk_cds, "Csf2ra", min_abs_pcor=0.01)
+
+get_neighboring_genes(St_f$gene_count_model[[1]], pseudobulk_cds, "Cebpb", min_abs_pcor=0.01)
+get_neighboring_genes(St_f$gene_count_model[[1]], pseudobulk_cds, "Zeb2", min_abs_pcor=0.01)
 
 # TODO: after we've done the above for a bunch of transitions, we should be able to pull out the top regulators for each
 # and assemble them into a single regulatory network that explains all the shifts!
