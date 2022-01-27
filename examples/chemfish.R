@@ -14,7 +14,8 @@ setwd("~/OneDrive/UW/Trapnell/hooke/examples/")
 
 
 if (!file.exists("R_objects/cds_metadata_proj_eliza.RDS")) {
-  drive_download("https://drive.google.com/file/d/1lnCtTZig1inhu3KCNOjjqIUp7aZnOJNx/")
+  drive_download("https://drive.google.com/file/d/1lnCtTZig1inhu3KCNOjjqIUp7aZnOJNx/", 
+                 path = "R_objects/cds_metadata_proj_eliza.RDS")
 }
 
 
@@ -43,16 +44,16 @@ plot_contrast(cf_ccm, cond_sb_vs_dmso_tbl, scale_shifts_by="none",
               plot_labels = "significant", 
               q_value_thresh = 0.05)
 
-cond_cp = estimate_abundances(cf_ccm, tibble::tibble(drug="CP"))
-cond_etoh = estimate_abundances(cf_ccm, tibble::tibble(drug="EtOH"))
+cond_cp = estimate_abundances(cf_ccm, tibble::tibble(drug="CP", timepoint = "24"))
+cond_etoh = estimate_abundances(cf_ccm, tibble::tibble(drug="EtOH",timepoint = "24"))
 cond_cp_vs_etoh_tbl = compare_abundances(cf_ccm, cond_etoh, cond_cp)
 
 
-plot_contrast(cp_ccm, 
+plot_contrast(cf_ccm, 
               cond_cp_vs_etoh_tbl, 
               scale_shifts_by="none", 
               plot_labels = "significant", 
-              plot_edges = F, 
+              plot_edges = T, 
               q_value_thresh = 0.05) 
 
 
