@@ -56,8 +56,8 @@ ccs = new_cell_count_set(pap_cds,
 ccm  = new_cell_count_model(ccs,
                             model_formula_str = "~Genotype + batch")
 
-ccm = select_model(ccm, criterion="StARS", sparsity_factor=0.1)
-
+ccm = select_model(ccm, criterion="EBIC", sparsity_factor=1)
+plot(model(ccm), output="corrplot")
 
 cond_csf2ra = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2ra-/-", Age="12-13 weeks", batch="A", experiment=1))
 cond_wt = estimate_abundances(ccm, tibble::tibble(Genotype="WT", Age="12-13 weeks", batch="A", experiment=1))
@@ -66,13 +66,13 @@ cond_csf2rb = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2rb-/-", Age=
 
 cond_ra_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2ra)
 
-plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="none", p_value_thresh=0.05, plot_labels="none") +
+plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.01) +
   theme_minimal() + monocle3:::monocle_theme_opts() +
   ggsave("pap_mac_shift.png", width=7, height=6)
 
 cond_rb_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2rb)
 
-plot_contrast(ccm, cond_rb_vs_wt_tbl, scale_shifts_by="none", p_value_thresh=0.05)
+plot_contrast(ccm, cond_rb_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.05)
 
 pred_abund_mat = cbind(cond_wt$log_abund, cond_csf2ra$log_abund, cond_csf2rb$log_abund)
 colnames(pred_abund_mat) = c("WT", "Csfr2ra-/-", "Csfr2rb-/-")
