@@ -50,24 +50,6 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 }
 
 
-get_neg_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
-  hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
-    as_tibble %>%
-    filter(edge_type != "undirected" &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold) 
-  
-}
-
-get_pos_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
-  hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
-    as_tibble %>%
-    filter(pcor > 0 &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold)
-  
-}
-
 add_covariate <- function(ccs, pb_cds, covariate) {
   assertthat::assert_that(
     tryCatch(expr = covariate %in% colnames(colData(ccs@cds)), 
@@ -191,6 +173,7 @@ plot_sub_contrast <- function (ccm,
                                cond_b_vs_a_tbl,
                                cell_group = "cell_type_broad",
                                facet_group = "major_group",
+                               select_group = NULL,
                                log_abundance_thresh = -5,
                                scale_shifts_by=c("receiver", "sender", "none"),
                                edge_size=2,
@@ -217,6 +200,15 @@ plot_sub_contrast <- function (ccm,
   cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% 
     left_join(cg_to_mg, by = "cell_group")
   
+  if (is.null(select_group) == FALSE) {
+    ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["facet_group"]] == select_group]
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(facet_group == select_group) 
+    
+    sub_cell_groups = unique(colData(ccm@ccs@cds)$cell_group)
+    ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
+    
+  }
+  
   
   plot_contrast(ccm, 
                 cond_b_vs_a_tbl, 
@@ -233,3 +225,37 @@ plot_sub_contrast <- function (ccm,
     facet_wrap(~facet_group)
   
 }
+
+
+
+#' projection wrap up 
+#' @param query_cds
+#' @param ref_cds
+#' @param directory_path a string giving the name of the directory from which to read the model files
+#' @param transfer_type 
+run_projection <- function(query_cds, 
+                           ref_cds, 
+                           directory_path, 
+                           transfer_type = "cluster") {
+  
+  query_cds <- load_transform_models(query_cds, directory_path)
+  query_cds <- preprocess_transform(query_cds, method="PCA")
+  query_cds <- align_beta_transform(query_cds)
+  query_cds <- reduce_dimension_transform(query_cds, method="UMAP")
+  
+  umap_dims = reducedDims(query_cds)[["UMAP"]]
+  annoy_res = uwot:::annoy_search(umap_dims,
+                                k = 10,
+                                ann = query_cds@reduce_dim_aux$UMAP$nn_index$annoy_index)
+
+  labels  = get_nn_labels(umap_dims,
+                          annoy_res,
+                          as.data.frame(colData(ref_cds)),
+                          transfer_type = transfer_type)
+  
+  query_cds = query_cds[,!is.na(colData(query_cds)[[transfer_type]])]
+  
+  return(query_cds)
+}
+
+
