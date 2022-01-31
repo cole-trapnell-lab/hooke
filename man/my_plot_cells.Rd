@@ -11,7 +11,8 @@ my_plot_cells(
   cell_size = 1,
   legend_position = "none",
   residuals = NULL,
-  cond_b_vs_a_tbl = NULL
+  cond_b_vs_a_tbl = NULL,
+  q_value_thresh = 1
 )
 }
 \description{

@@ -10,7 +10,14 @@ plot_contrast(
   log_abundance_thresh = -5,
   scale_shifts_by = c("receiver", "sender", "none"),
   edge_size = 2,
-  cell_size = 1
+  cell_size = 1,
+  q_value_thresh = 1,
+  group_label_size = 2,
+  plot_labels = c("significant", "all", "none"),
+  fc_limits = c(-3, 3),
+  sender_cell_groups = NULL,
+  receiver_cell_groups = NULL,
+  plot_edges = TRUE
 )
 }
 \arguments{

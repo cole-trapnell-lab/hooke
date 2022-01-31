@@ -18,7 +18,7 @@ and feature metadata.
 \describe{
 \item{\code{ccs}}{cell_count_set the underlying object of cell counts this class models.}
 
-\item{\code{model_formula_str}}{character string, specifies the model for the cell abundances.}
+\item{\code{model_formula}}{specifies the model for the cell abundances.}
 
 \item{\code{model_family}}{PLNnetworkfamily a family of PLNnetwork models for the cell count data.}
 
