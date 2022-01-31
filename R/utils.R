@@ -50,24 +50,6 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 }
 
 
-get_neg_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
-  hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
-    as_tibble %>%
-    filter(edge_type != "undirected" &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold) 
-  
-}
-
-get_pos_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
-  hooke:::collect_pln_graph_edges(a549_ccm, cond_0_vs_10000_tbl) %>%
-    as_tibble %>%
-    filter(pcor > 0 &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold)
-  
-}
-
 add_covariate <- function(ccs, pb_cds, covariate) {
   assertthat::assert_that(
     tryCatch(expr = covariate %in% colnames(colData(ccs@cds)), 
@@ -105,7 +87,8 @@ find_edges <- function(states, gene_model_ccm) {
   
 }
 
-#' returns specificity
+#' calculates the fraction expression, mean expression and specificity 
+#' for each gene split by the specified group 
 #' @param cds
 #' @param group_cells_by
 #' 
@@ -156,4 +139,123 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
   return(cluster_fraction_expressing_table)
   
 }
+
+
+#' this switches the umap space to the sub umap space
+#' @param cds
+#' @param sub_space 
+switch_umap_space <- function(cds, sub_space = TRUE) {
+  curr_umap_matrix = reducedDims(cds)[["UMAP"]]
+  
+  if (sub_space) {
+    umap_coords = colData(cds) %>% 
+      as.data.frame() %>% 
+      select(subumap3d_1, subumap3d_2, subumap3d_3) %>% 
+      as.matrix()
+  } else {
+    umap_coords = colData(cds) %>% 
+      as.data.frame() %>% 
+      select(umap3d_1, umap3d_2, umap3d_3) %>% 
+      as.matrix()
+  }
+  reducedDims(cds)[["UMAP"]] = umap_coords[rownames(curr_umap_matrix),]
+  return(cds)
+}
+
+#' wrapper for plot contrast that allows you to facet the plot
+#' you can also switch between sub + full umap space
+#' @param ccm
+#' @param cond_b_vs_a_tbl
+#' @param cell_group
+#' @param facet_group
+#'
+plot_sub_contrast <- function (ccm,
+                               cond_b_vs_a_tbl,
+                               cell_group = "cell_type_broad",
+                               facet_group = "major_group",
+                               select_group = NULL,
+                               log_abundance_thresh = -5,
+                               scale_shifts_by=c("receiver", "sender", "none"),
+                               edge_size=2,
+                               cell_size=1,
+                               q_value_thresh = 1.0,
+                               group_label_size=2,
+                               plot_labels = c("significant", "all", "none"),
+                               fc_limits=c(-3,3),
+                               sender_cell_groups=NULL,
+                               receiver_cell_groups=NULL,
+                               plot_edges = TRUE, 
+                               sub_space = T) {
+  
+  
+  ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, sub_space = sub_space)
+  
+  colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[cell_group]]
+  colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
+  
+  cg_to_mg = as.data.frame(colData(ccm@ccs@cds)) %>% 
+    select("cell_group", "facet_group") %>% 
+    distinct()
+  
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% 
+    left_join(cg_to_mg, by = "cell_group")
+  
+  if (is.null(select_group) == FALSE) {
+    ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["facet_group"]] == select_group]
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(facet_group == select_group) 
+    
+    sub_cell_groups = unique(colData(ccm@ccs@cds)$cell_group)
+    ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
+    
+  }
+  
+  
+  plot_contrast(ccm, 
+                cond_b_vs_a_tbl, 
+                scale_shifts_by=scale_shifts_by, 
+                edge_size=edge_size,
+                cell_size=cell_size,
+                q_value_thresh = q_value_thresh,
+                group_label_size=group_label_size,
+                plot_labels = plot_labels,
+                fc_limits=fc_limits,
+                sender_cell_groups=sender_cell_groups,
+                receiver_cell_groups=receiver_cell_groups,
+                plot_edges = plot_edges) + 
+    facet_wrap(~facet_group)
+  
+}
+
+
+
+#' projection wrap up 
+#' @param query_cds
+#' @param ref_cds
+#' @param directory_path a string giving the name of the directory from which to read the model files
+#' @param transfer_type 
+run_projection <- function(query_cds, 
+                           ref_cds, 
+                           directory_path, 
+                           transfer_type = "cluster") {
+  
+  query_cds <- load_transform_models(query_cds, directory_path)
+  query_cds <- preprocess_transform(query_cds, method="PCA")
+  query_cds <- align_beta_transform(query_cds)
+  query_cds <- reduce_dimension_transform(query_cds, method="UMAP")
+  
+  umap_dims = reducedDims(query_cds)[["UMAP"]]
+  annoy_res = uwot:::annoy_search(umap_dims,
+                                k = 10,
+                                ann = query_cds@reduce_dim_aux$UMAP$nn_index$annoy_index)
+
+  labels  = get_nn_labels(umap_dims,
+                          annoy_res,
+                          as.data.frame(colData(ref_cds)),
+                          transfer_type = transfer_type)
+  
+  query_cds = query_cds[,!is.na(colData(query_cds)[[transfer_type]])]
+  
+  return(query_cds)
+}
+
 

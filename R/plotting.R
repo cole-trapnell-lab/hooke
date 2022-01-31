@@ -84,7 +84,8 @@ plot_contrast <- function(ccm,
   plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
 
   plot_df = dplyr::left_join(plot_df,
-                      cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
+                             cond_b_vs_a_tbl, 
+                      # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                       by=c("cell_group"="cell_group"))
 
 
@@ -239,7 +240,8 @@ my_plot_cells <- function(data,
                       cell_size=1,
                       legend_position="none",
                       residuals = NULL,
-                      cond_b_vs_a_tbl = NULL) {
+                      cond_b_vs_a_tbl = NULL, 
+                      q_value_thresh = 1.0) {
 
   if (class(data) == "cell_count_set") {
     cds = data@cds
@@ -274,7 +276,10 @@ my_plot_cells <- function(data,
   }
 
   else if (!is.null(cond_b_vs_a_tbl)) {
-
+    
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% 
+      dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+    
     plot_df = dplyr::left_join(plot_df,
                                cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                                by=c("cell_group"="cell_group"))
