@@ -6,11 +6,11 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
                          xlev = ccm@model_aux[["xlevels"]])
   #O <- model.offset(ccm@model_aux[["model_frame"]])
-  EZ <- tcrossprod(X, ccm@best_model$model_par$Theta)
+  EZ <- tcrossprod(X, model(ccm)$model_par$Theta)
   #if (!is.null(O))
   #  EZ <- EZ + O
-  EZ <- sweep(EZ, 2, 0.5 * diag(ccm@best_model$model_par$Sigma), "+")
-  colnames(EZ) <- colnames(ccm@best_model$model_par$Sigma)
+  EZ <- sweep(EZ, 2, 0.5 * diag(model(ccm)$model_par$Sigma), "+")
+  colnames(EZ) <- colnames(model(ccm)$model_par$Sigma)
   results <- switch(type, link = EZ, response = exp(EZ))
   attr(results, "type") <- type
   results
@@ -53,12 +53,12 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
 
   #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
   #                  xlev = ccm@model_aux[["xlevels"]])
-  X = Matrix::bdiag(rep.int(list(base_X), ccm@best_model$p))
+  X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
 
 
 
   v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
-  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(ccm@best_model$n)
+  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(model(ccm)$n)
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)

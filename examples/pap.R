@@ -54,7 +54,8 @@ ccs = new_cell_count_set(pap_cds,
 
 
 ccm  = new_cell_count_model(ccs,
-                            model_formula_str = "~Genotype + batch")
+                            main_model_formula_str = "Genotype",
+                            nuisance_model_formula_str = "batch")
 
 ccm = select_model(ccm, criterion="EBIC", sparsity_factor=1)
 plot(model(ccm), output="corrplot")

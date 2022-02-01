@@ -4,8 +4,9 @@
 #'@param cond_b_vs_a_tbl A contrast between two conditions as returned by compare_abundances()
 collect_pln_graph_edges <- function(ccm,
                                     cond_b_vs_a_tbl,
-                                    log_abundance_thresh = 1-5){
-  pln_model = model(ccm)
+                                    log_abundance_thresh = 1-5,
+                                    model_for_pcors = "reduced"){
+  pln_model = model(ccm, model_for_pcors)
 
   abundance_corr_tbl = correlate_abundance_changes(pln_model, cond_b_vs_a_tbl)
 

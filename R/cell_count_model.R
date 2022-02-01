@@ -33,7 +33,8 @@ setClass("cell_count_set",
 #' @field ccs cell_count_set the underlying object of cell counts this class models.
 #' @field model_formula specifies the model for the cell abundances.
 #' @field model_family PLNnetworkfamily a family of PLNnetwork models for the cell count data.
-#' @field best_model PLNnetworkfit the current best PLN network model for the cell count data.
+#' @field best_full_model PLNnetworkfit the current best PLN network model for the cell count data. Both main effects and nuisance terms
+#' @field best_reduced_model PLNnetworkfit the current best (reduced) PLN network model for the cell count data. Nuisance terms only
 #' @field model_aux SimpleList auxiliary information from from PLN model construction
 #' @name cell_count_model
 #' @rdname cell_count_model
@@ -42,10 +43,12 @@ setClass("cell_count_set",
 #' @exportClass cell_count_model
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
-                   model_formula = "formula",
-                   # FIXME: for some reason I can't include these as slots. Maybe because they are R6? dunno. For now, they live in model_aux
-                   model_family = "PLNnetworkfamily",
-                   best_model = "PLNnetworkfit",
+                   full_model_formula = "formula",
+                   full_model_family = "PLNnetworkfamily",
+                   best_full_model = "PLNnetworkfit",
+                   reduced_model_formula = "formula",
+                   reduced_model_family = "PLNnetworkfamily",
+                   best_reduced_model = "PLNnetworkfit",
                    model_aux = "SimpleList")
 )
 
@@ -189,8 +192,9 @@ new_cell_count_set <- function(cds,
 #' allows user to update it.
 #'
 #' @param ccs A Hooke cell_count_set object.
-#' @param model_formula_str A character string specifying the model of cell abundances across samples.
-#' where terms refer to columns in\code{colData(ccs)}
+#' @param main_model_formula_str A character string specifying the model of cell abundances across samples,
+#' where terms refer to columns in\code{colData(ccs)}. Put main effects here.
+#' @param nuisance_model_formula_str A character string specifying the model of cell abundances across samples. Put nuisance effects here.
 #' @param penalty_matrix A numeric NxN symmetric matrix specifying penalties for
 #'   the PLN model, where N is the number of cell types. Entries must be
 #'   positive. Use to specify an undirected graph prior for the PLN model.
@@ -202,7 +206,8 @@ new_cell_count_set <- function(cds,
 #' @importFrom PLNmodels getModel
 #' @export
 new_cell_count_model <- function(ccs,
-                                 model_formula_str,
+                                 main_model_formula_str,
+                                 nuisance_model_formula_str = "1",
                                  penalty_matrix = NULL,
                                  whitelist=NULL,
                                  blacklist=NULL,
@@ -221,8 +226,14 @@ new_cell_count_model <- function(ccs,
                                       covariates = colData(ccs) %>% as.data.frame,
                                       offset = size_factors(ccs))
 
-  model_formula_str = paste("Abundance", model_formula_str, " + offset(log(Offset))")
-  model_formula = as.formula(model_formula_str)
+  main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
+  nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
+
+  full_model_formula_str = paste("Abundance~", main_model_formula_str, "+", nuisance_model_formula_str, " + offset(log(Offset))")
+  full_model_formula = as.formula(full_model_formula_str)
+
+  reduced_model_formula_str = paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
+  reduced_model_formula = as.formula(reduced_model_formula_str)
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
@@ -253,7 +264,7 @@ new_cell_count_model <- function(ccs,
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula
   # created with as.formula (e.g. after pasting).
-  pln_model <- do.call(PLNmodels::PLNnetwork, args=list(model_formula,
+  full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                      data=pln_data,
                                      control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
                                      control_main=list(penalty_weights=initial_penalties,
@@ -261,55 +272,35 @@ new_cell_count_model <- function(ccs,
                                      ...),)
 
   # Choose a model that isn't very aggressively sparsified
-  best_model <- PLNmodels::getBestModel(pln_model, "EBIC")
-  best_model <- PLNmodels::getModel(pln_model, var=best_model$penalty * sparsity_factor)
+  best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
+  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_full_model$penalty * sparsity_factor)
 
-  # assertthat::assert_that(class(expression_data) == "matrix" ||
-  #                           is_sparse_matrix(expression_data),
-  #                         msg = paste("Argument expression_data must be a",
-  #                                     "matrix - either sparse from the",
-  #                                     "Matrix package or dense"))
-  # if (!is.null(cell_metadata)) {
-  #   assertthat::assert_that(nrow(cell_metadata) == ncol(expression_data),
-  #                           msg = paste("cell_metadata must be NULL or have",
-  #                                       "the same number of rows as columns",
-  #                                       "in expression_data"))
-  #   assertthat::assert_that(!is.null(row.names(cell_metadata)) &
-  #                             all(row.names(cell_metadata) == colnames(expression_data)),
-  #                           msg = paste("row.names of cell_metadata must be equal to colnames of",
-  #                                       "expression_data"))
-  # }
-  #
-  # if (!is.null(gene_metadata)) {
-  #   assertthat::assert_that(nrow(gene_metadata) == nrow(expression_data),
-  #                           msg = paste("gene_metadata must be NULL or have",
-  #                                       "the same number of rows as rows",
-  #                                       "in expression_data"))
-  #   assertthat::assert_that(!is.null(row.names(gene_metadata)) & all(
-  #     row.names(gene_metadata) == row.names(expression_data)),
-  #     msg = paste("row.names of gene_metadata must be equal to row.names of",
-  #                 "expression_data"))
-  # }
-  #
-  # if (is.null(cell_metadata)) {
-  #   cell_metadata <- data.frame(cell = colnames(expression_data),
-  #                               row.names = colnames(expression_data))
-  # }
-  #
-  # if(!('gene_short_name' %in% colnames(gene_metadata))) {
-  #   warning(paste("Warning: gene_metadata must contain a column verbatim",
-  #                 "named 'gene_short_name' for certain functions."))
-  # }
-  #
-
-  model_frame = model.frame(model_formula[-2], pln_data)
+  model_frame = model.frame(full_model_formula[-2], pln_data)
   xlevels = .getXlevels(terms(model_frame), model_frame)
+
+  reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+                                                                data=pln_data,
+                                                                control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                                control_main=list(penalty_weights=initial_penalties,
+                                                                                  trace = ifelse(verbose, 2, 0)),
+                                                             ...),)
+
+
+
+  # Choose a model that isn't very aggressively sparsified
+  best_reduced_model <- PLNmodels::getBestModel(reduced_pln_model, "EBIC")
+  best_reduced_model <- PLNmodels::getModel(reduced_pln_model, var=best_reduced_model$penalty * sparsity_factor)
+
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
-                      model_formula = model_formula,
-                      best_model = best_model,
-                      model_family = pln_model,
+                      full_model_formula = full_model_formula,
+                      best_full_model = best_full_model,
+                      full_model_family = full_pln_model,
+                      reduced_model_formula = reduced_model_formula,
+                      best_reduced_model = best_reduced_model,
+                      reduced_model_family = reduced_pln_model,
+
                       model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels)
                       )
   #
@@ -332,11 +323,20 @@ new_cell_count_model <- function(ccs,
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
-select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0)
+select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
 {
-  best_model <- PLNmodels::getBestModel(ccm@model_family, criterion)
-  best_model <- PLNmodels::getModel(ccm@model_family, var=best_model$penalty * sparsity_factor)
-  ccm@best_model = best_model
+  models_to_update = match.arg(models_to_update)
+  if (models_to_update == "full" || models_to_update == "both"){
+    best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
+    best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=best_full_model$penalty * sparsity_factor)
+    ccm@best_full_model = best_full_model
+  }
+
+  if (models_to_update == "reduced" || models_to_update == "both"){
+    best_reduced_model <- PLNmodels::getBestModel(ccm@reduced_model_family, criterion)
+    best_reduced_model <- PLNmodels::getModel(ccm@reduced_model_family, var=best_reduced_model$penalty * sparsity_factor)
+    ccm@best_reduced_model = best_reduced_model
+  }
   return(ccm)
 }
 

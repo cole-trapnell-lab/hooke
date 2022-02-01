@@ -21,8 +21,8 @@ blacklist <- function(edges) {
 }
 
 #' returns edges based on pcor values
-get_pcor_edges <- function(ccm) {
-  ccm@best_model$latent_network() %>%
+get_pcor_edges <- function(ccm, selected_model=c("reduced", "full")) {
+  model(ccm, selected_model)$latent_network() %>%
     as.matrix() %>%
     as.data.frame() %>%
     rownames_to_column("from") %>%
@@ -34,9 +34,9 @@ get_pcor_edges <- function(ccm) {
 get_distances <- function(ccs, method="euclidean", matrix=T) {
   umap_centers = centroids(ccs)
   row.names(umap_centers) <- umap_centers$cell_group
-  
+
   dist_matrix = dist(umap_centers[,-1], method = method, upper=T, diag = T)
-  
+
   if (matrix) {
     return(dist_matrix)
   } else {
@@ -52,110 +52,110 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 
 add_covariate <- function(ccs, pb_cds, covariate) {
   assertthat::assert_that(
-    tryCatch(expr = covariate %in% colnames(colData(ccs@cds)), 
-             error = function(e) FALSE), 
+    tryCatch(expr = covariate %in% colnames(colData(ccs@cds)),
+             error = function(e) FALSE),
     msg = "covariate not in colnames")
-  
+
   assertthat::assert_that(
-    tryCatch(expr = !covariate %in% colnames(colData(pb_cds)), 
-             error = function(e) FALSE), 
+    tryCatch(expr = !covariate %in% colnames(colData(pb_cds)),
+             error = function(e) FALSE),
     msg = "covariate already in colnames")
-  
-  group_to_covariate = colData(ccs@cds) %>% 
+
+  group_to_covariate = colData(ccs@cds) %>%
     as.data.frame %>%
-    select(group_id, all_of(covariate)) %>% 
+    select(group_id, all_of(covariate)) %>%
     distinct()
-  
-  pb_coldata = colData(pb_cds) %>% 
-    as.data.frame %>% 
+
+  pb_coldata = colData(pb_cds) %>%
+    as.data.frame %>%
     left_join(group_to_covariate, by = "group_id")
-  
+
   colData(pb_cds)[[covariate]] =  pb_coldata[[covariate]]
-  
+
   return(pb_cds)
 }
 
 find_edges <- function(states, gene_model_ccm) {
-  
+
   from_cond_est = estimate_abundances(gene_model_ccm, tibble("cell_state" = states[1]))
   to_cond_est = estimate_abundances(gene_model_ccm, tibble("cell_state" = states[2]))
-  from_to_cond_diff = compare_abundances(gene_model_ccm, from_cond_est, to_cond_est) %>% 
+  from_to_cond_diff = compare_abundances(gene_model_ccm, from_cond_est, to_cond_est) %>%
     filter(delta_p_value < 0.05)
-  
-  gene_edges = collect_pln_graph_edges(gene_model_ccm, from_to_cond_diff) 
+
+  gene_edges = collect_pln_graph_edges(gene_model_ccm, from_to_cond_diff)
   gene_edges
-  
+
 }
 
-#' calculates the fraction expression, mean expression and specificity 
-#' for each gene split by the specified group 
+#' calculates the fraction expression, mean expression and specificity
+#' for each gene split by the specified group
 #' @param cds
 #' @param group_cells_by
-#' 
+#'
 aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
-  
+
   cds = cds[, !is.na(colData(cds)$timepoint)]
-  
-  cell_group_df <- data.frame(row.names = row.names(colData(cds)), 
+
+  cell_group_df <- data.frame(row.names = row.names(colData(cds)),
                               cell_id = row.names(colData(cds)))
-  
+
   cell_group_df$cell_group <- colData(cds)[, group_cells_by]
   cell_group_df$cell_group <- as.character(cell_group_df$cell_group)
-  cluster_binary_exprs = as.matrix(aggregate_gene_expression(cds, 
-                                                             cell_group_df = cell_group_df, 
+  cluster_binary_exprs = as.matrix(aggregate_gene_expression(cds,
+                                                             cell_group_df = cell_group_df,
                                                              norm_method = "binary",
                                                              scale_agg_values=FALSE))
-  
+
   cluster_fraction_expressing_table = tibble::rownames_to_column(as.data.frame(cluster_binary_exprs))
-  
-  cluster_fraction_expressing_table = tidyr::gather(cluster_fraction_expressing_table, 
+
+  cluster_fraction_expressing_table = tidyr::gather(cluster_fraction_expressing_table,
                                                     "cell_group", "fraction_expressing", -rowname)
-  
-  cluster_mean_exprs = as.matrix(aggregate_gene_expression(cds, 
-                                                           cell_group_df = cell_group_df, 
+
+  cluster_mean_exprs = as.matrix(aggregate_gene_expression(cds,
+                                                           cell_group_df = cell_group_df,
                                                            norm_method = "size_only",
                                                            scale_agg_values=FALSE))
-  
+
   cluster_expr_table = tibble::rownames_to_column(as.data.frame(cluster_mean_exprs))
-  cluster_expr_table = tidyr::gather(cluster_expr_table, "cell_group", 
+  cluster_expr_table = tidyr::gather(cluster_expr_table, "cell_group",
                                      "mean_expression", -rowname)
-  
+
   cluster_fraction_expressing_table$mean_expression = cluster_expr_table$mean_expression
-  
+
   cluster_spec_mat = monocle3:::specificity_matrix(cluster_mean_exprs, cores = 4)
   cluster_spec_table = tibble::rownames_to_column(as.data.frame(cluster_spec_mat))
-  cluster_spec_table = tidyr::gather(cluster_spec_table, "cell_group", 
+  cluster_spec_table = tidyr::gather(cluster_spec_table, "cell_group",
                                      "specificity", -rowname)
-  
+
   cluster_fraction_expressing_table$specificity = cluster_spec_table$specificity
-  cluster_fraction_expressing_table = cluster_fraction_expressing_table %>% 
-    dplyr::rename("gene_id" = rowname) %>% 
-    dplyr::left_join(rowData(cds) %>% 
+  cluster_fraction_expressing_table = cluster_fraction_expressing_table %>%
+    dplyr::rename("gene_id" = rowname) %>%
+    dplyr::left_join(rowData(cds) %>%
                        as.data.frame() %>%
-                       dplyr::select("gene_id" = "id", gene_short_name), 
-                     by = "gene_id") %>% 
+                       dplyr::select("gene_id" = "id", gene_short_name),
+                     by = "gene_id") %>%
     dplyr::select(cell_group, gene_id, gene_short_name, everything())
-  
+
   return(cluster_fraction_expressing_table)
-  
+
 }
 
 
 #' this switches the umap space to the sub umap space
 #' @param cds
-#' @param sub_space 
+#' @param sub_space
 switch_umap_space <- function(cds, sub_space = TRUE) {
   curr_umap_matrix = reducedDims(cds)[["UMAP"]]
-  
+
   if (sub_space) {
-    umap_coords = colData(cds) %>% 
-      as.data.frame() %>% 
-      select(subumap3d_1, subumap3d_2, subumap3d_3) %>% 
+    umap_coords = colData(cds) %>%
+      as.data.frame() %>%
+      select(subumap3d_1, subumap3d_2, subumap3d_3) %>%
       as.matrix()
   } else {
-    umap_coords = colData(cds) %>% 
-      as.data.frame() %>% 
-      select(umap3d_1, umap3d_2, umap3d_3) %>% 
+    umap_coords = colData(cds) %>%
+      as.data.frame() %>%
+      select(umap3d_1, umap3d_2, umap3d_3) %>%
       as.matrix()
   }
   reducedDims(cds)[["UMAP"]] = umap_coords[rownames(curr_umap_matrix),]
@@ -184,35 +184,35 @@ plot_sub_contrast <- function (ccm,
                                fc_limits=c(-3,3),
                                sender_cell_groups=NULL,
                                receiver_cell_groups=NULL,
-                               plot_edges = TRUE, 
+                               plot_edges = TRUE,
                                sub_space = T) {
-  
-  
+
+
   ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, sub_space = sub_space)
-  
+
   colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[cell_group]]
   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
-  
-  cg_to_mg = as.data.frame(colData(ccm@ccs@cds)) %>% 
-    select("cell_group", "facet_group") %>% 
+
+  cg_to_mg = as.data.frame(colData(ccm@ccs@cds)) %>%
+    select("cell_group", "facet_group") %>%
     distinct()
-  
-  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% 
+
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>%
     left_join(cg_to_mg, by = "cell_group")
-  
+
   if (is.null(select_group) == FALSE) {
     ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["facet_group"]] == select_group]
-    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(facet_group == select_group) 
-    
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(facet_group == select_group)
+
     sub_cell_groups = unique(colData(ccm@ccs@cds)$cell_group)
     ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
-    
+
   }
-  
-  
-  plot_contrast(ccm, 
-                cond_b_vs_a_tbl, 
-                scale_shifts_by=scale_shifts_by, 
+
+
+  plot_contrast(ccm,
+                cond_b_vs_a_tbl,
+                scale_shifts_by=scale_shifts_by,
                 edge_size=edge_size,
                 cell_size=cell_size,
                 q_value_thresh = q_value_thresh,
@@ -221,28 +221,28 @@ plot_sub_contrast <- function (ccm,
                 fc_limits=fc_limits,
                 sender_cell_groups=sender_cell_groups,
                 receiver_cell_groups=receiver_cell_groups,
-                plot_edges = plot_edges) + 
+                plot_edges = plot_edges) +
     facet_wrap(~facet_group)
-  
+
 }
 
 
 
-#' projection wrap up 
+#' projection wrap up
 #' @param query_cds
 #' @param ref_cds
 #' @param directory_path a string giving the name of the directory from which to read the model files
-#' @param transfer_type 
-run_projection <- function(query_cds, 
-                           ref_cds, 
-                           directory_path, 
+#' @param transfer_type
+run_projection <- function(query_cds,
+                           ref_cds,
+                           directory_path,
                            transfer_type = "cluster") {
-  
+
   query_cds <- load_transform_models(query_cds, directory_path)
   query_cds <- preprocess_transform(query_cds, method="PCA")
   query_cds <- align_beta_transform(query_cds)
   query_cds <- reduce_dimension_transform(query_cds, method="UMAP")
-  
+
   umap_dims = reducedDims(query_cds)[["UMAP"]]
   annoy_res = uwot:::annoy_search(umap_dims,
                                 k = 10,
@@ -252,9 +252,9 @@ run_projection <- function(query_cds,
                           annoy_res,
                           as.data.frame(colData(ref_cds)),
                           transfer_type = transfer_type)
-  
+
   query_cds = query_cds[,!is.na(colData(query_cds)[[transfer_type]])]
-  
+
   return(query_cds)
 }
 

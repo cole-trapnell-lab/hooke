@@ -20,7 +20,8 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = TRUE){
+                          plot_edges = TRUE,
+                          model_for_pcors="reduced"){
 
   umap_centers = centroids(ccm@ccs)
 
@@ -36,7 +37,8 @@ plot_contrast <- function(ccm,
 
   corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
                                                               umap_centers_delta_abund,
-                                                              log_abundance_thresh)
+                                                              log_abundance_thresh,
+                                                              model_for_pcors=model_for_pcors)
   directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
   undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
 
@@ -84,7 +86,7 @@ plot_contrast <- function(ccm,
   plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
 
   plot_df = dplyr::left_join(plot_df,
-                             cond_b_vs_a_tbl, 
+                             cond_b_vs_a_tbl,
                       # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                       by=c("cell_group"="cell_group"))
 
@@ -240,7 +242,7 @@ my_plot_cells <- function(data,
                       cell_size=1,
                       legend_position="none",
                       residuals = NULL,
-                      cond_b_vs_a_tbl = NULL, 
+                      cond_b_vs_a_tbl = NULL,
                       q_value_thresh = 1.0) {
 
   if (class(data) == "cell_count_set") {
@@ -276,10 +278,10 @@ my_plot_cells <- function(data,
   }
 
   else if (!is.null(cond_b_vs_a_tbl)) {
-    
-    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% 
+
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>%
       dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
-    
+
     plot_df = dplyr::left_join(plot_df,
                                cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                                by=c("cell_group"="cell_group"))
