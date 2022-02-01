@@ -38,6 +38,8 @@ calc_mst <- function(edges) {
 #' @param edges data frame of edges with edge weights
 #' @param from
 #' @param to 
+#' @import igraph
+#' @timport
 #' @return data frame containing the shortest path
 #' @export
 calc_shortest_path <- function(edges, from, to) {
@@ -57,6 +59,7 @@ calc_shortest_path <- function(edges, from, to) {
 
 #'
 #' @param edges
+#' @import tidygraph
 #' 
 distance_to_root <- function(edges) {
   
@@ -124,6 +127,7 @@ get_weighted_edges <- function(ccm,
 #' @param weighted_edge_df 
 #' @param source
 #' @param target
+#' 
 get_shortest_path <- function(from, to, weighted_edges) {
   
   shortest_path_df = calc_shortest_path(weighted_edges, from, to) %>%
@@ -272,8 +276,26 @@ find_deg_path = function(ccm,
                                     .x = states, 
                                     pb_cds))
   
-    
+  return(neg_rec_edges)
 }
 
+
+get_neg_dir_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
+  hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
+    as_tibble %>%
+    filter(edge_type != "undirected" &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold) 
+  
+}
+
+get_positive_edges <- function(ccm, cond_b_vs_a_tbl,  p_value_threshold = 1.0) {
+  hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
+    as_tibble %>%
+    filter(pcor > 0 &
+             to_delta_p_value < p_value_threshold &
+             from_delta_p_value < p_value_threshold)
+  
+}
 
          
