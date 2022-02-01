@@ -71,7 +71,7 @@ new_cell_count_set <- function(cds,
                                lower_threshold = NULL, 
                                upper_threshold = NULL) {
 
-  coldata_df = colData(ref_cds) %>% tibble::as_tibble()
+  coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
   # coldata_df$partition = partitions(cds)
@@ -238,7 +238,7 @@ new_cell_count_model <- function(ccs,
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
+    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty,...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
     # TODO: check and validate dimensions of the user-provided penaties
