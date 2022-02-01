@@ -91,11 +91,11 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
 #' @return A table contrasting cond_x and cond_y (interpret as Y/X)
 #' @importFrom dplyr full_join
 #' @export
-compare_abundances <- function(ccm, cond_x, cond_y){
+compare_abundances <- function(ccm, cond_x, cond_y, method = "BH"){
   contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by="cell_group")
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
                                                 delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
-                                                delta_q_value = p.adjust(delta_p_value))
+                                                delta_q_value = p.adjust(delta_p_value, method = method))
   return(contrast_tbl)
 }
 

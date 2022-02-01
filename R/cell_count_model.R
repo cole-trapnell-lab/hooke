@@ -70,9 +70,11 @@ new_cell_count_set <- function(cds,
                                sample_group,
                                cell_group,
                                sample_metadata = NULL,
-                               cell_metadata = NULL) {
+                               cell_metadata = NULL, 
+                               lower_threshold = NULL, 
+                               upper_threshold = NULL) {
 
-  coldata_df = colData(cds) %>% tibble::as_tibble()
+  coldata_df = colData(ref_cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
   # coldata_df$partition = partitions(cds)
@@ -105,7 +107,17 @@ new_cell_count_set <- function(cds,
   cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)
   cell_states = as.character(cell_counts_wide %>% dplyr::pull("cell_group"))
   cell_counts_wide = as.matrix(cell_counts_wide[,3:ncol(cell_counts_wide)])
+  
   row.names(cell_counts_wide) = cell_states
+  
+  # filter out cell groups based on counts
+  if (is.null(lower_threshold) == FALSE) {
+    cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) >= lower_threshold, ]
+  }
+  if (is.null(upper_threshold) == FALSE) {
+    cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
+  }
+  
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
