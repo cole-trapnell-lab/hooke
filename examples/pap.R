@@ -57,8 +57,8 @@ ccm  = new_cell_count_model(ccs,
                             main_model_formula_str = "Genotype",
                             nuisance_model_formula_str = "batch")
 
-ccm = select_model(ccm, criterion="EBIC", sparsity_factor=1)
-plot(model(ccm), output="corrplot")
+ccm = select_model(ccm, criterion="StARS", sparsity_factor=10)
+plot(model(ccm, "reduced"), output="corrplot")
 
 cond_csf2ra = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2ra-/-", Age="12-13 weeks", batch="A", experiment=1))
 cond_wt = estimate_abundances(ccm, tibble::tibble(Genotype="WT", Age="12-13 weeks", batch="A", experiment=1))
@@ -67,9 +67,18 @@ cond_csf2rb = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2rb-/-", Age=
 
 cond_ra_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2ra)
 
-plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.01) +
+plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="sender", q_value_thresh=0.01) +
   theme_minimal() + monocle3:::monocle_theme_opts() +
   ggsave("pap_mac_shift.png", width=7, height=6)
+
+
+full_edges = hooke:::collect_pln_graph_edges(ccm, cond_ra_vs_wt_tbl, model_for_pcors = "full") %>% dplyr::select(from, to, pcor)
+reduced_edges = hooke:::collect_pln_graph_edges(ccm, cond_ra_vs_wt_tbl, model_for_pcors = "reduced") %>% dplyr::select(from, to, pcor)
+
+full_vs_reduced = full_join(full_edges, reduced_edges, by=c("from", "to")) %>% tidyr::replace_na(list(pcor.x = 0, pcor.y = 0))
+qplot(pcor.x, pcor.y, data=full_vs_reduced) + geom_abline() + geom_smooth(method="lm") + xlab("Partial correlation (full model)") + ylab("Partial correlation (reduced model)")
+
+
 
 cond_rb_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2rb)
 

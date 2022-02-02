@@ -149,9 +149,10 @@ fast_mt_ccs = new_cell_count_set(fast_muscle_cds,
                                  cell_group = "cell_type_sub")
 
 fast_mt_ccm = new_cell_count_model(fast_mt_ccs,
-                                   main_model_formula_str = "~ as.factor(timepoint) + gene_target")
+                                   main_model_formula_str = "~ as.factor(timepoint) + gene_target",
+                                   pln_min_ratio=1e-4)
 
-fast_mt_ccm = select_model(fast_mt_ccm, criterion="EBIC", sparsity_factor=1)
+fast_mt_ccm = select_model(fast_mt_ccm, criterion="StARS", sparsity_factor=1)
 
 plot(model(fast_mt_ccm,"reduced"), output="corrplot")
 
@@ -171,7 +172,7 @@ plot_contrast(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, q_value_thresh = 1)
 plot_contrast(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, q_value_thresh = 1, plot_labels="none") +
   ggsave("fast_muscle_wt_18_24.png", width=7, height=6)
 
-plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, p_value_thresh = 1, plot_labels="none") +
+plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, q_value_thresh = 1, plot_labels="none") +
   ggsave("fast_muscle_tbx16_18_24.png", width=7, height=6)
 
 plot_contrast(fast_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "receiver", q_value_thresh = 1)
@@ -179,7 +180,13 @@ plot_contrast(fast_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "se
 plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, q_value_thresh = 1)
 
 
+# Compare pcors in full and reduced models:
 
+full_edges = hooke:::collect_pln_graph_edges(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, model_for_pcors = "full") %>% dplyr::select(from, to, pcor)
+reduced_edges = hooke:::collect_pln_graph_edges(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, model_for_pcors = "reduced") %>% dplyr::select(from, to, pcor)
+
+full_vs_reduced = full_join(full_edges, reduced_edges, by=c("from", "to")) %>% tidyr::replace_na(list(pcor.x = 0, pcor.y = 0))
+qplot(pcor.x, pcor.y, data=full_vs_reduced) + geom_abline() + geom_smooth(method="lm")
 # mutant alone ----------------------------------------------------------------
 # whitelist=total_green_edges,
 # blacklist = total_green_edge_blacklist,

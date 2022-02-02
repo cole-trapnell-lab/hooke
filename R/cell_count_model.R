@@ -70,8 +70,8 @@ new_cell_count_set <- function(cds,
                                sample_group,
                                cell_group,
                                sample_metadata = NULL,
-                               cell_metadata = NULL, 
-                               lower_threshold = NULL, 
+                               cell_metadata = NULL,
+                               lower_threshold = NULL,
                                upper_threshold = NULL) {
 
   coldata_df = colData(cds) %>% tibble::as_tibble()
@@ -107,9 +107,9 @@ new_cell_count_set <- function(cds,
   cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)
   cell_states = as.character(cell_counts_wide %>% dplyr::pull("cell_group"))
   cell_counts_wide = as.matrix(cell_counts_wide[,3:ncol(cell_counts_wide)])
-  
+
   row.names(cell_counts_wide) = cell_states
-  
+
   # filter out cell groups based on counts
   if (is.null(lower_threshold) == FALSE) {
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) >= lower_threshold, ]
@@ -117,7 +117,7 @@ new_cell_count_set <- function(cds,
   if (is.null(upper_threshold) == FALSE) {
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
   }
-  
+
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
@@ -276,32 +276,32 @@ new_cell_count_model <- function(ccs,
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula
   # created with as.formula (e.g. after pasting).
-  full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-                                     data=pln_data,
-                                     control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
-                                     control_main=list(penalty_weights=initial_penalties,
-                                                       trace = ifelse(verbose, 2, 0)),
-                                     ...),)
-
-  # Choose a model that isn't very aggressively sparsified
-  best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
-  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_full_model$penalty * sparsity_factor)
-
-  model_frame = model.frame(full_model_formula[-2], pln_data)
-  xlevels = .getXlevels(terms(model_frame), model_frame)
-
   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                 data=pln_data,
                                                                 control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
                                                                 control_main=list(penalty_weights=initial_penalties,
                                                                                   trace = ifelse(verbose, 2, 0)),
-                                                             ...),)
+                                                                ...),)
 
 
+  full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+                                     data=pln_data,
+                                     penalties = reduced_pln_model$penalties,
+                                     control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                     control_main=list(penalty_weights=initial_penalties,
+                                                       trace = ifelse(verbose, 2, 0)),
+                                     ...),)
+
+  model_frame = model.frame(full_model_formula[-2], pln_data)
+  xlevels = .getXlevels(terms(model_frame), model_frame)
 
   # Choose a model that isn't very aggressively sparsified
   best_reduced_model <- PLNmodels::getBestModel(reduced_pln_model, "EBIC")
   best_reduced_model <- PLNmodels::getModel(reduced_pln_model, var=best_reduced_model$penalty * sparsity_factor)
+
+  # Choose a model that isn't very aggressively sparsified
+  #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
+  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty * sparsity_factor)
 
 
   ccm <- methods::new("cell_count_model",
@@ -338,17 +338,18 @@ new_cell_count_model <- function(ccs,
 select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
 {
   models_to_update = match.arg(models_to_update)
-  if (models_to_update == "full" || models_to_update == "both"){
-    best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
-    best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=best_full_model$penalty * sparsity_factor)
-    ccm@best_full_model = best_full_model
-  }
 
-  if (models_to_update == "reduced" || models_to_update == "both"){
-    best_reduced_model <- PLNmodels::getBestModel(ccm@reduced_model_family, criterion)
-    best_reduced_model <- PLNmodels::getModel(ccm@reduced_model_family, var=best_reduced_model$penalty * sparsity_factor)
+  #if (models_to_update == "reduced" || models_to_update == "both"){
+    base_reduced_model <- PLNmodels::getBestModel(ccm@reduced_model_family, criterion)
+    best_reduced_model <- PLNmodels::getModel(ccm@reduced_model_family, var=base_reduced_model$penalty * sparsity_factor)
     ccm@best_reduced_model = best_reduced_model
-  }
+  #}
+
+  #if (models_to_update == "full" || models_to_update == "both"){
+  #  best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
+    best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
+    ccm@best_full_model = best_full_model
+  #}
   return(ccm)
 }
 
