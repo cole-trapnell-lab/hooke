@@ -1,0 +1,138 @@
+---
+title: "embryo trajectory w PLN"
+author: "Madeleine Duran"
+date: "02/02/2022"
+output: html_document
+---
+
+```{r}
+
+library(monocle3)
+library(PLNmodels)
+library(devtools)
+library(pryr)
+library(VGAM)
+library(plyr)
+
+load_all("~/OneDrive/UW/Trapnell/hooke/")
+
+setwd("~/OneDrive/UW/Trapnell/hooke/examples/")
+
+
+```
+
+
+```{r}
+
+ref_cds <- readRDS("~/OneDrive/UW/Trapnell/gap-notebook-ct-1/R_objects/full_gap_hf_ctrl_ref_mito-filt_1.25M_model-update_anno_cds.RDS")
+ref_cds = ref_cds[,!is.na(colData(ref_cds)$cell_type_sub)]
+ref_cds = ref_cds[,!is.na(colData(ref_cds)$embryo)]
+
+ref_ccs = new_cell_count_set(ref_cds,
+                             sample_group = "embryo",
+                             cell_group = "cell_type_sub", 
+                             lower_threshold = 1500)
+
+# threshold filters it 154 1222 down to 113 1222 
+
+# make a cds version 
+ref_ccs_cds = new_cell_data_set(counts(ref_ccs), 
+                                colData(ref_ccs))
+
+```
+
+
+```{r}
+
+
+ref_ccs_cds = ref_ccs_cds %>%
+              preprocess_cds(num_dim = 10,
+                           norm_method="size_only",
+                           method = "PCA") 
+
+ref_ccs_cds = ref_ccs_cds %>% align_cds(alignment_group = "expt")
+ref_ccs_cds = ref_ccs_cds %>% reduce_dimension(max_components = 2)
+ 
+plot_cells(ref_ccs_cds, color_cells_by = "timepoint") %>% 
+  ggsave(filename = "embryo_trajectory/ref_timepoint.png")
+
+```
+
+
+```{r}
+
+add_umap_coords <- function(cds) {
+  colData(cds)$umap_1 = reducedDims(cds)[["UMAP"]][,1]
+  colData(cds)$umap_2 = reducedDims(cds)[["UMAP"]][,2]
+  return(cds)
+}
+
+generate_dummy_data <- function(ccm, newdata) { 
+  newdata$Offset = 1
+
+  # pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
+  pred_out = my_plnnetwork_predict(ccm, newdata=newdata, type = "response")
+  log_abund = pred_out[1:nrow(newdata),]
+  
+  rownames(log_abund) = newdata[['timepoint']]
+  
+  newdata = as.data.frame(newdata)
+  rownames(newdata) = newdata[['timepoint']]
+  
+  cell_count_cds = new_cell_data_set(expression_data = t(log_abund), 
+                                     cell_metadata=newdata)
+  
+} 
+```
+
+
+```{r, make dummy data using PLN}
+ref_ccm_spline = new_cell_count_model(ref_ccs,
+                                      model_formula_str = "~ splines::ns(as.numeric(timepoint), df=3)",
+                                      pseudocount = 1)
+
+
+newdata = tibble(timepoint = seq(18, 96, by=0.1))
+
+dummy_ccs = generate_dummy_data(ref_ccm_spline, newdata)
+ 
+dummy_ccs = dummy_ccs %>%
+            preprocess_cds(num_dim = 10,
+                           norm_method="size_only",
+                           method = "PCA") %>%
+            reduce_dimension(max_components = 2)
+
+plot_cells(dummy_ccs, color_cells_by = "timepoint")%>% 
+  ggsave(filename = "embryo_trajectory/dummy_timepoint.png")
+
+dummy_ccs_cds = new_cell_data_set(counts(dummy_ccs), 
+                                  colData(dummy_ccs))
+
+colData(dummy_ccs_cds)$expt = "dummy"
+
+
+
+```
+
+
+
+```{r, combine dummy PLN + reference filtered}
+
+comb_ccs_cds = combine_cds(list(ref_ccs_cds, dummy_ccs_cds))
+
+comb_ccs_cds = comb_ccs_cds %>% 
+               preprocess_cds(num_dim = 10) %>% 
+               align_cds(alignment_group = "expt") %>% 
+               reduce_dimension(max_components = 2)
+
+plot_cells(comb_ccs_cds, color_cells_by = "expt") %>% 
+  ggsave(filename = "embryo_trajectory/comb_dummy_expt.png")
+
+plot_cells(comb_ccs_cds, color_cells_by = "timepoint") %>% 
+  ggsave(filename = "embryo_trajectory/comb_dummy_expt.png")
+
+save_transform_models(comb_ccs_cds, "embryo_trajectory/comb_ref_ccs_dummy_model")
+
+```
+
+
