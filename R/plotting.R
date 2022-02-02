@@ -2,6 +2,9 @@
 #'
 #' @param ccm A cell_count_model object.
 #' @param criterion a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".
+#' @param scale_shifts_by
+#' @param q_value_thresh
+#' @param plot_labels
 #' @return an updated cell_count_model object
 #' @export
 #' @import ggplot2
@@ -85,8 +88,8 @@ plot_contrast <- function(ccm,
 
   plot_df = dplyr::left_join(plot_df,
                              cond_b_vs_a_tbl, 
-                      # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
-                      by=c("cell_group"="cell_group"))
+                              # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
+                              by=c("cell_group"="cell_group"))
 
 
   if (is.null(fc_limits)) {
@@ -132,8 +135,10 @@ plot_contrast <- function(ccm,
     )  +
     #theme_void() +
     #theme(legend.position = "none") +
-    monocle3:::monocle_theme_opts()
-
+    monocle3:::monocle_theme_opts() + 
+    xlab("UMAP 1") + ylab("UMAP 2")
+  
+  
   if (plot_edges) {
     gp = gp  +
       geom_segment(data = undirected_edge_df,
@@ -491,6 +496,46 @@ add_edge <- function(gp,
 }
 
 
+#' this currently just plots the mappy thing with the abundance results
+#' to be completed later to handle automatic plotting 
+#' @param G igraph object of mappy thing
+#' @param cytoscape_pos coordinates from cytoscape
+#' @param cond_b_vs_a_tbl output of compare_abundances 
+#' 
+plot_graph <- function(G, 
+                       cytoscape_pos,
+                       cond_b_vs_a_tbl,
+                       arrow.gap = 0.02, 
+                       scale = F,
+                       q_value_thresold = 0.05,
+                       color_nodes_by = "delta_log_abund",
+                       legend.position = "right") {
+  
+  
+  cytoscape_pos = cytoscape_pos %>% column_to_rownames("id")
+  geo = cytoscape_pos[igraph::V(G)$name,] %>% select(x,y) %>% as.matrix
+  g = ggnetwork::ggnetwork(G, layout = geo, arrow.gap=arrow.gap) %>% 
+    left_join(cond_b_vs_a_tbl, by = c("name" = "cell_group")) %>% 
+    mutate(delta_log_abund = ifelse(delta_q_value < q_value_thresold, delta_log_abund, 0)) %>% 
+    mutate(delta_log_abund = replace_na(delta_log_abund, 0)) 
+  
+  
+  p = ggplot(g, aes(x, y, xend = xend, yend = yend)) +
+    geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
+    geom_nodes(
+      aes(fill = get(color_nodes_by)),
+      size = 7,colour="black",shape=21) +
+    scale_fill_gradient2(low = "darkblue", mid = "white", high = "red4") + 
+    geom_nodetext_repel(aes(label = name), size=3) +
+    theme_blank() + labs(fill=color_nodes_by) + 
+    theme(legend.position = legend.position)
+  
+  return(p)
+  
+}
+
+
+
 # plot igraph
 #' plots the resulting path as an igraph
 #' instead of as a UMAP
@@ -541,6 +586,68 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 }
 
 
+#' plots a grn 
+#' @param g a ggnetwork dataframe object  
+#' @color_nodes_by
+plot_grn <- function(g, 
+                     color_nodes_by,
+                     regulator_score_min = NULL, 
+                     regulator_score_max = NULL, 
+                     legend.position = "right") {
+  
+  
+  # colors = c( "#735CDD", "#1B9AAA","#EF476F", "#101D42")
+  # names(colors) = c("mesodermal progenitor cells (contains PSM)",
+  #                   "myoblast/fast-committed myocyte",
+  #                   "fast-committed myocyte",
+  #                   "mature fast muscle")
+  
+  num_colors = unique(g[[color_nodes_by]]) %>% length()
+  full_spectrum = get_colors(num_colors, "vibrant")
+  names(full_spectrum_timepoint) = unique(plot_df$timepoint) %>% sort()
+  
+  if (is.null(regulator_score_min)) {
+    g = g %>% mutate(regulator_score = ifelse(regulator_score < regulator_score_min, regulator_score_min, regulator_score))
+    
+  }
+  if (is.null(regulator_score_max)) {
+    g = g %>% mutate(regulator_score = ifelse(regulator_score > regulator_score_max, regulator_score_max, regulator_score))
+    
+  }
+  
+  p = ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
+    # draw activator edges
+    geom_nodes(data = g, size=0.5) +
+    geom_edges(data = g %>% filter(edge_type == "activator"),
+               aes(size = 0.35*scaled_weight),
+               arrow = arrow(length = unit(1.5, "pt"), type="closed"),
+               curvature = 0.1) +
+    # draw repressor edges
+    geom_edges(data = g %>% filter(edge_type == "repressor"),
+               aes(size = 0.35*scaled_weight),
+               arrow = arrow(angle = 90, length = unit(.075, "cm")),
+               curvature = 0) +
+    geom_nodelabel_repel(data = g ,
+                         aes(fill = cell_type_broad,
+                             label = gene_short_name,
+                             size = 1.25*abs(regulator_score)),
+                         color="white",
+                         label.size = 0.2,
+                         box.padding = unit(0.1, "lines"),
+                         label.padding = 0.15,
+                         force = 0.1) +
+    scale_fill_manual(values = colors) +
+    scale_size_identity() +
+    monocle3:::monocle_theme_opts() +
+    theme_blank() +
+    theme(legend.position = legend.position)
+  
+  
+}
+
+
+
+
 #' helper function for adding attributes to network node
 #' assumes gene id is in the dataframe
 # add_node_attribute <- function(n, df, colname) {
@@ -583,8 +690,6 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 #     monocle3:::monocle_theme_opts() + theme_blank()
 #
 # }
-
-
 
 # To add:
 #' #' plot a similar heatmap to lauren's BB testing
