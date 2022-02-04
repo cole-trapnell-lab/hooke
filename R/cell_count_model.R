@@ -18,7 +18,8 @@ setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit
 #' @exportClass cell_count_set
 setClass("cell_count_set",
          contains = "cell_data_set",
-         slots = c(cds = "cell_data_set")
+         slots = c(cds = "cell_data_set", 
+                   info = "SimpleList")
 )
 
 
@@ -126,7 +127,9 @@ new_cell_count_set <- function(cds,
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
                                            gene_metadata=cell_metadata),
-               cds=cds)
+               cds=cds, 
+               info = SimpleList(sample_group = sample_group, 
+                                 cell_group = cell_group))
 
 
   # assertthat::assert_that(class(expression_data) == "matrix" ||
