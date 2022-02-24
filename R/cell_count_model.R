@@ -18,7 +18,7 @@ setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit
 #' @exportClass cell_count_set
 setClass("cell_count_set",
          contains = "cell_data_set",
-         slots = c(cds = "cell_data_set", 
+         slots = c(cds = "cell_data_set",
                    info = "SimpleList")
 )
 
@@ -68,8 +68,8 @@ new_cell_count_set <- function(cds,
                                sample_group,
                                cell_group,
                                sample_metadata = NULL,
-                               cell_metadata = NULL, 
-                               lower_threshold = NULL, 
+                               cell_metadata = NULL,
+                               lower_threshold = NULL,
                                upper_threshold = NULL) {
 
   coldata_df = colData(cds) %>% tibble::as_tibble()
@@ -105,9 +105,9 @@ new_cell_count_set <- function(cds,
   cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)
   cell_states = as.character(cell_counts_wide %>% dplyr::pull("cell_group"))
   cell_counts_wide = as.matrix(cell_counts_wide[,3:ncol(cell_counts_wide)])
-  
+
   row.names(cell_counts_wide) = cell_states
-  
+
   # filter out cell groups based on counts
   if (is.null(lower_threshold) == FALSE) {
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) >= lower_threshold, ]
@@ -115,7 +115,7 @@ new_cell_count_set <- function(cds,
   if (is.null(upper_threshold) == FALSE) {
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
   }
-  
+
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
@@ -127,8 +127,8 @@ new_cell_count_set <- function(cds,
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
                                            gene_metadata=cell_metadata),
-               cds=cds, 
-               info = SimpleList(sample_group = sample_group, 
+               cds=cds,
+               info = SimpleList(sample_group = sample_group,
                                  cell_group = cell_group))
 
 
@@ -226,6 +226,7 @@ new_cell_count_model <- function(ccs,
                                  min_penalty=0.01,
                                  max_penalty=1e6,
                                  verbose=FALSE,
+                                 penalty_type="distance",
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
@@ -241,7 +242,7 @@ new_cell_count_model <- function(ccs,
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty,...)
+    initial_penalties = init_penalty_matrix(ccs, type=penalty_type, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty,...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
     # TODO: check and validate dimensions of the user-provided penaties
@@ -362,12 +363,41 @@ select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0)
 #' @param whitelist a data frame with two columns corresponding to (undirected) edges that should receive no penalty
 #' @param blacklist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
-init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
-  cell_group_centroids = centroids(ccs)
-  dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
+init_penalty_matrix = function(ccs, type = c("distance", "JS"), whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
 
-  row.names(dist_matrix) <- cell_group_centroids$cell_group
-  colnames(dist_matrix) <- cell_group_centroids$cell_group
+  type <- match.arg(type)
+
+  if (type == "distance") {
+    cell_group_centroids = centroids(ccs)
+    dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
+
+    row.names(dist_matrix) <- cell_group_centroids$cell_group
+    colnames(dist_matrix) <- cell_group_centroids$cell_group
+  }
+  else if (type == "JS") {
+
+    cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]]) %>%
+      select(rowname, cell_group)
+
+    agg_expr_mat = monocle3::aggregate_gene_expression(ccs@cds,
+                                                       cell_group_df = cell_group_df,
+                                                       norm_method = "size_only",
+                                                       scale_agg_values = FALSE,
+                                                       pseudocount = 0,
+                                                       cell_agg_fun = "mean")
+
+    agg_coldata = ccs@metadata[["cell_group_assignments"]] %>%
+      dplyr::group_by(cell_group) %>%
+      dplyr::summarize(num_cells_in_group = n()) %>%
+      as.data.frame
+    row.names(agg_coldata) = colnames(agg_expr_mat)
+    pseudobulk_cds = new_cell_data_set(agg_expr_mat,
+                                       cell_metadata = agg_coldata,
+                                       rowData(ccs@cds) %>% as.data.frame)
+    pseudobulk_cds = pseudobulk_cds[,Matrix::colSums(exprs(pseudobulk_cds)) != 0]
+    dist_matrix = CalcJSDivergence(as.matrix(counts(pseudobulk_cds)), by_rows = FALSE)
+
+  }
 
   # TODO: do I need this? Probably the caller can and should do this.
   #dist_matrix = dist_matrix[colnames(data$Abundance), colnames(data$Abundance)]
