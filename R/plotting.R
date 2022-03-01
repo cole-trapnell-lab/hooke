@@ -87,7 +87,7 @@ plot_contrast <- function(ccm,
   plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
 
   plot_df = dplyr::left_join(plot_df,
-                             cond_b_vs_a_tbl, 
+                             cond_b_vs_a_tbl,
                               # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                               by=c("cell_group"="cell_group"))
 
@@ -135,10 +135,10 @@ plot_contrast <- function(ccm,
     )  +
     #theme_void() +
     #theme(legend.position = "none") +
-    monocle3:::monocle_theme_opts() + 
+    monocle3:::monocle_theme_opts() +
     xlab("UMAP 1") + ylab("UMAP 2")
-  
-  
+
+
   if (plot_edges) {
     gp = gp  +
       geom_segment(data = undirected_edge_df,
@@ -245,7 +245,9 @@ my_plot_cells <- function(data,
                       cell_size=1,
                       legend_position="none",
                       residuals = NULL,
-                      cond_b_vs_a_tbl = NULL, 
+                      effect_sizes = NULL,
+                      cond_b_vs_a_tbl = NULL,
+                      cell_group = NULL,
                       q_value_thresh = 1.0) {
 
   if (class(data) == "cell_count_set") {
@@ -254,7 +256,7 @@ my_plot_cells <- function(data,
   } else if (class(data) == "cell_data_set") {
     cds = data
     plot_df = as.data.frame(colData(cds))
-    plot_df = data@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+    # plot_df = data@metadata[["cell_group_assignments"]] %>% pull(cell_group)
   } else if (class(data) == "cell_count_model") {
     cds = data@ccs@cds
     plot_df = as.data.frame(colData(cds))
@@ -262,8 +264,6 @@ my_plot_cells <- function(data,
   } else {
     print("some error message")
   }
-
-
 
 
   plot_df$cell = row.names(plot_df)
@@ -280,11 +280,18 @@ my_plot_cells <- function(data,
 
   }
 
+  else if (!is.null(effect_sizes)) {
+
+    plot_df = plot_df %>% left_join(effect_sizes, by="cell_group")
+    color_cells_by = "delta_log_needed"
+
+  }
+
   else if (!is.null(cond_b_vs_a_tbl)) {
-    
-    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% 
+
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>%
       dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
-    
+
     plot_df = dplyr::left_join(plot_df,
                                cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
                                by=c("cell_group"="cell_group"))
@@ -331,7 +338,7 @@ my_plot_cells <- function(data,
       ) +
       scale_color_manual(values = full_spectrum_timepoint)
 
-  } else if (color_cells_by == "residuals") {
+  } else if (color_cells_by %in% c("residuals", "delta_log_needed")) {
     gp = gp  +
       geom_point(
         data = plot_df,
@@ -345,7 +352,7 @@ my_plot_cells <- function(data,
         mid = "white",
         high = "red4",
         na.value = "white",
-        # limits = c(-3,3)
+        limits = c(-3,3)
       )
 
   } else if (color_cells_by == "delta_log_abund") {
@@ -363,7 +370,7 @@ my_plot_cells <- function(data,
         mid = "white",
         high = "red4",
         na.value = "white",
-        # limits=c(-3,3)
+        limits=c(-3,3)
       )
   } else if (color_cells_by == "none") {
     # do nothing
@@ -497,41 +504,40 @@ add_edge <- function(gp,
 
 
 #' this currently just plots the mappy thing with the abundance results
-#' to be completed later to handle automatic plotting 
+#' to be completed later to handle automatic plotting
 #' @param G igraph object of mappy thing
 #' @param cytoscape_pos coordinates from cytoscape
-#' @param cond_b_vs_a_tbl output of compare_abundances 
-#' 
-plot_graph <- function(G, 
+#' @param cond_b_vs_a_tbl output of compare_abundances
+#'
+plot_graph <- function(G,
                        cytoscape_pos,
                        cond_b_vs_a_tbl,
-                       arrow.gap = 0.02, 
+                       arrow.gap = 0.02,
                        scale = F,
                        q_value_thresold = 0.05,
                        color_nodes_by = "delta_log_abund",
                        legend.position = "right") {
-  
-  
+
+
   cytoscape_pos = cytoscape_pos %>% column_to_rownames("id")
   geo = cytoscape_pos[igraph::V(G)$name,] %>% select(x,y) %>% as.matrix
-  g = ggnetwork::ggnetwork(G, layout = geo, arrow.gap=arrow.gap) %>% 
-    left_join(cond_b_vs_a_tbl, by = c("name" = "cell_group")) %>% 
-    mutate(delta_log_abund = ifelse(delta_q_value < q_value_thresold, delta_log_abund, 0)) %>% 
-    mutate(delta_log_abund = replace_na(delta_log_abund, 0)) 
-  
-  
+  g = ggnetwork::ggnetwork(G, layout = geo, arrow.gap=arrow.gap) %>%
+    left_join(cond_b_vs_a_tbl, by = c("name" = "cell_group")) %>%
+    mutate(delta_log_abund = ifelse(delta_q_value < q_value_thresold, delta_log_abund, 0)) %>%
+    mutate(delta_log_abund = replace_na(delta_log_abund, 0))
+
   p = ggplot(g, aes(x, y, xend = xend, yend = yend)) +
-    geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
-    geom_nodes(
-      aes(fill = get(color_nodes_by)),
-      size = 7,colour="black",shape=21) +
-    scale_fill_gradient2(low = "darkblue", mid = "white", high = "red4") + 
-    geom_nodetext_repel(aes(label = name), size=3) +
-    theme_blank() + labs(fill=color_nodes_by) + 
-    theme(legend.position = legend.position)
-  
+      ggnetwork::geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
+      ggnetwork::geom_nodes(aes(fill = delta_log_abund),
+                            size = 7,colour="black",shape=21) +
+      scale_fill_gradient2(low = "darkblue", mid = "white", high = "red4") +
+      ggnetwork::geom_nodetext_repel(aes(label = name), size = 3) +
+      monocle3:::monocle_theme_opts()+
+      theme_blank()+
+      theme(legend.position = legend.position)
+  p
   return(p)
-  
+
 }
 
 
@@ -586,35 +592,35 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 }
 
 
-#' plots a grn 
-#' @param g a ggnetwork dataframe object  
+#' plots a grn
+#' @param g a ggnetwork dataframe object
 #' @color_nodes_by
-plot_grn <- function(g, 
+plot_grn <- function(g,
                      color_nodes_by,
-                     regulator_score_min = NULL, 
-                     regulator_score_max = NULL, 
+                     regulator_score_min = NULL,
+                     regulator_score_max = NULL,
                      legend.position = "right") {
-  
-  
+
+
   # colors = c( "#735CDD", "#1B9AAA","#EF476F", "#101D42")
   # names(colors) = c("mesodermal progenitor cells (contains PSM)",
   #                   "myoblast/fast-committed myocyte",
   #                   "fast-committed myocyte",
   #                   "mature fast muscle")
-  
+
   num_colors = unique(g[[color_nodes_by]]) %>% length()
   full_spectrum = get_colors(num_colors, "vibrant")
   names(full_spectrum_timepoint) = unique(plot_df$timepoint) %>% sort()
-  
+
   if (is.null(regulator_score_min)) {
     g = g %>% mutate(regulator_score = ifelse(regulator_score < regulator_score_min, regulator_score_min, regulator_score))
-    
+
   }
   if (is.null(regulator_score_max)) {
     g = g %>% mutate(regulator_score = ifelse(regulator_score > regulator_score_max, regulator_score_max, regulator_score))
-    
+
   }
-  
+
   p = ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
     # draw activator edges
     geom_nodes(data = g, size=0.5) +
@@ -641,8 +647,48 @@ plot_grn <- function(g,
     monocle3:::monocle_theme_opts() +
     theme_blank() +
     theme(legend.position = legend.position)
-  
-  
+
+
+}
+
+# make sure ccs is made on clusters
+
+plot_paga <- function(ccs,
+                      color_cells_by,
+                      legend_position = "right") {
+
+
+  assertthat::assert_that(
+    tryCatch(expr = ccs@info$cell_group == "cluster",
+             error = function(e) FALSE),
+    msg = "cell group must be cluster")
+
+  umap_centers = centroids(ccs) %>% tibble::column_to_rownames("cell_group")
+
+  paga_graph = get_paga_graph(ccs@cds)
+
+  colData(ccs@cds)[["color_cells_by"]] = colData(ccs@cds)[[color_cells_by]]
+
+  cluster_to_cellgroup = colData(ccs@cds) %>%
+                          as.data.frame() %>%
+                          group_by(cluster, color_cells_by) %>%
+                          tally() %>%
+                          top_n(1) %>%
+                          tibble::column_to_rownames("cluster")
+
+  igraph::V(paga_graph)$cell_group = cluster_to_cellgroup[igraph::V(paga_graph)$name, "color_cells_by"]
+
+  coords = umap_centers[igraph::V(paga_graph),1:2] %>% as.matrix()
+
+  p = ggnetwork::ggnetwork(paga_graph, layout=coords, arrow.gap= 0.02) %>%
+      ggplot(aes(x, y, xend = xend, yend = yend)) +
+      ggnetwork::geom_edges() +
+      ggnetwork::geom_nodes(aes(fill = cell_group), size = 7, color="black",shape=21) +
+      ggnetwork::theme_blank() +
+      theme(legend.position = legend_position)
+
+  return(p)
+
 }
 
 
