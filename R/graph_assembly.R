@@ -100,32 +100,52 @@ return_igraph <- function(model, type = "partial_cor", remove.isolated=FALSE,
 #'
 #' @param cds A cell_data_set object. cluster_cells() must have been called.
 #' @param reduction_method The coordinate space in which to build the graph
-get_paga_graph <- function(cds, reduction_method = "UMAP") {
+#' @param cell_group If defined, will be built on cell group labels instead of cluster
+#' 
+get_paga_graph <- function(cds, reduction_method = "UMAP", cell_group = NULL) {
 
   cluster_result <- cds@clusters[[reduction_method]]$cluster_result
-  #clusters <- ccm@ccs@cds@clusters[[reduction_method]]$clusters
-  #partitions <- ccm@ccs@cds@clusters[[reduction_method]]$partitions
-
-  #colData(cds)$cluster = clusters
-  #colData(cds)$partition = partitions
-
-  #coldata = colData(ccm@ccs@cds) %>% as_tibble() %>% dplyr::rename(embryo = Oligo) %>%
-  #  mutate(timepoint=as.numeric(stringr::str_remove(timepoint, "hpf")))
-  #coldata = ccm@ccs@metadata[["cell_group_assignments"]]
+  
+  if (is.null(cell_group) == FALSE) {
+    
+    optim_res = cluster_result$optim_res
+    
+    # can i replace this with a cell type label 
+    cell_df = data.frame(optim_res$membership) %>% rownames_to_column("cell")
+    cell_group_df = colData(cds) %>% as.data.frame() %>% select(cell, all_of(cell_group))
+    
+    number = cell_group_df %>% select(all_of(cell_group)) %>% distinct() %>% mutate(rn = row_number())
+    
+    # replace the cluster with the cell group number
+    optim_res_df = left_join(cell_df, cell_group_df, by = "cell") %>% 
+      left_join(number, by = cell_group) %>% 
+      select(-optim_res.membership) %>% 
+      rename(optim_res.membership = rn)
+    
+    membership = optim_res_df$optim_res.membership
+    names(membership) = optim_res_df$cell
+    optim_res$membership = membership
+    
+    cluster_result$optim_res  = optim_res
+    
+  }
 
   cluster_graph_res <- monocle3:::compute_partitions(cluster_result$g,
                                                      cluster_result$optim_res,
                                                      0.05, FALSE)
 
-
-  #cluster_time = coldata %>% group_by(cluster) %>% summarise(avg_time = mean(as.numeric(timepoint)))
-  #cluster_info = merge(cluster_maj, cluster_time, by="cluster") %>%
-  #  mutate("label" = paste0(cell_type, ".", round(avg_time), ".", cluster)) %>%
-  #  arrange(as.numeric(cluster))
-
   cluster_g <- cluster_graph_res$cluster_g
   cluster_g <- igraph::set_vertex_attr(cluster_g, "name", value = stringr::str_replace(igraph::V(cluster_g)$name, "cell_membership", ""))
-  cluster_g
+  
+  if (is.null(cell_group) == FALSE) {
+    rownames(number) = NULL
+    number = number %>% tibble::column_to_rownames("rn")
+    
+    cluster_g <- igraph::set_vertex_attr(cluster_g, "name", value = number[igraph::V(cluster_g)$name, cell_group])
+    
+  }
+  
+  return(cluster_g)
 }
 
 
