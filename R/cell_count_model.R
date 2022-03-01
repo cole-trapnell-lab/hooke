@@ -230,12 +230,25 @@ new_cell_count_model <- function(ccs,
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
+                                 size_factors = NULL,
                                  ...) {
 
+  if (!is.null(size_factors)) {
 
-  pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                      covariates = colData(ccs) %>% as.data.frame,
-                                      offset = size_factors(ccs))
+    assertthat::assert_that(
+      tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
+               error = function(e) FALSE),
+      msg = "size factors don't match")
+
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = size_factors)
+  } else {
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = size_factors(ccs))
+  }
+
 
   model_formula_str = paste("Abundance", model_formula_str, " + offset(log(Offset))")
   model_formula = as.formula(model_formula_str)
@@ -395,8 +408,9 @@ init_penalty_matrix = function(ccs, type = c("distance", "JS"), whitelist=NULL, 
                                        cell_metadata = agg_coldata,
                                        rowData(ccs@cds) %>% as.data.frame)
     pseudobulk_cds = pseudobulk_cds[,Matrix::colSums(exprs(pseudobulk_cds)) != 0]
-    dist_matrix = CalcJSDivergence(as.matrix(counts(pseudobulk_cds)), by_rows = FALSE)
-
+    divergence_matrix = textmineR::CalcJSDivergence(as.matrix(counts(pseudobulk_cds)), by_rows = FALSE)
+    # get JS distance
+    dist_matrix = sqrt(divergence_matrix)
   }
 
   # TODO: do I need this? Probably the caller can and should do this.
