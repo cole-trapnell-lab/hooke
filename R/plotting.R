@@ -15,6 +15,8 @@ plot_contrast <- function(ccm,
                           log_abundance_thresh = -5,
                           scale_shifts_by=c("receiver", "sender", "none"),
                           #cell_group="cluster",
+                          x=1,
+                          y=2,
                           edge_size=2,
                           cell_size=1,
                           q_value_thresh = 1.0,
@@ -23,7 +25,8 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = TRUE){
+                          plot_edges = TRUE,
+                          ){
 
   umap_centers = centroids(ccm@ccs)
 
@@ -83,8 +86,8 @@ plot_contrast <- function(ccm,
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
   plot_df$cell = row.names(plot_df)
 
-  plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,1]
-  plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
+  plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,y]
 
   plot_df = dplyr::left_join(plot_df,
                              cond_b_vs_a_tbl,
