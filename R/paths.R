@@ -30,10 +30,10 @@ calc_mst <- function(edges, weight = "pcor") {
   G <- igraph::graph_from_data_frame(edges, directed=FALSE)
 
   if (weight == "pcor") {
-    G_mst <- mst(G, weights=igraph::E(G)$pcor)
+    G_mst <- igraph::mst(G, weights=igraph::E(G)$pcor)
   }
   if (weight == "weight") {
-    G_mst <- mst(G, weights=igraph::E(G)$weight)
+    G_mst <- igraph::mst(G, weights=igraph::E(G)$weight)
   }
 
   mst_df <- igraph::as_data_frame(G_mst)
