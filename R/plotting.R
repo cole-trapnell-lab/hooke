@@ -14,7 +14,7 @@ plot_contrast <- function(ccm,
                           cond_b_vs_a_tbl,
                           log_abundance_thresh = -5,
                           scale_shifts_by=c("receiver", "sender", "none"),
-                          #cell_group="cluster",
+                          #cell_group="cluster",f
                           x=1,
                           y=2,
                           edge_size=2,
@@ -25,7 +25,7 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = TRUE
+                          plot_edges = c("all", "directed", "undirected")
                           ){
 
   umap_centers = centroids(ccm@ccs)
@@ -142,50 +142,54 @@ plot_contrast <- function(ccm,
     xlab("UMAP 1") + ylab("UMAP 2")
 
 
-  if (plot_edges) {
-    gp = gp  +
-      geom_segment(data = undirected_edge_df,
-                   aes(x = get(paste0("to_umap_", x)),
-                       y = get(paste0("to_umap_", y)),
-                       xend = get(paste0("from_umap_", x)),
-                       yend = get(paste0("from_umap_", y)),
-                       size = edge_size * scaled_weight),
-                   #size=edge_size / 4,
-                   color="lightgray") +
-      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                   aes(x = get(paste0("to_umap_", x)),
-                       y = get(paste0("to_umap_", x)),
-                       xend = get(paste0("from_umap_", x)),
-                       yend = get(paste0("from_umap_", y)),
-                       size = edge_size * scaled_weight),
-                   color="black") +
-      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                   aes(x = get(paste0("to_umap_", x)),
-                       y = get(paste0("to_umap_", y)),
-                       xend=(get(paste0("to_umap_", x))+get(paste0("from_umap_", x)))/2,
-                       yend = (get(paste0("to_umap_", y))+get(paste0("from_umap_", x)))/2,
-                       size=edge_size * scaled_weight),
-                   color="black",
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                   aes(x = get(paste0("from_umap_", x)),
-                       y = get(paste0("from_umap_", y)),
-                       xend = get(paste0("to_umap_", x)),
-                       yend = get(paste0("to_umap_", y)),
-                       size=edge_size * scaled_weight),
-                   color="black") +
-      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                   aes(x = get(paste0("from_umap_", x)),
-                       y = get(paste0("from_umap_", y)),
-                       xend=(get(paste0("from_umap_", x))+get(paste0("to_umap_", x)))/2,
-                       yend = (get(paste0("from_umap_", y))+get(paste0("to_umap_", y)))/2,
-                       size=edge_size * scaled_weight),
-                   color="black",
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-      scale_size_identity()
+  # force to be empty
+  if (plot_edges == "directed") {
+    undirected_edge_df = undirected_edge_df %>% dplyr::filter(!edge_type %in% c("undirected"))
+  } else if (plot_edges == "undirected") {
+    directed_edge_df = directed_edge_df %>% dplyr::filter(edge_type %in% c("undirected"))
   }
+
+  gp = gp  +
+    geom_segment(data = undirected_edge_df,
+                 aes(x = get(paste0("to_umap_", x)),
+                     y = get(paste0("to_umap_", y)),
+                     xend = get(paste0("from_umap_", x)),
+                     yend = get(paste0("from_umap_", y)),
+                     size = edge_size * scaled_weight),
+                 color="lightgray") +
+    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                 aes(x = get(paste0("to_umap_", x)),
+                     y = get(paste0("to_umap_", x)),
+                     xend = get(paste0("from_umap_", x)),
+                     yend = get(paste0("from_umap_", y)),
+                     size = edge_size * scaled_weight),
+                 color="black") +
+    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                 aes(x = get(paste0("to_umap_", x)),
+                     y = get(paste0("to_umap_", y)),
+                     xend=(get(paste0("to_umap_", x))+get(paste0("from_umap_", x)))/2,
+                     yend = (get(paste0("to_umap_", y))+get(paste0("from_umap_", x)))/2,
+                     size=edge_size * scaled_weight),
+                 color="black",
+                 linejoin='mitre',
+                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                 aes(x = get(paste0("from_umap_", x)),
+                     y = get(paste0("from_umap_", y)),
+                     xend = get(paste0("to_umap_", x)),
+                     yend = get(paste0("to_umap_", y)),
+                     size=edge_size * scaled_weight),
+                 color="black") +
+    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                 aes(x = get(paste0("from_umap_", x)),
+                     y = get(paste0("from_umap_", y)),
+                     xend=(get(paste0("from_umap_", x))+get(paste0("to_umap_", x)))/2,
+                     yend = (get(paste0("from_umap_", y))+get(paste0("to_umap_", y)))/2,
+                     size=edge_size * scaled_weight),
+                 color="black",
+                 linejoin='mitre',
+                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+    scale_size_identity()
 
   if (plot_labels != "none") {
     label_df = umap_centers_delta_abund
@@ -251,7 +255,9 @@ my_plot_cells <- function(data,
                       effect_sizes = NULL,
                       cond_b_vs_a_tbl = NULL,
                       cell_group = NULL,
-                      q_value_thresh = 1.0) {
+                      q_value_thresh = 1.0,
+                      x=1,
+                      y=2) {
 
   if (class(data) == "cell_count_set") {
     cds = data@cds
@@ -270,8 +276,8 @@ my_plot_cells <- function(data,
 
 
   plot_df$cell = row.names(plot_df)
-  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,1]
-  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,2]
+  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
 
 
   # could be an vector that corresponds to a label
@@ -413,10 +419,14 @@ plot_path <- function(data,
                       color_cells_by = "cluster",
                       color_path_by = NULL,
                       residuals = NULL,
-                      cond_b_vs_a_tbl = NULL) {
+                      cond_b_vs_a_tbl = NULL,
+                      x=1,
+                      y=2) {
 
 
-  gp = my_plot_cells(data, color_cells_by = color_cells_by, residuals = residuals, cond_b_vs_a_tbl = cond_b_vs_a_tbl)
+  gp = my_plot_cells(data, color_cells_by = color_cells_by,
+                     residuals = residuals, cond_b_vs_a_tbl = cond_b_vs_a_tbl,
+                     x=x,y=y)
 
   if (class(data) == "cell_count_set") {
     umap_centers = centroids(data)
@@ -431,17 +441,17 @@ plot_path <- function(data,
     gp = gp +
       ggnewscale::new_scale_color() +
       geom_segment(data = path_df,
-                           aes(x = umap_to_1,
-                               y = umap_to_2,
-                               xend=umap_from_1,
-                               yend = umap_from_2,
+                           aes(x = get(paste0("umap_to_", x)),
+                               y = get(paste0("umap_to_", y)),
+                               xend=get(paste0("from_to_", x)),
+                               yend = get(paste0("from_to_", y)),
                                color = get(color_path_by)),
                            size=2 ) +
       geom_segment(data = path_df,
                    aes(x = umap_from_1,
                        y = umap_from_2,
-                       xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2,
+                       xend = (get(paste0("umap_to_", x))+get(paste0("umap_from_", x)))/2,
+                       yend = (get(paste0("umap_to_", y))+get(paste0("umap_from_", y)))/2,
                        color = get(color_path_by)),
                    size=2,
                    linejoin='mitre',
@@ -455,21 +465,21 @@ plot_path <- function(data,
 
   } else {
     gp = gp + geom_segment(data = path_df,
-                           aes(x = umap_to_1,
-                               y = umap_to_2,
-                               xend=umap_from_1,
-                               yend = umap_from_2),
-                           color = path_color,
-                           size = 2 ) +
+                           aes(x = get(paste0("umap_to_", x)),
+                               y = get(paste0("umap_to_", y)),
+                               xend=get(paste0("umap_from_", x)),
+                               yend = get(paste0("umap_from_", y))),
+                               color = path_color,
+                               size = 2) +
       geom_segment(data = path_df,
-                   aes(x = umap_from_1,
-                       y = umap_from_2,
-                       xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2),
-                   size=2,
-                   color=path_color,
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
+                   aes(x = get(paste0("umap_from_", x)),
+                       y = get(paste0("umap_from_", y)),
+                       xend = (get(paste0("umap_to_", x)) + get(paste0("umap_from_", x)))/2,
+                       yend = (get(paste0("umap_to_", y)) + get(paste0("umap_from_", y)))/2),
+                       size = 2,
+                       color = path_color,
+                       linejoin='mitre',
+                       arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
   }
 
   return(gp)
