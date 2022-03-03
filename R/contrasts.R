@@ -62,7 +62,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
-  log_abund = pred_out[1,]
+  #log_abund = pred_out[1,]
+  log_abund = as.numeric(pred_out)
   log_abund_sd = sqrt(diag(coef(model(ccm), type="covariance")))
   log_abund_se = se_fit
 
@@ -73,8 +74,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #percent_range = 100 * (exp(log_abund) - exp(min_log_abundances)) / (exp(max_log_abundances) - exp(min_log_abundances))
   pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out),
                         log_abund,
-                        log_abund_sd,
                         log_abund_se)
+  pred_out_tbl = left_join(pred_out_tbl,  tibble::tibble(cell_group=names(log_abund_sd), log_abund_sd), by=c("cell_group"))
   #max_log_abundances,
   #min_log_abundances,
   #percent_max,
