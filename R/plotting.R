@@ -25,7 +25,7 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = c("all", "directed", "undirected")
+                          plot_edges = c("all", "directed", "undirected", "none")
                           ){
 
   umap_centers = centroids(ccm@ccs)
@@ -149,54 +149,60 @@ plot_contrast <- function(ccm,
     directed_edge_df = directed_edge_df %>% dplyr::filter(edge_type %in% c("undirected"))
   }
 
-  gp = gp  +
-    geom_segment(data = undirected_edge_df,
-                 aes(x = get(paste0("to_umap_", x)),
-                     y = get(paste0("to_umap_", y)),
-                     xend = get(paste0("from_umap_", x)),
-                     yend = get(paste0("from_umap_", y)),
-                     size = edge_size * scaled_weight),
-                 color="lightgray") +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                 aes(x = get(paste0("to_umap_", x)),
-                     y = get(paste0("to_umap_", x)),
-                     xend = get(paste0("from_umap_", x)),
-                     yend = get(paste0("from_umap_", y)),
-                     size = edge_size * scaled_weight),
-                 color="black") +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                 aes(x = get(paste0("to_umap_", x)),
-                     y = get(paste0("to_umap_", y)),
-                     xend=(get(paste0("to_umap_", x))+get(paste0("from_umap_", x)))/2,
-                     yend = (get(paste0("to_umap_", y))+get(paste0("from_umap_", x)))/2,
-                     size=edge_size * scaled_weight),
-                 color="black",
-                 linejoin='mitre',
-                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                 aes(x = get(paste0("from_umap_", x)),
-                     y = get(paste0("from_umap_", y)),
-                     xend = get(paste0("to_umap_", x)),
-                     yend = get(paste0("to_umap_", y)),
-                     size=edge_size * scaled_weight),
-                 color="black") +
-    geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                 aes(x = get(paste0("from_umap_", x)),
-                     y = get(paste0("from_umap_", y)),
-                     xend=(get(paste0("from_umap_", x))+get(paste0("to_umap_", x)))/2,
-                     yend = (get(paste0("from_umap_", y))+get(paste0("to_umap_", y)))/2,
-                     size=edge_size * scaled_weight),
-                 color="black",
-                 linejoin='mitre',
-                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-    scale_size_identity()
+  if (plot_edges != "none") {
+    gp = gp  +
+      geom_segment(data = undirected_edge_df,
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend = get(paste0("from_umap_", x)),
+                       yend = get(paste0("from_umap_", y)),
+                       size = edge_size * scaled_weight),
+                   color="lightgray") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", x)),
+                       xend = get(paste0("from_umap_", x)),
+                       yend = get(paste0("from_umap_", y)),
+                       size = edge_size * scaled_weight),
+                   color="black") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend=(get(paste0("to_umap_", x))+get(paste0("from_umap_", x)))/2,
+                       yend = (get(paste0("to_umap_", y))+get(paste0("from_umap_", x)))/2,
+                       size=edge_size * scaled_weight),
+                   color="black",
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                   aes(x = get(paste0("from_umap_", x)),
+                       y = get(paste0("from_umap_", y)),
+                       xend = get(paste0("to_umap_", x)),
+                       yend = get(paste0("to_umap_", y)),
+                       size=edge_size * scaled_weight),
+                   color="black") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                   aes(x = get(paste0("from_umap_", x)),
+                       y = get(paste0("from_umap_", y)),
+                       xend=(get(paste0("from_umap_", x))+get(paste0("to_umap_", x)))/2,
+                       yend = (get(paste0("from_umap_", y))+get(paste0("to_umap_", y)))/2,
+                       size=edge_size * scaled_weight),
+                   color="black",
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      scale_size_identity()
+
+  }
+
 
   if (plot_labels != "none") {
     label_df = umap_centers_delta_abund
     if (plot_labels == "significant")
       label_df = label_df %>% filter(delta_log_abund != 0)
     gp <- gp + ggrepel::geom_label_repel(data = label_df,
-                                         mapping = aes(umap_1, umap_2, label=cell_group),
+                                         mapping = aes(get(paste0("umap_", x)),
+                                                       get(paste0("umap_", y)),
+                                                       label=cell_group),
                                          size=I(group_label_size),
                                          fill = "white")
   }
