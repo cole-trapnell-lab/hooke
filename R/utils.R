@@ -418,7 +418,7 @@ plot_sub_path <- function(ccm,
                                    q_value_thresh = q_value_thresh)
 
 
-  gp =sub_contrast +
+  gp = sub_contrast +
     geom_segment(data = path_df,
                  aes(x = umap_to_1,
                      y = umap_to_2,

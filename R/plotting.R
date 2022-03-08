@@ -21,11 +21,12 @@ plot_contrast <- function(ccm,
                           cell_size=1,
                           q_value_thresh = 1.0,
                           group_label_size=2,
-                          plot_labels = c("significant", "all", "none"),
+                          plot_labels = c("all", "significant", "none"),
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = c("all", "directed", "undirected", "none")
+                          plot_edges = c("all", "directed", "undirected", "none"),
+                          plot_label_switch = NULL
                           ){
 
   umap_centers = centroids(ccm@ccs)
@@ -197,8 +198,13 @@ plot_contrast <- function(ccm,
 
   if (plot_labels != "none") {
     label_df = umap_centers_delta_abund
+
     if (plot_labels == "significant")
       label_df = label_df %>% filter(delta_log_abund != 0)
+
+    if (is.null(plot_label_switch) == FALSE)
+      label_df = convert_to_col(ccm@ccs, label_df, plot_label_switch)
+
     gp <- gp + ggrepel::geom_label_repel(data = label_df,
                                          mapping = aes(get(paste0("umap_", x)),
                                                        get(paste0("umap_", y)),
@@ -262,8 +268,9 @@ my_plot_cells <- function(data,
                       cond_b_vs_a_tbl = NULL,
                       cell_group = NULL,
                       q_value_thresh = 1.0,
-                      x=1,
-                      y=2) {
+                      fc_limits = c(-3,3),
+                      x = 1,
+                      y = 2) {
 
   if (class(data) == "cell_count_set") {
     cds = data@cds
@@ -288,8 +295,7 @@ my_plot_cells <- function(data,
 
   # could be an vector that corresponds to a label
   if (!is.null(residuals)) {
-    res_df = as.data.frame(residuals) %>% rownames_to_column("cell_group")
-    colnames(res_df)[1] = "residuals"
+    res_df = data.frame("residuals" = residuals) %>% rownames_to_column("cell_group")
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
     color_cells_by = "residuals"
 
@@ -367,7 +373,7 @@ my_plot_cells <- function(data,
         mid = "white",
         high = "red4",
         na.value = "white",
-        limits = c(-3,3)
+        limits = fc_limits
       )
 
   } else if (color_cells_by == "delta_log_abund") {
@@ -385,7 +391,7 @@ my_plot_cells <- function(data,
         mid = "white",
         high = "red4",
         na.value = "white",
-        limits=c(-3,3)
+        limits = fc_limits
       )
   } else if (color_cells_by == "none") {
     # do nothing
@@ -429,6 +435,7 @@ plot_path <- function(data,
                       x=1,
                       y=2) {
 
+  # if plot not defined, find one
 
   gp = my_plot_cells(data, color_cells_by = color_cells_by,
                      residuals = residuals, cond_b_vs_a_tbl = cond_b_vs_a_tbl,
@@ -440,7 +447,6 @@ plot_path <- function(data,
     umap_centers = centroids(data@ccs)
   }
 
-  path_df = add_umap_coords(path_df, umap_centers)
 
   if (is.null(color_path_by) == FALSE) {
 
@@ -711,6 +717,22 @@ plot_paga <- function(ccs,
 }
 
 
+# plot_contrast_3d <- function() {
+#
+#   S_matrix <- reducedDims(cds)[[reduction_method]]
+#
+# }
+# my_plot_3d
+
+# plot_cells_3d()
+
+
+# scale_color_gradient2(
+#   low = "#122985",
+#   mid = "white",
+#   high = "red4",
+#   na.value = "white"
+# )
 
 
 #' helper function for adding attributes to network node
@@ -771,3 +793,4 @@ plot_paga <- function(ccs,
 #' plot_boxplots <- function() {
 #'
 #' }
+#'
