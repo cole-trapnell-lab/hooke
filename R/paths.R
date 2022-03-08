@@ -62,6 +62,10 @@ calc_shortest_path <- function(edges, from, to) {
 
   mf = igraph::shortest_paths(G, from = from, to = to, weights = igraph::E(G)$weight, output="epath")
 
+  if (is.null(mf$vpath)) {
+    return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
+  }
+
   directed_subgraph = igraph::subgraph.edges(G, mf$epath[[1]])
 
   # turn back into a dataframe
