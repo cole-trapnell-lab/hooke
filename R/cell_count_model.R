@@ -72,6 +72,21 @@ new_cell_count_set <- function(cds,
                                lower_threshold = NULL,
                                upper_threshold = NULL) {
 
+  # check if anything contains NAs in it
+  # if so drop them
+  num_sample_group_NAs = sum(is.na(colData(cds)[[sample_group]]))
+  if (num_sample_group_NAs != 0) {
+    message(paste(num_sample_group_NAs, "NAs found in sample group. Dropping NAs."))
+    cds = cds[, !is.na(colData(cds)[[sample_group]])]
+  }
+
+  num_cell_group_NAs = sum(is.na(colData(cds)[[cell_group]]))
+  if (num_cell_group_NAs != 0) {
+    message(paste(num_cell_group_NAs, "NAs found in cell group. Dropping NAs."))
+    cds = cds[, !is.na(colData(cds)[[cell_group]])]
+  }
+
+
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
