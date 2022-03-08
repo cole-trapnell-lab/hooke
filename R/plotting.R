@@ -161,7 +161,7 @@ plot_contrast <- function(ccm,
                    color="lightgray") +
       geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
                    aes(x = get(paste0("to_umap_", x)),
-                       y = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
                        xend = get(paste0("from_umap_", x)),
                        yend = get(paste0("from_umap_", y)),
                        size = edge_size * scaled_weight),
@@ -258,7 +258,6 @@ get_colors <- function(num_colors, type = "rainbow") {
 
 }
 
-
 #' rename this later?
 #' probably needs fixing
 my_plot_cells <- function(data,
@@ -279,12 +278,14 @@ my_plot_cells <- function(data,
 
   if (class(data) == "cell_count_set") {
     cds = data@cds
+    ccs = data
     plot_df = as.data.frame(colData(cds))
   } else if (class(data) == "cell_data_set") {
     cds = data
     plot_df = as.data.frame(colData(cds))
     # plot_df = data@metadata[["cell_group_assignments"]] %>% pull(cell_group)
   } else if (class(data) == "cell_count_model") {
+    ccs = data@ccs
     cds = data@ccs@cds
     plot_df = as.data.frame(colData(cds))
     plot_df$cell_group = data@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
@@ -420,10 +421,10 @@ my_plot_cells <- function(data,
 
   if (plot_labels) {
 
-    label_df = centroids(ccm@ccs)
+    label_df = centroids(ccs)
 
     if (is.null(plot_label_switch) == FALSE)
-      label_df = convert_to_col(ccm@ccs, label_df, plot_label_switch)
+      label_df = convert_to_col(ccs, label_df, plot_label_switch)
 
     gp = gp + ggrepel::geom_label_repel(data = label_df,
                                         mapping = aes(get(paste0("umap_", x)),
@@ -439,6 +440,115 @@ my_plot_cells <- function(data,
   return(gp)
 
 }
+
+
+#' plots the residuals from the model
+#' @param
+#' @param
+plot_residuals <- function(ccm,
+                           term,
+                           level,
+                           plot_label_switch = NULL,
+                           fc_limits = NULL,
+                           plot_edges = F,
+                           edge_size=2,
+                           x = 1,
+                           y = 2) {
+
+  model_levels = ccm@model_aux[["xlevels"]]
+
+  assertthat::assert_that(
+    term %in% names(model_levels),
+    msg = paste0("term must be in ", names(model_levels))
+  )
+
+  assertthat::assert_that(
+    level %in% model_levels[[term]],
+    msg = paste0("level must be in ", model_levels)
+  )
+
+  residuals = coef(ccm@best_model)[,paste0(term, level)]
+
+  gp = my_plot_cells(ccm,
+                    residuals = residuals,
+                    legend_position = "right",
+                    fc_limits = fc_limits,
+                    plot_label_switch = plot_label_switch)
+
+  if (plot_edges) {
+
+    res_df = data.frame("residuals" = residuals) %>% rownames_to_column("cell_group")
+    umap_centers = centroids(ccm@ccs)
+    umap_centers_delta_abund = dplyr::left_join(umap_centers, res_df, by=c("cell_group"="cell_group"))
+
+
+    abundance_corr_tbl = correlate_abundance_changes(model(ccm), umap_centers_delta_abund) %>%
+      dplyr::mutate(edge_type = dplyr::case_when(
+        from_residuals > 0 & to_residuals > 0 & pcor > 0 ~ "undirected",
+        from_residuals > 0 & to_residuals < 0 & pcor > 0 ~ "undirected",
+        from_residuals < 0 & to_residuals > 0 & pcor > 0 ~ "undirected",
+        from_residuals < 0 & to_residuals < 0 & pcor > 0 ~ "undirected",
+        from_residuals > 0 & to_residuals > 0 & pcor < 0 ~ "undirected",
+        from_residuals > 0 & to_residuals < 0 & pcor < 0 ~ "directed_to_from",
+        from_residuals < 0 & to_residuals > 0 & pcor < 0 ~ "directed_from_to",
+        from_residuals < 0 & to_residuals < 0 & pcor < 0 ~ "undirected",
+        TRUE ~ "hidden"
+      ))
+
+    directed_edge_df = abundance_corr_tbl %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
+    undirected_edge_df = abundance_corr_tbl %>% dplyr::filter(edge_type %in% c("undirected"))
+    directed_edge_df = directed_edge_df %>%
+      dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
+    undirected_edge_df = undirected_edge_df %>%
+      dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
+
+    gp = gp  +
+      geom_segment(data = undirected_edge_df,
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend = get(paste0("from_umap_", x)),
+                       yend = get(paste0("from_umap_", y)),
+                       size = edge_size * scaled_weight),
+                   color="lightgray") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend = get(paste0("from_umap_", x)),
+                       yend = get(paste0("from_umap_", y)),
+                       size = edge_size * scaled_weight),
+                   color="black") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend=(get(paste0("to_umap_", x))+get(paste0("from_umap_", x)))/2,
+                       yend = (get(paste0("to_umap_", y))+get(paste0("from_umap_", y)))/2,
+                       size=edge_size * scaled_weight),
+                   color="black",
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                   aes(x = get(paste0("from_umap_", x)),
+                       y = get(paste0("from_umap_", y)),
+                       xend = get(paste0("to_umap_", x)),
+                       yend = get(paste0("to_umap_", y)),
+                       size=edge_size * scaled_weight),
+                   color="black") +
+      geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
+                   aes(x = get(paste0("from_umap_", x)),
+                       y = get(paste0("from_umap_", y)),
+                       xend=(get(paste0("from_umap_", x))+get(paste0("to_umap_", x)))/2,
+                       yend = (get(paste0("from_umap_", y))+get(paste0("to_umap_", y)))/2,
+                       size = edge_size * scaled_weight),
+                   color="black",
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      scale_size_identity()
+  }
+
+  return(gp)
+
+}
+
 
 
 #' plots a path on top of
