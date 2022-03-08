@@ -212,6 +212,8 @@ plot_contrast <- function(ccm,
                                          size=I(group_label_size),
                                          fill = "white")
   }
+
+  gp = gp + xlab(paste0("UMAP",x)) + ylab(paste0("UMAP",y))
   return(gp)
 }
 
@@ -269,6 +271,9 @@ my_plot_cells <- function(data,
                       cell_group = NULL,
                       q_value_thresh = 1.0,
                       fc_limits = c(-3,3),
+                      plot_labels = TRUE,
+                      plot_label_switch = NULL,
+                      group_label_size=2,
                       x = 1,
                       y = 2) {
 
@@ -338,7 +343,7 @@ my_plot_cells <- function(data,
       size = cell_size,
       stroke = 0
     ) +
-    theme_void() +
+    # theme_void() +
     theme(legend.position = legend_position) +
     monocle3:::monocle_theme_opts()
 
@@ -410,6 +415,26 @@ my_plot_cells <- function(data,
     ) +
       scale_color_manual(values = full_spectrum)
   }
+
+  # add labels
+
+  if (plot_labels) {
+
+    label_df = centroids(ccm@ccs)
+
+    if (is.null(plot_label_switch) == FALSE)
+      label_df = convert_to_col(ccm@ccs, label_df, plot_label_switch)
+
+    gp = gp + ggrepel::geom_label_repel(data = label_df,
+                                        mapping = aes(get(paste0("umap_", x)),
+                                                      get(paste0("umap_", y)),
+                                                      label=cell_group),
+                                        size=I(group_label_size),
+                                        fill = "white")
+
+  }
+
+  gp = gp + labs(color = color_cells_by) + xlab(paste0("UMAP",x)) + ylab(paste0("UMAP",y))
 
   return(gp)
 
