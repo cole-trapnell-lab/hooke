@@ -20,24 +20,35 @@ compute_vhat = function(ccm) {
   if (model(ccm)$d > 0) {
     ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
     ## safe inversion using Matrix::solve and Matrix::diag and error handling
-    out <- tryCatch(Matrix::solve(vcov(model(ccm))),
+
+    vcov_mat = vcov(model(ccm))
+
+    vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+
+    #dimnames(vhat) <- dimnames(vcov_mat)
+    safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+    vcov_mat = vcov_mat[safe_rows, safe_cols]
+
+    out <- tryCatch(Matrix::solve(vcov_mat),
                     error = function(e) {e})
+    row.names(out) = colnames(out) = names(safe_rows[safe_rows])
     if (is(out, "error")) {
       warning(paste("Inversion of the Fisher information matrix failed with following error message:",
                     out$message,
                     "Returning NA",
                     sep = "\n"))
-      vhat <- matrix(NA, nrow = self$p, ncol = self$d)
+      vhat <- matrix(NA, nrow = model(ccm)$p, ncol = model(ccm)$d)
     } else {
-      vhat <- out #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+      row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+      row.names(vhat) = colnames(vhat) = row.names(vcov(model(ccm)))
+      vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
     }
-    dimnames(vhat) <- dimnames(vcov(model(ccm)))
+    #dimnames(vhat) <- dimnames(vcov_mat)
   } else {
     vhat <- NULL
   }
   vhat
 }
-
 #' Predict cell type abundances given a PLN model and a set of inputs for its covariates
 #'
 #' @param newdata needs to be suitable input to pln_model
