@@ -180,13 +180,13 @@ select_states <- function(ordered_path, start , n = 3) {
 #' @param cond_a_vs_tbl
 #' @param p_value_threshold
 #'
-get_path <- function(ccm, cond_b_vs_a_tbl, p_value_threshold = 1.0) {
+get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
 
   pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
     filter(pcor > 0 &
-           to_delta_p_value < p_value_threshold &
-           from_delta_p_value < p_value_threshold)
+           to_delta_q_value < q_value_threshold &
+           from_delta_q_value < q_value_threshold)
 
   assertthat::assert_that(
     tryCatch(expr = nrow(pos_edges) != 0,
@@ -198,8 +198,8 @@ get_path <- function(ccm, cond_b_vs_a_tbl, p_value_threshold = 1.0) {
   neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
     filter(edge_type != "undirected" &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold)
+             to_delta_q_value < q_value_threshold &
+             from_delta_q_value < q_value_threshold)
 
   assertthat::assert_that(
     tryCatch(expr = nrow(neg_rec_edges) != 0,
