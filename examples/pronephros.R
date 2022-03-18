@@ -40,11 +40,22 @@ colData(kidney_cds)$cell_type_dk = case_when(
 
 colData(kidney_cds)$orig_cluster = colData(kidney_cds)$cluster
 
+plot_cells(kidney_cds, color_cells_by="orig_cluster", show_trajectory_graph=FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) +
+  ggsave("kidney_orig_clusters.png", width=4, height=4)
+
+
+
 set.seed(42)
 
 kidney_cds = cluster_cells(kidney_cds, resolution=1e-3)
 colData(kidney_cds)$cluster = monocle3::clusters(kidney_cds)
-
+colData(kidney_cds)$new_cluster = colData(kidney_cds)$cluster
 plot_cells(kidney_cds)
 
 colData(kidney_cds)$cell_type_ct = case_when(
@@ -64,7 +75,7 @@ colData(kidney_cds)$cell_type_ct = case_when(
 plot_cells(kidney_cds, color_cells_by="cell_type_ct")
 
 pronephros_classifier <- train_cell_classifier(cds = kidney_cds,
-                                         marker_file = "./examples/pronephros_cell_types.txt", #marker_file_path,
+                                         marker_file = "./examples/pronephros_cell_types.txt",
                                          db="none",#org.Dr.eg.db::org.Dr.eg.db,
                                          cds_gene_id_type = "SYMBOL",
                                          num_unknown = 50,
@@ -131,7 +142,7 @@ plot_cells(kidney_cds, color_cells_by="segment", show_trajectory_graph=FALSE) +
         axis.ticks=element_blank(),
         axis.title.x=element_blank(),
         axis.title.y=element_blank()) +
-  ggsave("kidney_segment.png", width=3, height=3)
+  ggsave("kidney_segment.png", width=7, height=6)
 
 
 plot_cells(kidney_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE) +
@@ -141,7 +152,16 @@ plot_cells(kidney_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE) 
         axis.ticks=element_blank(),
         axis.title.x=element_blank(),
         axis.title.y=element_blank()) +
-  ggsave("kidney_cell_types.png", width=3, height=3)
+  ggsave("kidney_cell_types.png", width=4, height=4)
+
+plot_cells(kidney_cds, color_cells_by="cell_type_ct", show_trajectory_graph=FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) +
+  ggsave("kidney_cell_types_ct.png", width=4, height=4)
 
 
 #plot_cells(kidney_cds, color_cells_by="gene_target1", show_trajectory_graph=FALSE) + facet_wrap(~gene_target1)
@@ -159,7 +179,7 @@ plot_cells(kidney_cds, color_cells_by="timepoint.1", show_trajectory_graph=FALSE
         axis.title.x=element_blank(),
         axis.title.y=element_blank()) +
   #theme(legend.position="none") +
-  ggsave("kidney_time.png", width=3, height=3)
+  ggsave("kidney_time.png", width=7, height=6)
 
 
 #########
@@ -247,22 +267,76 @@ wt_ccs = new_cell_count_set(wt_cds,
 wt_ccm  = new_cell_count_model(wt_ccs,
                                main_model_formula_str = "~splines::ns(timepoint,df=4)",
                                nuisance_model_formula_str = "~experiment")
-
+wt_ccm = select_model(wt_ccm, criterion = "EBIC", sparsity_factor=0.2)
 
 timepoint_pred_df = tibble(timepoint=seq(18,48))
 
 timepoint_pred_df = timepoint_pred_df %>%
   dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
     function(tp){ estimate_abundances(wt_ccm, tibble(timepoint=tp, experiment="GAP14"))}, NA_real_), .x = timepoint)) %>% tidyr::unnest()
+
+cell_type_assignments = colData(wt_ccs@cds) %>%
+  as.data.frame %>%
+  dplyr::count(cluster, cell_type) %>%
+  group_by(cluster) %>% slice_max(n) %>%
+  dplyr::select(cell_group=cluster, cell_type)
+timepoint_pred_df = left_join(timepoint_pred_df,cell_type_assignments)
+timepoint_pred_df = timepoint_pred_df %>% mutate(cell_group_label = paste(cell_type, " (", cell_group, ")", sep=""))
+
 qplot(timepoint, log_abund, data=timepoint_pred_df, geom="line", color=cell_group) +
-  geom_ribbon(aes(timepoint, ymin=log_abund-2*log_abund_se, ymax=log_abund+2*log_abund_se), alpha=I(0.1)) +
-  facet_wrap(~cell_group, scales="free_y")
+  #geom_ribbon(aes(timepoint, ymin=log_abund-2*log_abund_se, ymax=log_abund+2*log_abund_se), alpha=I(0.1)) +
+  facet_wrap(~cell_group_label, scales="free_y")
+
+
+timepoint_pred_df %>% filter(grepl("Podocyte", cell_group_label)) %>%
+  mutate(cell_group_label=forcats::fct_relevel(cell_group_label, c("Podocyte (11)", "Podocyte (23)", "Podocyte (31)", "Podocyte (19)"))) %>%
+ggplot(aes(timepoint, log_abund, color=cell_group_label)) +
+  geom_line() +
+  #geom_ribbon(aes(timepoint, ymin=log_abund-2*log_abund_se, ymax=log_abund+2*log_abund_se), alpha=I(0.1)) +
+  facet_wrap(~cell_group_label, ncol=1, scales="free_y") + monocle3:::monocle_theme_opts() + theme(legend.position="none") +
+  ggsave("podocyte_kinetics.png", width=3, height=4)
+
+
+timepoint_pred_df %>% filter(grepl("Renal progenitors \\(15\\)|Convoluted", cell_group_label)) %>%
+  mutate(cell_group_label=forcats::fct_relevel(cell_group_label, c("Renal progenitors (15)",
+                                                                   "Proximal Convoluted Tubule (3)",
+                                                                   "Proximal Convoluted Tubule (21)",
+                                                                   "Proximal Convoluted Tubule (5)",
+                                                                   "Proximal Convoluted Tubule (1)",
+                                                                   "Proximal Convoluted Tubule (33)",
+                                                                   "Proximal Convoluted Tubule (12)"))) %>%
+  ggplot(aes(timepoint, log_abund, color=cell_group_label)) +
+  geom_line() +
+  #geom_ribbon(aes(timepoint, ymin=log_abund-2*log_abund_se, ymax=log_abund+2*log_abund_se), alpha=I(0.1)) +
+  facet_wrap(~cell_group_label, ncol=1, scales="free_y") + monocle3:::monocle_theme_opts() + theme(legend.position="none") +
+  ggsave("PCT_kinetics.png", width=3, height=7)
+
+
+plot_contrast(wt_ccm, compare_abundances(wt_ccm,
+                                         timepoint_pred_df %>% filter(timepoint == 18),
+                                         timepoint_pred_df %>% filter(timepoint == 36)),
+              q_value_thresh = 0.01) +
+  theme(legend.position="none") +
+  ggtitle("WT, 18 vs. 36 hpf") +
+  ggsave("wt_pronephros_lfc_18_v_36.png", width=4, height=4)
+
+
+plot_contrast(wt_ccm, compare_abundances(wt_ccm,
+                                         timepoint_pred_df %>% filter(timepoint == 18),
+                                         timepoint_pred_df %>% filter(timepoint == 24)),
+              q_value_thresh = 0.01) +
+  theme(legend.position="none") +
+  ggtitle("WT, 18 vs. 24 hpf") +
+  ggsave("wt_pronephros_lfc_18_v_24.png", width=4, height=4)
 
 
 plot_contrast(wt_ccm, compare_abundances(wt_ccm,
                                          timepoint_pred_df %>% filter(timepoint == 24),
-                                         timepoint_pred_df %>% filter(timepoint == 30)),
-              q_value_thresh = 0.01)
+                                         timepoint_pred_df %>% filter(timepoint == 36)),
+              q_value_thresh = 0.01) +
+  theme(legend.position="none") +
+  ggtitle("WT, 24 vs. 36 hpf") +
+  ggsave("wt_pronephros_lfc_24_v_36.png", width=4, height=4)
 
 
 plot_pronephros_transitions <- function(ccm,
@@ -551,6 +625,7 @@ fit_genotype_ccm = function(genotype,
 
                                                        nuisance_model_formula_str = nuisance_model_formula_str
                                                        ))
+  genotype_ccm = select_model(genotype_ccm, sparsity_factor = 0.2)
   return(genotype_ccm)
 }
 undebug(fit_genotype_ccm)
@@ -558,8 +633,9 @@ undebug(fit_genotype_ccm)
 
 genotype_df = colData(ccs@cds) %>% as_tibble() %>% dplyr::select(gene_target) %>% distinct()
 
-crispant_genotype_df = dplyr::filter(genotype_df, gene_target %in% c("smo", "noto"))
+crispant_genotype_df = dplyr::filter(genotype_df, gene_target %in% c("smo", "noto", "tbxta", "cdx4", "egr2b", "mafba", "epha4a"))
 # Fit a model for each genotype:
+#
 
 crispant_models_tbl = crispant_genotype_df %>%
   dplyr::mutate(genotype_ccm = purrr::map(.f = purrr::possibly(
@@ -587,12 +663,37 @@ collect_genotype_effects = function(ccm, timepoint=24, experiment="GAP16"){
 
 genotype_models_tbl = genotype_models_tbl %>%
   dplyr::mutate(genotype_eff = purrr::map(.f = purrr::possibly(
-    collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=24)) #%>%
+    collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=18)) #%>%
 #tidyr::unnest(states)
 
 plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 0.05)
 plot_contrast(genotype_models_tbl$genotype_ccm[[2]], genotype_models_tbl$genotype_eff[[2]], q_value_thresh = 0.05)
 plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05)
+plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05)
+plot_contrast(genotype_models_tbl$genotype_ccm[[5]], genotype_models_tbl$genotype_eff[[5]], q_value_thresh = 0.05)
+
+
+# noto
+plot_contrast(genotype_models_tbl$genotype_ccm[[8]], genotype_models_tbl$genotype_eff[[8]], q_value_thresh = 0.05)+
+  theme(legend.position="none") +
+  ggtitle("noto vs. ctrl 18hpf") +
+  ggsave("noto_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+# smo
+plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05)+
+  theme(legend.position="none") +
+  ggtitle("smo vs. ctrl 18hpf") +
+  ggsave("smo_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+# egr2b
+plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05)+
+  theme(legend.position="none") +
+  ggtitle("egr2b vs. ctrl 18hpf") +
+  ggsave("egr2b_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
 
 #state_transitions = hooke:::collect_pln_graph_edges(ccm, cond_ra_vs_wt_tbl) %>% as_tibble %>%
 #  filter(edge_type == "directed_from_to" & to_delta_p_value < 0.05 & from_delta_p_value < 0.05)
@@ -616,93 +717,34 @@ plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotyp
 #
 # sig_state_transition_effects = state_transition_effects %>% dplyr::filter(from_delta_q_value < 0.01 & to_delta_q_value < 0.01)
 
+## Let's look at the kinetics of some of the crispants:
 
 
-### Old stuff:
+collect_genotype_kinetics = function(ccm, experiment="GAP16", start_time=18, stop_time=36){
+  timepoint_pred_df = tibble(timepoint=seq(start_time,stop_time))
+  timepoint_pred_df = timepoint_pred_df %>%
+    dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
+      function(tp){
+        control_abund = estimate_abundances(ccm, tibble(knockout=FALSE, timepoint=tp, experiment=experiment))
+        knockout_abund = estimate_abundances(ccm, tibble(knockout=TRUE, timepoint=tp, experiment=experiment))
+        genotype_comparison_tbl = compare_abundances(ccm, control_abund, knockout_abund)
+        return(genotype_comparison_tbl)
+      }, NA_real_), .x = timepoint)) %>% tidyr::unnest()
+}
 
+genotype_models_kinetics = genotype_models_tbl %>%
+  dplyr::mutate(genotype_kinetics = purrr::map(.f = purrr::possibly(
+    collect_genotype_kinetics, NA_real_), .x = genotype_ccm)) %>%
+  dplyr::select(gene_target, genotype_kinetics) %>% tidyr::unnest()
+#tidyr::unnest(states)
 
-
-noto_smo_cds = kidney_cds[,colData(kidney_cds)$genotype %in% c("wt", "noto", "noto-mut", "smo")]
-
-
-noto_smo_gap16_cds = kidney_cds[,colData(kidney_cds)$genotype %in% c("wt", "noto", "smo", "noto-mut") &
-                                  colData(kidney_cds)$experiment == "GAP16" &
-                                  colData(kidney_cds)$timepoint %in% c(18,24,36)]
-
-gap16_cds = kidney_cds[,colData(kidney_cds)$experiment == "GAP16"]
-
-
-
-plot_cells(noto_smo_gap16_cds, color_cells_by="timepoint.1", show_trajectory_graph=FALSE, label_cell_groups=FALSE) +
-  theme(axis.line=element_blank(),
-        axis.text.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank()) +
-  ggsave("kidney_time.png", width=3, height=3)
-
-
-
-#subset_kidney_cds = kidney_cds[,colData(kidney_cds)$genotype]
-
-ccs = new_cell_count_set(kidney_cds,
-                         sample_group = "Oligo",
-                         cell_group = "cell_type")
-
-
-ccm  = new_cell_count_model(ccs,
-                            main_model_formula_str = "~splines::ns(timepoint,df=3) + genotype",
-                            nuisance_model_formula_str = "experiment")
-
-ccm = select_model(ccm, criterion="StARS", sparsity_factor=0.1)
-
-
-cond_wt_18 = estimate_abundances(ccm, tibble::tibble(timepoint=18, genotype="wt", experiment="GAP16"))
-cond_wt_24 = estimate_abundances(ccm, tibble::tibble(timepoint=24, genotype="wt", experiment="GAP16"))
-cond_wt_36 = estimate_abundances(ccm, tibble::tibble(timepoint=36, genotype="wt", experiment="GAP16"))
-cond_18_vs_24_wt = compare_abundances(ccm, cond_wt_18, cond_wt_24)
-plot_contrast(ccm, cond_18_vs_24_wt, scale_shifts_by="none", q_value_thresh=0.01)
-
-cond_24_vs_36_wt = compare_abundances(ccm, cond_wt_24, cond_wt_36)
-plot_contrast(ccm, cond_24_vs_36_wt, scale_shifts_by="none", q_value_thresh=0.01)
-
-
-cond_smo_18 = estimate_abundances(ccm, tibble::tibble(timepoint=18, genotype="smo", experiment="GAP16"))
-
-cond_smo = estimate_abundances(ccm, tibble::tibble(timepoint=36, genotype="smo", experiment="GAP16"))
-cond_wt = estimate_abundances(ccm, tibble::tibble(timepoint=36,genotype="wt", experiment="GAP16"))
-cond_noto = estimate_abundances(ccm, tibble::tibble(timepoint=36,genotype="noto", experiment="GAP16"))
-cond_noto_mut = estimate_abundances(ccm, tibble::tibble(timepoint=36,genotype="noto-mut", experiment="GAP16"))
-
-#cond_tbxta = estimate_abundances(ccm, tibble::tibble(timepoint.1="36", genotype="tbxta", experiment="GAP16"))
-
-cond_met = estimate_abundances(ccm, tibble::tibble(timepoint=36, genotype="met", experiment="GAP16"))
-
-
-# cond_ctrl_vs_wt = compare_abundances(ccm, cond_wt, cond_ctrl_inj)
-#
-# plot_contrast(ccm, cond_ctrl_vs_wt, scale_shifts_by="none", p_value_thresh=0.05, plot_labels="none") +
-#   theme_minimal() + monocle3:::monocle_theme_opts() +
-#   ggsave("kidney_wt_vs_ctrl_inj.png", width=7, height=6)
-
-cond_smo_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_smo)
-
-plot_contrast(ccm, cond_smo_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.01)
-
-
-plot_contrast(ccm, cond_smo_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.01, plot_labels="none", receiver_cell_groups=c("none")) +
-  ggsave("smo_vs_wt_36h_fc.png", width=4.5, height=3)
-
-
-#plot_contrast(ccm, cond_smo_vs_wt_tbl, scale_shifts_by="none", p_value_thresh=1, receiver_cell_groups = c("Neck Segment"))
-
-cond_noto_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_noto)
-
-plot_contrast(ccm, cond_noto_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.01)
-
-
-plot_contrast(ccm, cond_noto_vs_wt_tbl, scale_shifts_by="none", q_value_thresh=0.01, plot_labels="none", receiver_cell_groups=c("none"))+
-  ggsave("noto_vs_wt_36h_fc.png", width=4.5, height=3)
+cell_type_assignments = colData(ccs@cds) %>%
+  as.data.frame %>%
+  dplyr::count(cluster, cell_type) %>%
+  group_by(cluster) %>% slice_max(n) %>%
+  dplyr::select(cell_group=cluster, cell_type)
+genotype_models_kinetics = left_join(genotype_models_kinetics,cell_type_assignments)
+genotype_models_kinetics = genotype_models_kinetics %>% mutate(cell_group_label = paste(cell_type, " (", cell_group, ")", sep=""))
+qplot(timepoint, log_abund_y, data=genotype_models_kinetics, geom="line", color=gene_target) + facet_wrap(~cell_group_label, scales="free_y")
 
 

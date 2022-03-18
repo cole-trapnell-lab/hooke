@@ -126,9 +126,9 @@ plot_contrast <- function(ccm,
       stroke = 0
     ) +
     scale_color_gradient2(
-      low = "#122985",
+      low = "royalblue3",
       mid = "white",
-      high = "red4",
+      high = "orangered3",
       na.value = "white",
       limits = fc_limits
     )  +
