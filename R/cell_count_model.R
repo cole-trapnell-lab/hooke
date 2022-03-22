@@ -119,7 +119,7 @@ new_cell_count_set <- function(cds,
 
   cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)
   cell_states = as.character(cell_counts_wide %>% dplyr::pull("cell_group"))
-  cell_counts_wide = as.matrix(cell_counts_wide[,3:ncol(cell_counts_wide)])
+  cell_counts_wide = as.matrix(cell_counts_wide[,2:ncol(cell_counts_wide)])
 
   row.names(cell_counts_wide) = cell_states
 
@@ -450,4 +450,11 @@ init_penalty_matrix = function(ccs, type = c("distance", "JS"), whitelist=NULL, 
   #qplot(as.numeric(dist_matrix), as.numeric(out))
   return(penalty_matrix)
 }
+
+
+
+
+
+
+
 
