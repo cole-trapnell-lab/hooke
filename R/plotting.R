@@ -235,24 +235,36 @@ get_colors <- function(num_colors, type = "rainbow") {
 }
 
 
-#' rename this later?
-#' probably needs fixing
 my_plot_cells <- function(data,
-                      color_cells_by = "cluster",
-                      cell_size=1,
-                      legend_position="none",
-                      residuals = NULL,
-                      cond_b_vs_a_tbl = NULL,
-                      q_value_thresh = 1.0) {
+                          color_cells_by = "cluster",
+                          cell_size=1,
+                          legend_position="none",
+                          coefficients = NULL,
+                          effect_sizes = NULL,
+                          cond_b_vs_a_tbl = NULL,
+                          cell_group = NULL,
+                          q_value_thresh = 1.0,
+                          fc_limits = c(-3,3),
+                          plot_labels = TRUE,
+                          plot_label_switch = NULL,
+                          group_label_size=2,
+                          repel_labels = FALSE,
+                          lab_title = NULL,
+                          x = 1,
+                          y = 2) {
 
   if (class(data) == "cell_count_set") {
     cds = data@cds
+    ccs = data
     plot_df = as.data.frame(colData(cds))
+    plot_df$cell_group = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
   } else if (class(data) == "cell_data_set") {
     cds = data
     plot_df = as.data.frame(colData(cds))
-    plot_df = data@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+    plot_df$cell_group = plot_df$cluster
+    # plot_df = data@metadata[["cell_group_assignments"]] %>% pull(cell_group)
   } else if (class(data) == "cell_count_model") {
+    ccs = data@ccs
     cds = data@ccs@cds
     plot_df = as.data.frame(colData(cds))
     plot_df$cell_group = data@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
@@ -261,19 +273,25 @@ my_plot_cells <- function(data,
   }
 
 
-
-
   plot_df$cell = row.names(plot_df)
-  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,1]
-  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,2]
+  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
 
 
   # could be an vector that corresponds to a label
-  if (!is.null(residuals)) {
-    res_df = as.data.frame(residuals) %>% rownames_to_column("cell_group")
-    colnames(res_df)[1] = "residuals"
+  if (!is.null(coefficients)) {
+    res_df = data.frame("coefficients" = coefficients) %>% rownames_to_column("cell_group")
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
-    color_cells_by = "residuals"
+
+    if (is.null(color_cells_by))
+      color_cells_by = "coefficients"
+
+  }
+
+  else if (!is.null(effect_sizes)) {
+
+    plot_df = plot_df %>% left_join(effect_sizes, by="cell_group")
+    color_cells_by = "delta_log_needed"
 
   }
 
@@ -307,7 +325,7 @@ my_plot_cells <- function(data,
       size = cell_size,
       stroke = 0
     ) +
-    theme_void() +
+    # theme_void() +
     theme(legend.position = legend_position) +
     monocle3:::monocle_theme_opts()
 
@@ -315,7 +333,7 @@ my_plot_cells <- function(data,
   if (color_cells_by == "timepoint") {
 
     num_colors = unique(plot_df$timepoint) %>% sort() %>% length()
-    full_spectrum_timepoint = get_time_colors(num_colors)
+    full_spectrum_timepoint = get_colors(num_colors, type="rainbow")
     names(full_spectrum_timepoint) = unique(plot_df$timepoint) %>% sort()
 
     gp = gp  +
@@ -328,7 +346,7 @@ my_plot_cells <- function(data,
       ) +
       scale_color_manual(values = full_spectrum_timepoint)
 
-  } else if (color_cells_by == "residuals") {
+  } else if (color_cells_by %in% c("coefficients", "delta_log_needed")) {
     gp = gp  +
       geom_point(
         data = plot_df,
@@ -342,8 +360,19 @@ my_plot_cells <- function(data,
         mid = "white",
         high = "red4",
         na.value = "white",
-        # limits = c(-3,3)
+        limits = fc_limits
       )
+
+
+  } else if (color_cells_by %in% c("viridis", "inferno", "C")) {
+    gp = gp  +
+      geom_point(
+        data = plot_df,
+        aes(umap2D_1, umap2D_2,
+            color = coefficients),
+        size = cell_size,
+        stroke = 0) +
+      viridis::scale_color_viridis(option = color_cells_by)
 
   } else if (color_cells_by == "delta_log_abund") {
     gp = gp  +
@@ -360,7 +389,7 @@ my_plot_cells <- function(data,
         mid = "white",
         high = "red4",
         na.value = "white",
-        # limits=c(-3,3)
+        limits = fc_limits
       )
   } else if (color_cells_by == "none") {
     # do nothing
@@ -380,10 +409,42 @@ my_plot_cells <- function(data,
       scale_color_manual(values = full_spectrum)
   }
 
+  # add labels
+
+  if (plot_labels) {
+
+    label_df = centroids(ccs)
+
+    if (is.null(plot_label_switch) == FALSE)
+      label_df = convert_to_col(ccs, label_df, plot_label_switch)
+
+
+    if (repel_labels) {
+      gp = gp + ggrepel::geom_label_repel(data = label_df,
+                                          mapping = aes(get(paste0("umap_", x)),
+                                                        get(paste0("umap_", y)),
+                                                        label=cell_group),
+                                          size=I(group_label_size),
+                                          fill = "white")
+    } else {
+      gp = gp + geom_text(data = label_df,
+                          mapping = aes(get(paste0("umap_", x)),
+                                        get(paste0("umap_", y)),
+                                        label=cell_group),
+                          size=I(group_label_size))
+    }
+
+  }
+
+  if (is.null(lab_title)) {
+    lab_title = color_cells_by
+  }
+
+  gp = gp + labs(color = lab_title) + xlab(paste0("UMAP",x)) + ylab(paste0("UMAP",y))
+
   return(gp)
 
 }
-
 
 #' plots a path on top of
 #' @param data
