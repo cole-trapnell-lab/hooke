@@ -48,7 +48,7 @@ calc_mst <- function(edges, weight = "pcor") {
 #' @return data frame containing the shortest path
 #' @export
 calc_shortest_path <- function(edges, from, to) {
-  edges = edges %>% dplyr::select(from, to, x, y, z, x_z, y_z, z_z, weight)
+  edges = edges %>% dplyr::select(from, to, weight) %>% distinct()
 
   # if from or to is not in edges, return NA
   #if (!from %in% edges$from | !to %in% edges$to) {
@@ -79,7 +79,7 @@ calc_shortest_path <- function(edges, from, to) {
 #'
 distance_to_root <- function(edges) {
 
-  g = edges %>% select(from,to) %>% igraph::graph_from_data_frame()
+  g = edges %>% select(from,to) %>% distinct() %>% igraph::graph_from_data_frame()
   distances = igraph::distances(g) %>%
     as.data.frame() %>%
     tibble::rownames_to_column("to") %>%
@@ -179,8 +179,6 @@ select_states <- function(ordered_path, start , n = 3) {
 #' @param p_value_threshold
 #'
 get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
-
-  origin_policy = match.arg(origin_policy)
 
   pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%

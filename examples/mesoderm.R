@@ -152,6 +152,20 @@ get_extant_cell_types <- function(ccm,
 #debug(get_extant_cell_types)
 #get_extant_cell_types(wt_ccm_wl, 72, 96) %>% filter(cell_group == "21")
 
+weigh_edges_by_umap_dist <- function(ccm, edges) {
+
+  # get weighted path
+  dist_df = hooke:::get_distances(ccm@ccs, matrix = F)
+
+  weighted_edge_df = left_join(edges, dist_df, by=c("from", "to")) %>%
+    mutate(weight = dist)
+
+
+  return(weighted_edge_df)
+
+}
+
+
 find_paths_to_origins <- function(ccm,
                                      cond_b_vs_a_tbl,
                                      abund_over_time_df,
@@ -162,7 +176,10 @@ find_paths_to_origins <- function(ccm,
   all_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl)
   #all_edges = paga_graph_edges
   paga_graph = igraph::graph_from_data_frame(paga_graph_edges, directed=FALSE)
-  weighted_edges = hooke:::get_weighted_edges(ccm, all_edges)
+
+  # FIXME: While we should consider this more sophisticated weighting function, let's test just using UMAP distance for now:
+  #weighted_edges = hooke:::get_weighted_edges(ccm, all_edges)
+  weighted_edges = weigh_edges_by_umap_dist(ccm, all_edges)
 
   weighted_edges = weighted_edges %>% group_by(from, to) %>% mutate(adjacent_in_paga = igraph::are_adjacent(paga_graph, from, to)) %>% ungroup()
   weighted_edges = weighted_edges %>% filter(adjacent_in_paga)
@@ -205,7 +222,7 @@ find_paths_to_origins <- function(ccm,
 
   return(edge_path)
 }
-undebug(find_paths_to_origins)
+debug(find_paths_to_origins)
 
 #
 # xxx_paths = find_paths_to_origins(wt_ccm_wl,
@@ -280,7 +297,7 @@ wt_possible_origins = find_origins(wt_ccm_wl,
                          paga_graph_edges=initial_pcor_graph(wt_ccs),
                          start=18, stop=96,
                          min_interval = 2,
-                         log_abund_detection_thresh=-5,
+                         log_abund_detection_thresh=-4,
                          percent_max_threshold=0.01,
                          require_presence_at_all_timepoints=TRUE)
 
@@ -302,7 +319,11 @@ wt_possible_origins = find_origins(wt_ccm_wl,
 # pcor_path_matrix = xxx_paths %>% group_by(from, to) %>% summarize(max_origin_pcor = max(origin_pcor))
 # #pcor_path_graph = igraph::graph_from_data_frame(pcor_path_matrix)
 
-select_origins <- function(ccm, possible_origins, fraction_origin_pcor_thresh=0.5, overlap_theshold=0.25, allow_discontinuous_paths = FALSE){
+select_origins <- function(ccm,
+                           possible_origins,
+                           fraction_origin_pcor_thresh=0.5,
+                           allow_discontinuous_paths = FALSE,
+                           max_origin_distance_ratio=2){
 
   neg_rec_edges = possible_origins %>%
     select(neg_rec_edges) %>%
@@ -313,7 +334,7 @@ select_origins <- function(ccm, possible_origins, fraction_origin_pcor_thresh=0.
   weighted_paths = possible_origins %>% select(t1, t2, path) %>%
     filter(!is.na(path)) %>%
     tidyr::unnest(path) %>%
-    select(t1, t2, origin, destination, from, to, umap_dist=weight)
+    select(t1, t2, origin, destination, from, to, umap_dist=weight, edges_on_path=distance_from_root)
 
 
   #valid_origins = get_valid_origins(ccm, overlap_theshold)
@@ -330,9 +351,20 @@ select_origins <- function(ccm, possible_origins, fraction_origin_pcor_thresh=0.
   # origin_summary = weighted_paths %>% group_by(destination) %>% summarize(num_origins = length(unique(origin)),
   #                                                                         num_indirect_origins = length(unique(origin[umap_dist != -1])))
 
+  weighted_paths = weighted_paths %>% select(-t1, -t2) %>% distinct()
+
+  weighted_paths = weighted_paths %>% group_by(origin, destination) %>% mutate(path_geodesic_umap_dist = sum(umap_dist)) %>% ungroup()
+
   weighted_paths = weighted_paths %>% group_by(destination) %>% mutate(max_origin_pcor = max(origin_pcor),
                                                                        fraction_max_origin_pcor = origin_pcor / max_origin_pcor)
+  distance_to_best_origin_df = weighted_paths %>%
+    select(origin, destination, origin_pcor, max_origin_pcor, path_geodesic_umap_dist) %>%
+    slice_max(origin_pcor, with_ties=FALSE) %>%
+    select(destination, distance_to_best_origin = path_geodesic_umap_dist)
+  weighted_paths = left_join(weighted_paths, distance_to_best_origin_df)
 
+  weighted_paths = weighted_paths %>% mutate (origin_distance_ratio = path_geodesic_umap_dist / distance_to_best_origin)
+  weighted_paths = weighted_paths %>% filter(origin_distance_ratio < max_origin_distance_ratio)
   weighted_paths = weighted_paths %>% filter(fraction_max_origin_pcor > fraction_origin_pcor_thresh)
 
   origin_df = weighted_paths %>%
