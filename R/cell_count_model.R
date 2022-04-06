@@ -80,6 +80,7 @@ new_cell_count_set <- function(cds,
   # coldata_df$partition = partitions(cds)
 
   coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = as.character(cell_group))
+  #coldata_df$cell_group = factor(coldata_df$cell_group, levels=unique(colData(cds)[,cell_group]))
 
   coldata_df$group_id = coldata_df %>%
     dplyr::group_indices_("sample", "cell_group") %>% as.character
@@ -92,6 +93,7 @@ new_cell_count_set <- function(cds,
     dplyr::summarize(cells = dplyr::n())
 
   cds_covariates_df = coldata_df %>%
+    dplyr::select(-cell_group) %>%
     dplyr::group_by_("sample") %>%
     dplyr::summarize(across(where(is.numeric), mean),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
@@ -101,7 +103,7 @@ new_cell_count_set <- function(cds,
     cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
   }
 
-  cds_covariates_df = cds_covariates_df %>% as.data.frame(cds_covariates_df)
+  cds_covariates_df = cds_covariates_df %>% as.data.frame(cds_covariates_df, stringsAsFactors=FALSE)
   row.names(cds_covariates_df) = cds_covariates_df %>% dplyr::pull(sample)
 
   cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)

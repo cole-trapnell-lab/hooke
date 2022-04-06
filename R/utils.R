@@ -44,7 +44,7 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
       as.matrix() %>%
       as.data.frame() %>%
       rownames_to_column("from") %>%
-      pivot_longer(-from, names_to = "to", values_to = "dist")
+      tidyr::pivot_longer(-from, names_to = "to", values_to = "dist")
     return(dist_df)
   }
 }

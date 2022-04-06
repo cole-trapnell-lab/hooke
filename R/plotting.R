@@ -460,11 +460,10 @@ plot_path <- function(data,
                       path_color = "black",
                       color_cells_by = "cluster",
                       color_path_by = NULL,
-                      residuals = NULL,
                       cond_b_vs_a_tbl = NULL) {
 
 
-  gp = my_plot_cells(data, color_cells_by = color_cells_by, residuals = residuals, cond_b_vs_a_tbl = cond_b_vs_a_tbl)
+  gp = my_plot_cells(data, color_cells_by = color_cells_by, cond_b_vs_a_tbl = cond_b_vs_a_tbl)
 
   if (class(data) == "cell_count_set") {
     umap_centers = centroids(data)
@@ -484,14 +483,14 @@ plot_path <- function(data,
                                xend=umap_from_1,
                                yend = umap_from_2,
                                color = get(color_path_by)),
-                           size=2 ) +
+                           size=edge_size) +
       geom_segment(data = path_df,
                    aes(x = umap_from_1,
                        y = umap_from_2,
                        xend = (umap_to_1+umap_from_1)/2,
                        yend = (umap_to_2+umap_from_2)/2,
                        color = get(color_path_by)),
-                   size=2,
+                   size=edge_size,
                    linejoin='mitre',
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
       scale_color_gradient2(
@@ -508,13 +507,13 @@ plot_path <- function(data,
                                xend=umap_from_1,
                                yend = umap_from_2),
                            color = path_color,
-                           size = 2 ) +
+                           size = edge_size ) +
       geom_segment(data = path_df,
                    aes(x = umap_from_1,
                        y = umap_from_2,
                        xend = (umap_to_1+umap_from_1)/2,
                        yend = (umap_to_2+umap_from_2)/2),
-                   size=2,
+                   size= edge_size,
                    color=path_color,
                    linejoin='mitre',
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
@@ -583,14 +582,14 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 
   no_edge = setdiff(nodes$id, union(edges$from, edges$to))
   edges = rbind(edges, data.frame("from" = no_edge, "to" = no_edge))
-  n = network(edges %>% dplyr::select(from,to), directed = T, loops = T)
-  nodes = nodes[match(network.vertex.names(n), nodes$id),]
-  n %v% "id" = network.vertex.names(n)
+  n = network::network(edges %>% dplyr::select(from,to), directed = T, loops = T)
+  nodes = nodes[match(network::network.vertex.names(n), nodes$id),]
+  n %v% "id" = network::network.vertex.names(n)
 
   merged_coords = ggnetwork(n) %>% select(id, vertex.names) %>% unique() %>%
     left_join(umap_centers, by = c("id"="cell_group"))
   rownames(merged_coords) = merged_coords$id
-  coords = merged_coords[network.vertex.names(n),] %>% select(umap_1,umap_2)
+  coords = merged_coords[network::network.vertex.names(n),] %>% select(umap_1,umap_2)
   geo = as.matrix(sapply(coords, as.numeric))
 
   g <- ggnetwork(x = n, layout = geo, arrow.gap=arrow.gap, scale = scale)

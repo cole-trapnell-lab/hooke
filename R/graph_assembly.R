@@ -101,6 +101,7 @@ return_igraph <- function(model, type = "partial_cor", remove.isolated=FALSE,
 #'
 #' @param cds A cell_data_set object. cluster_cells() must have been called.
 #' @param reduction_method The coordinate space in which to build the graph
+#' @export
 get_paga_graph <- function(cds, reduction_method = "UMAP") {
 
   cluster_result <- cds@clusters[[reduction_method]]$cluster_result

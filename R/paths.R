@@ -45,24 +45,22 @@ calc_mst <- function(edges, weight = "pcor") {
 #' @param edges data frame of edges with edge weights
 #' @param from
 #' @param to
-#' @import igraph
-#' @timport
 #' @return data frame containing the shortest path
 #' @export
 calc_shortest_path <- function(edges, from, to) {
   edges = edges %>% dplyr::select(from, to, x, y, z, x_z, y_z, z_z, weight)
 
   # if from or to is not in edges, return NA
-  if (!from %in% edges$from | !to %in% edges$to) {
-    return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
-
-  }
+  #if (!from %in% edges$from | !to %in% edges$to) {
+  #  return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
+#
+ # }
 
   G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
 
   mf = igraph::shortest_paths(G, from = from, to = to, weights = igraph::E(G)$weight, output="epath")
 
-  if (is.null(mf$vpath)) {
+  if (is.null(mf$epath)) {
     return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
   }
 
@@ -180,7 +178,9 @@ select_states <- function(ordered_path, start , n = 3) {
 #' @param cond_a_vs_tbl
 #' @param p_value_threshold
 #'
-get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
+get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0, origin_policy = c("all", "best")) {
+
+  origin_policy = match.arg(origin_policy)
 
   pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
@@ -206,12 +206,16 @@ get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
              error = function(e) FALSE),
     msg = "no significant negative reciprocal edges found")
 
+  if (origin_policy == "best"){
+    neg_rec_edges = neg_rec_edges %>% group_by(to) %>% slice_min(pcor, n=1)
+  }
+
   edge_path = neg_rec_edges %>%
     dplyr::mutate(shortest_path = purrr::map2(.f =
                                                 purrr::possibly(get_shortest_path, NA_real_),
                                               .x = from, .y = to,
                                               weighted_edges)) %>%
-    select(shortest_path) %>%
+    select(origin=from, destination=to, shortest_path) %>%
     tidyr::unnest(shortest_path) %>%
     # select(-weight) %>%
     distinct()
