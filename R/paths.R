@@ -178,7 +178,7 @@ select_states <- function(ordered_path, start , n = 3) {
 #' @param cond_a_vs_tbl
 #' @param p_value_threshold
 #'
-get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0, origin_policy = c("all", "best")) {
+get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
 
   origin_policy = match.arg(origin_policy)
 
@@ -205,10 +205,6 @@ get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0, origin_polic
     tryCatch(expr = nrow(neg_rec_edges) != 0,
              error = function(e) FALSE),
     msg = "no significant negative reciprocal edges found")
-
-  if (origin_policy == "best"){
-    neg_rec_edges = neg_rec_edges %>% group_by(to) %>% slice_min(pcor, n=1)
-  }
 
   edge_path = neg_rec_edges %>%
     dplyr::mutate(shortest_path = purrr::map2(.f =
