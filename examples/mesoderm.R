@@ -73,7 +73,9 @@ build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", in
 }
 #debug(build_interval_formula)
 
-wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="adjusted_timepoint", interval_start=18, interval_stop=48, num_breaks=5)
+# Use custom breaks because the sampling over the time range is so uneven
+#wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="adjusted_timepoint", interval_start=18, interval_stop=96, num_breaks=6)
+wt_main_model_formula_str = "~ splines::ns( adjusted_timepoint , knots= c(30,40,50,60), Boundary.knots=c(20,92) )"
 
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #main_model_formula_str = "~expt",
@@ -82,7 +84,7 @@ wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #nuisance_model_formula_str = "~expt",
                                  whitelist = initial_pcor_graph(wt_ccs))
 
-wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=3)
+wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=5)
 
 estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="timepoint", interval_step=2, ...) {
 
@@ -103,7 +105,10 @@ estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="ti
   return(timepoint_pred_df)
 }
 
-estimate_abundances_over_interval(wt_ccm_wl, 18, 22, interval_col="adjusted_timepoint")
+xxx_interval_abundances = estimate_abundances_over_interval(wt_ccm_wl, 18, 96, interval_col="adjusted_timepoint")
+qplot(adjusted_timepoint, log_abund, color = log_abund - 3*log_abund_se > 0, geom="point", data=xxx_interval_abundances) +
+  #geom_ribbon(aes(ymin=log_abund - 2*log_abund_se, ymax=log_abund + 2*log_abund_se), alpha=0.25) +
+  facet_wrap(~cell_group)
 
 plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
 
@@ -131,29 +136,68 @@ get_extant_cell_types <- function(ccm,
                                   interval_col="timepoint",
                                   interval_step = 2,
                                   log_abund_detection_thresh = -5,
-                                  percent_max_threshold=NULL){
+                                  percent_max_threshold=0.0){
 
   timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_col=interval_col, interval_step=interval_step)
-  timepoint_pred_df = timepoint_pred_df %>% group_by(cell_group) %>% mutate(max_abundance = max(exp(log_abund)),
-                                                                            percent_max_abund = exp(log_abund) / max_abundance,
-                                                                            present_above_thresh = log_abund > log_abund_detection_thresh)
-  if (is.null(percent_max_threshold) == FALSE){
-    timepoint_pred_df = timepoint_pred_df %>%
-      mutate(present_above_thresh = ifelse(present_above_thresh & percent_max_abund > percent_max_threshold, TRUE, FALSE))
-  }
+  timepoint_pred_df = timepoint_pred_df %>%
+    group_by(cell_group) %>%
+    mutate(max_abundance = max(exp(log_abund)),
+           percent_max_abund = exp(log_abund) / max_abundance,
+           above_log_abund_thresh = log_abund - 2*log_abund_se > log_abund_detection_thresh,
+           above_percent_max_thresh = percent_max_abund > percent_max_threshold,
+           present_flag = ifelse(above_log_abund_thresh & above_percent_max_thresh, TRUE, NA)) %>% ungroup()
 
-  extant_cell_type_df = timepoint_pred_df %>% select(!!sym(interval_col), cell_group, log_abund, max_abundance, percent_max_abund, present_above_thresh)
+  longest_present_interval <- function(tps_df){
+    delta_t = as.numeric(tps_df[2,1] - tps_df[1,1])
+    ts_la = ts(tps_df$present_flag,
+               start=min(tps_df[,1]),
+               #end=max(tps_df[,1]),
+               deltat=delta_t)
+    longest_contig = na.contiguous(ts_la)
+    return(tibble(longest_contig_start = start(longest_contig)[1], longest_contig_end = end(longest_contig)[1]))
+  }
+  undebug(longest_present_interval)
+  nested_timepoints_df = timepoint_pred_df %>%
+    select(cell_group, !!sym(interval_col), present_flag) %>%
+    group_by(cell_group)
+
+  nested_timepoints_df = nested_timepoints_df %>%
+    group_modify(~ longest_present_interval(.x))
+    #mutate(cg_ts = purrr:::map2(.f=purrr::possibly(longest_present_interval, NA_real_),
+    #                            .x=!!sym(interval_col),
+    #                            .y=present_flag))
+
+  timepoint_pred_df = left_join(timepoint_pred_df, nested_timepoints_df)
+
+
+  timepoint_pred_df = timepoint_pred_df %>%
+      mutate(present_above_thresh = !!sym(interval_col) >= longest_contig_start & !!sym(interval_col) <= longest_contig_end)
+
+  extant_cell_type_df = timepoint_pred_df %>%
+    select(!!sym(interval_col),
+           cell_group,
+           log_abund,
+           max_abundance,
+           percent_max_abund,
+           longest_contig_start,
+           longest_contig_end,
+           present_above_thresh)
   return(extant_cell_type_df)
 }
-debug(get_extant_cell_types)
+undebug(get_extant_cell_types)
 #get_extant_cell_types(wt_ccm_wl, 72, 96) %>% filter(cell_group == "21")
 
 xxx_extant_cell_type_df = get_extant_cell_types(wt_ccm_wl,
                                             18,
                                             96,
                                             interval_col="adjusted_timepoint",
-                                            percent_max_threshold=0.01,
+                                            percent_max_threshold=0.00,
                                             log_abund_detection_thresh=-2)
+
+qplot(adjusted_timepoint, log_abund, color = present_above_thresh, geom="point", data=xxx_extant_cell_type_df) +
+  #geom_ribbon(aes(ymin=log_abund - 2*log_abund_se, ymax=log_abund + 2*log_abund_se), alpha=0.25) +
+  facet_wrap(~cell_group)
+
 
 # This function chooses the sparsity parameter by finding the largest value that provides at least one
 # possible origin for cell types that emerge in the time interval
@@ -168,8 +212,8 @@ get_emergent_cell_types <- function(ccm, start, stop, interval_col="timepoint", 
     pull(cell_group) %>% unique()
   return (emergent_cell_types)
 }
-#debug(get_emergent_cell_types)
-emergent_cell_types = get_emergent_cell_types(wt_ccm_wl, start=18, stop=96, interval_col="adjusted_timepoint", log_abund_detection_thresh=2)
+debug(get_emergent_cell_types)
+emergent_cell_types = get_emergent_cell_types(wt_ccm_wl, start=18, stop=96, interval_col="adjusted_timepoint", percent_max_threshold=0.25)
 
 
 
@@ -426,9 +470,26 @@ find_origins <- function(ccm,
     mutate(adjacent_in_paga = igraph::are_adjacent(paga_graph, from, to)) %>% ungroup()
   weighted_edges = weighted_edges %>% filter(adjacent_in_paga)
 
+  edges_between_concurrent_states = left_join(weighted_edges,
+                                            extant_cell_type_df, by=c("from"="cell_group")) %>%
+    select(from, to, from_start=longest_contig_start, from_end=longest_contig_end)
+  edges_between_concurrent_states = left_join(edges_between_concurrent_states, extant_cell_type_df, by=c("to"="cell_group")) %>%
+    select(from, to, from_start, from_end, to_start=longest_contig_start, to_end=longest_contig_end)
+  edges_between_concurrent_states = edges_between_concurrent_states %>%
+    filter(from_start <= to_start & from_end >= to_start) %>% select(from, to) %>% distinct()
+
   traversal_graph = weighted_edges %>% select(from, to, weight) %>%
     igraph::graph_from_data_frame(directed=FALSE, vertices=node_metadata) %>%
     igraph::as.directed()
+
+  #traversal_graph = igraph::intersection(traversal_graph,
+  #                                       edges_between_concurrent_states %>%
+  #                                         igraph::graph_from_data_frame(directed=TRUE, vertices=node_metadata))
+
+  # there must be a cleaner way to specify this edge sequence, but whatev
+  #traversal_graph = igraph::delete_edges(traversal_graph,
+  #                                       edges_between_disjoint_states %>%
+  #                                         mutate(edge_id=paste(from, to, sep="|")) %>% pull(edge_id))
 
   time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
     filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
@@ -483,7 +544,7 @@ find_origins <- function(ccm,
 
   return (time_contrasts)
 }
-undebug(find_origins)
+#debug(find_origins)
 
 
 wt_possible_origins = find_origins(wt_ccm_wl,
