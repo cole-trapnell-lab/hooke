@@ -47,8 +47,8 @@ calc_mst <- function(edges, weight = "pcor") {
 #' @param to
 #' @return data frame containing the shortest path
 #' @export
-calc_shortest_path <- function(edges, from, to) {
-  edges = edges %>% dplyr::select(from, to, weight) %>% distinct()
+calc_shortest_path <- function(G, from, to) {
+  #edges = edges %>% dplyr::select(from, to, weight) %>% distinct()
 
   # if from or to is not in edges, return NA
   #if (!from %in% edges$from | !to %in% edges$to) {
@@ -56,7 +56,7 @@ calc_shortest_path <- function(edges, from, to) {
 #
  # }
 
-  G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
+  #G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
 
   mf = igraph::shortest_paths(G, from = from, to = to, weights = igraph::E(G)$weight, output="epath")
 
@@ -144,9 +144,9 @@ get_weighted_edges <- function(ccm,
 #' @param source
 #' @param target
 #'
-get_shortest_path <- function(from, to, weighted_edges) {
+get_shortest_path <- function(from, to, traversal_graph) {
   # print(paste0(from, "-",to))
-  shortest_path_df = calc_shortest_path(weighted_edges, from, to) %>%
+  shortest_path_df = calc_shortest_path(traversal_graph, from, to) %>%
     select(from, to, weight) %>%
     distance_to_root() %>%
     arrange(distance_from_root)
