@@ -79,39 +79,35 @@ wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #main_model_formula_str = "~expt",
                                  main_model_formula_str = wt_main_model_formula_str,
                                  #nuisance_model_formula_str = "~1",
-                                 nuisance_model_formula_str = "~expt",
+                                 #nuisance_model_formula_str = "~expt",
                                  whitelist = initial_pcor_graph(wt_ccs))
 
 wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=3)
 
-# FIXME: This is just a convenience function - we need to find a way to make this generic so we can roll functions that
-# depend on it into the package. Right now, use of "adjusted_timepoint" is hard coded.
-estimate_abundances_over_interval <- function(ccm, start, stop, interval_step=2, reference_experiment="GAP16") {
+estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="timepoint", interval_step=2, ...) {
 
-  timepoint_pred_df = tibble(adjusted_timepoint=seq(start, stop, interval_step))
+  timepoint_pred_df = tibble(IV= seq(start, stop, interval_step), ...)
+  colnames(timepoint_pred_df)[1] = interval_col
 
   timepoint_pred_df = timepoint_pred_df %>%
     dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
-      function(tp){ estimate_abundances(ccm, tibble(adjusted_timepoint=tp, expt=reference_experiment))}, NA_real_),
-      .x = adjusted_timepoint)) %>%
+      function(tp){
+        tp_tbl = tibble(IV=tp, ...)
+        colnames(tp_tbl)[1] = interval_col
+        estimate_abundances(ccm, tp_tbl)
+        }, NA_real_),
+      .x = !!sym(interval_col))) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
-
-  # cell_type_assignments = colData(ccm@ccs@cds) %>%
-  #   as.data.frame %>%
-  #   dplyr::count(cluster, cell_type) %>%
-  #   group_by(cluster) %>% slice_max(n) %>%
-  #   dplyr::select(cell_group=cluster, cell_type)
-  #
-  # timepoint_pred_df = left_join(timepoint_pred_df, cell_type_assignments)
-  # timepoint_pred_df = timepoint_pred_df %>% mutate(cell_group_label = paste(cell_type, " (", cell_group, ")", sep=""))
 
   return(timepoint_pred_df)
 }
 
+estimate_abundances_over_interval(wt_ccm_wl, 18, 22, interval_col="adjusted_timepoint")
+
 plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
 
-  timepoint_pred_df = estimate_abundances_over_interval(ccm, t1, t2)
+  timepoint_pred_df = estimate_abundances_over_interval(ccm, t1, t2, interval_col="adjusted_timepoint", expt="GAP16")
 
   plot_contrast(ccm, compare_abundances(ccm,
                                            timepoint_pred_df %>% filter(adjusted_timepoint == t1),
@@ -123,6 +119,7 @@ plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
 
 #t1 = 18
 #t2 = 22
+#debug(plot_contrast_wrapper)
 plot_contrast_wrapper(wt_ccm_wl, 18, 22)
 
 # -----------------------------------------------------------------------------
@@ -136,7 +133,7 @@ get_extant_cell_types <- function(ccm,
                                   log_abund_detection_thresh = -5,
                                   percent_max_threshold=NULL){
 
-  timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_step)
+  timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_col=interval_col, interval_step=interval_step)
   timepoint_pred_df = timepoint_pred_df %>% group_by(cell_group) %>% mutate(max_abundance = max(exp(log_abund)),
                                                                             percent_max_abund = exp(log_abund) / max_abundance,
                                                                             present_above_thresh = log_abund > log_abund_detection_thresh)
@@ -148,7 +145,7 @@ get_extant_cell_types <- function(ccm,
   extant_cell_type_df = timepoint_pred_df %>% select(!!sym(interval_col), cell_group, log_abund, max_abundance, percent_max_abund, present_above_thresh)
   return(extant_cell_type_df)
 }
-#debug(get_extant_cell_types)
+debug(get_extant_cell_types)
 #get_extant_cell_types(wt_ccm_wl, 72, 96) %>% filter(cell_group == "21")
 
 xxx_extant_cell_type_df = get_extant_cell_types(wt_ccm_wl,
@@ -412,7 +409,7 @@ find_origins <- function(ccm,
                                               log_abund_detection_thresh=log_abund_detection_thresh)
 
   # FIXME: this is currently hardcoded to use "adjusted_time". Not generic and urgently needs fixing.
-  timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_step)
+  timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_col=interval_col, interval_step)
 
   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   node_metadata = data.frame(id=cell_groups)
