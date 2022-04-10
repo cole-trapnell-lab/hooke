@@ -66,13 +66,13 @@ colData(kidney_cds)$cell_type_ct = case_when(
   colData(kidney_cds)$cluster %in% c(4, 11, 3, 19, 12) ~ "Proximal Convoluted Tubule",
   colData(kidney_cds)$cluster %in% c(23, 1, 16) ~ "Distal Early",
   colData(kidney_cds)$cluster %in% c(6, 17, 2, 8, 31) ~ "Distal Late", #
-  colData(kidney_cds)$cluster %in% c(29, 15, 5) ~ "Proximal Straight Tubule", #"Early duct",
+  colData(kidney_cds)$cluster %in% c(15, 5) ~ "Proximal Straight Tubule", #"Early duct",
   colData(kidney_cds)$cluster %in% c(14, 26) ~ "Cloaca",
   colData(kidney_cds)$cluster %in% c(18, 27, 22, 9) ~ "Podocyte",
   colData(kidney_cds)$cluster %in% c(34, 21, 7, 38) ~ "Neck", #
   colData(kidney_cds)$cluster %in% c(20) ~ "Corpuscles of Stannius",
   colData(kidney_cds)$cluster %in% c(25) ~ "Multiciliated cells",
-  colData(kidney_cds)$cluster %in% c(28, 13, 10) ~ "Renal progenitors",
+  colData(kidney_cds)$cluster %in% c(28, 13, 10, 29) ~ "Renal progenitors",
   #colData(kidney_cds)$cluster == 16 ~ "Unknown",
   TRUE ~ "Unknown"
 )
@@ -218,18 +218,19 @@ wt_ccs = new_cell_count_set(wt_cds,
                             sample_group = "Oligo",
                             cell_group = "cluster")
 
+#wt_time_start = 18
+#wt_time_stop = 48
+#num_time_breaks = 3
+#time_breakpoints = seq(wt_time_start, wt_time_stop, length.out=num_time_breaks)
+#time_breakpoints = time_breakpoints[2:(length(time_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
+#wt_main_model_formula_str = paste("~ splines::ns(timepoint, knots=", paste("c(",paste(time_breakpoints, collapse=","), ")", sep=""), ")")
 
-wt_time_start = 18
-wt_time_stop = 48
-num_time_breaks = 3
-time_breakpoints = seq(wt_time_start, wt_time_stop, length.out=num_time_breaks)
-time_breakpoints = time_breakpoints[2:(length(time_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
-wt_main_model_formula_str = paste("~ splines::ns(timepoint, knots=", paste("c(",paste(time_breakpoints, collapse=","), ")", sep=""), ")")
+wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="timepoint", interval_start=18, interval_stop=48, num_breaks=4)
 
 
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  main_model_formula_str = wt_main_model_formula_str,
-                                 nuisance_model_formula_str = "~1",
+                                 nuisance_model_formula_str = "~experiment",
                                  whitelist = initial_pcor_graph(wt_ccs) )
 
 kidney_cell_type_abundances = get_extant_cell_types(wt_ccm_wl, start = 18, stop = 48,
@@ -238,7 +239,7 @@ kidney_cell_type_abundances = get_extant_cell_types(wt_ccm_wl, start = 18, stop 
 ggplot(aes(timepoint, log_abund, color=present_above_thresh), data=kidney_cell_type_abundances) + geom_point() + facet_wrap(~cell_group, scale="free_y")
 
 
-wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.1)
+wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.01)
 
 # -----------------------------------------------------------------------------
 
@@ -271,12 +272,12 @@ wt_possible_origins = find_origins(wt_ccm_wl,
                                    initial_origin_policy="closest-origin",
                                    experiment="GAP14")
 
-#wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "closest-origin")
+wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "closest-origin")
 
-wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
+#wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
 hooke:::plot_path(wt_ccm_wl, path_df = wt_origins, edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, wt_origins, color_nodes_by = "cell_type", group_nodes_by="cell_type")
+plot_state_transition_graph(wt_ccm_wl, wt_origins, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 
 # -----------------------------------------------------------------------------

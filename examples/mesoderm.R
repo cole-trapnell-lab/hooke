@@ -54,7 +54,7 @@ wt_ccs = new_cell_count_set(meso_cds,
 
 # Use custom breaks because the sampling over the time range is so uneven
 #wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="adjusted_timepoint", interval_start=18, interval_stop=96, num_breaks=6)
-wt_main_model_formula_str = "~ splines::ns( adjusted_timepoint , knots= c(30,45,60), Boundary.knots=c(20,92) )"
+wt_main_model_formula_str = "~ splines::ns( adjusted_timepoint , knots= c(24,48,60), Boundary.knots=c(20,92) )"
 
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #main_model_formula_str = "~expt",
@@ -63,12 +63,12 @@ wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #nuisance_model_formula_str = "~expt",
                                  whitelist = initial_pcor_graph(wt_ccs))
 
-wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=5)
+wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=1)
 
-xxx_interval_abundances = estimate_abundances_over_interval(wt_ccm_wl, 18, 96, interval_col="adjusted_timepoint")
-qplot(adjusted_timepoint, log_abund, color = log_abund - 3*log_abund_se > 0, geom="point", data=xxx_interval_abundances) +
-  #geom_ribbon(aes(ymin=log_abund - 2*log_abund_se, ymax=log_abund + 2*log_abund_se), alpha=0.25) +
-  facet_wrap(~cell_group)
+# xxx_interval_abundances = estimate_abundances_over_interval(wt_ccm_wl, 18, 96, interval_col="adjusted_timepoint")
+# qplot(adjusted_timepoint, log_abund, color = log_abund - 3*log_abund_se > 0, geom="point", data=xxx_interval_abundances) +
+#   #geom_ribbon(aes(ymin=log_abund - 2*log_abund_se, ymax=log_abund + 2*log_abund_se), alpha=0.25) +
+#   facet_wrap(~cell_group)
 
 plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
 
@@ -119,15 +119,24 @@ debug(get_emergent_cell_types)
 emergent_cell_types = get_emergent_cell_types(wt_ccm_wl, start=18, stop=96, interval_col="adjusted_timepoint", percent_max_threshold=0.25)
 
 
-
 wt_possible_origins = find_origins(wt_ccm_wl,
-                         start=18, stop=96,
-                         interval_col="adjusted_timepoint",
-                         min_interval = 2,
-                         log_abund_detection_thresh=-2,
-                         percent_max_threshold=0.01,
-                         require_presence_at_all_timepoints=TRUE,
-                         initial_origin_policy="all-origins")
+                                   start=18, stop=96,
+                                   interval_col="adjusted_timepoint",
+                                   min_interval = 2,
+                                   log_abund_detection_thresh=-2,
+                                   #percent_max_threshold=0.00,
+                                   require_presence_at_all_timepoints=TRUE,
+                                   initial_origin_policy="closest-origin",
+                                   experiment="GAP14")
+
+# wt_possible_origins = find_origins(wt_ccm_wl,
+#                          start=18, stop=96,
+#                          interval_col="adjusted_timepoint",
+#                          min_interval = 2,
+#                          log_abund_detection_thresh=-2,
+#                          percent_max_threshold=0.01,
+#                          require_presence_at_all_timepoints=TRUE,
+#                          initial_origin_policy="all-origins")
 
 # xxx_paths = wt_tcs %>% select(t1, t2, path) %>%
 #   filter(!is.na(path)) %>%
@@ -148,7 +157,7 @@ wt_possible_origins = find_origins(wt_ccm_wl,
 # #pcor_path_graph = igraph::graph_from_data_frame(pcor_path_matrix)
 
 
-wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
+wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "closest-origin")
 hooke:::plot_path(wt_ccm_wl, path_df = wt_origins, edge_size=0.25)
 
 origin_edge_graph = wt_origins %>% select(from, to, origin_pcor) %>% igraph::graph_from_data_frame()
@@ -172,7 +181,4 @@ hooke:::plot_path(wt_ccm_wl, path_df = wt_origins_filtered, edge_size=0.25)
 
 undebug(plot_state_transition_graph)
 plot_state_transition_graph(wt_ccm_wl, wt_origins, color_nodes_by = "cell_type_sub", group_nodes_by="cell_type_broad")
-
-
-plot_state_transition_graph(wt_ccm_wl, pos_edge_paths, color_nodes_by = "timepoint", group_nodes_by="cell_type")
 
