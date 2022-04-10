@@ -602,6 +602,150 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 
 }
 
+#' Plot a graph that summarized an assembled state transition graph
+#'
+#' @export
+plot_state_transition_graph <- function(ccm,
+                                        edges,
+                                        color_nodes_by=NULL,
+                                        label_nodes_by=NULL,
+                                        group_nodes_by=NULL,
+                                        layer_nodes_by=NULL,
+                                        arrow.gap=0.03,
+                                        arrow_unit = 2,
+                                        bar_unit = .075,
+                                        node_size = 2,
+                                        num_layers=10,
+                                        unlabeled_groups = c("Unknown"),
+                                        hide_unlinked_nodes=TRUE,
+                                        label_font_size=6,
+                                        label_conn_linetype="dotted"){
+
+  edges = hooke:::distance_to_root(edges)
+
+  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  node_metadata = tibble(id=cell_groups)
+
+  #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
+  cell_group_metadata = colData(ccm@ccs@cds)[,c(color_nodes_by,
+                                                label_nodes_by,
+                                                group_nodes_by,
+                                                layer_nodes_by)] %>%
+    as.data.frame
+  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+
+  if (is.null(color_nodes_by) == FALSE){
+    color_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
+      as.data.frame %>%
+      count(cell_group, !!sym(color_nodes_by)) %>%
+      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+    colnames(color_by_metadata) = c("cell_group", "color_nodes_by")
+    node_metadata = left_join(node_metadata, color_by_metadata, by=c("id"="cell_group"))
+  }
+  if (is.null(group_nodes_by) == FALSE){
+    group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
+      as.data.frame %>%
+      count(cell_group, !!sym(group_nodes_by)) %>%
+      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+    colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+    node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
+  }
+  if (is.null(layer_nodes_by) == FALSE){
+    layer_by_metadata = cell_group_metadata[,c("cell_group", layer_nodes_by)] %>%
+      as.data.frame
+    if (is.numeric(cell_group_metadata[,c(layer_nodes_by)])){
+      layer_by_metadata = layer_by_metadata %>%
+        group_by(cell_group) %>%
+        summarize(mean_layer_var = mean(!!sym(layer_nodes_by), na.rm=TRUE)) %>%
+        mutate(layer = ntile(desc(mean_layer_var),num_layers)) %>% dplyr::select(-mean_layer_var)
+    }else{
+      layer_by_metadata = layer_by_metadata %>%
+        count(cell_group, !!sym(layer_nodes_by)) %>%
+        group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+    }
+    colnames(layer_by_metadata) = c("cell_group", "layer_nodes_by")
+    node_metadata = left_join(node_metadata, layer_by_metadata, by=c("id"="cell_group"))
+  }
+  if (is.null(label_nodes_by) == FALSE){
+    label_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
+      as.data.frame %>%
+      count(cell_group, !!sym(label_nodes_by)) %>%
+      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+    colnames(label_by_metadata) = c("cell_group", "label_nodes_by")
+    node_metadata = left_join(node_metadata, label_by_metadata, by=c("id"="cell_group"))
+  }else{
+    node_metadata$label_nodes_by = node_metadata$id
+  }
+  node_metadata = node_metadata %>% distinct() %>% as.data.frame
+  row.names(node_metadata) = node_metadata$id
+  if (hide_unlinked_nodes){
+    node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
+  }
+
+  G = edges %>% select(from, to, scaled_weight) %>% distinct()  %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  # run sugiyama layout
+  layers = NULL
+  if (is.null(layer_nodes_by) == FALSE) {
+    layers=igraph::V(G)$layer_nodes_by
+  }
+  lay1 <- igraph::layout_with_sugiyama(G, layers=layers, maxiter=1000)
+
+  g = ggnetwork::ggnetwork(G, layout = lay1$layout, arrow.gap = arrow.gap)
+
+  # add level information
+  #g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
+  #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
+
+
+  p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend, size = scaled_weight)) +
+    # draw activator edges
+    ggnetwork::geom_edges(data = g,
+                          arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+  if (is.null(group_nodes_by) == FALSE){
+    p = p + ggforce::geom_mark_rect(aes(fill = group_nodes_by,
+                                        label=group_nodes_by,
+                                        filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                    size=0,
+                                    label.fontsize=label_font_size,
+                                    con.linetype=label_conn_linetype,
+                                    data=g)
+  }
+
+  if (is.null(color_nodes_by) == FALSE) {
+
+    # if numerical
+    if (is.numeric(g[[color_nodes_by]])) {
+      p = p + ggnetwork::geom_nodelabel(data = g,
+                                        aes(fill = as.factor(color_nodes_by),
+                                            label = label_nodes_by),
+                                        size = node_size) +
+        labs(fill = color_nodes_by) +
+        scale_fill_gradient2(low = "darkblue", mid = "white", high="red4")
+    }
+    else {
+      # if categorical
+      p = p + ggnetwork::geom_nodelabel(data = g,
+                                        aes(fill = color_nodes_by,
+                                            label = label_nodes_by),
+                                        size = node_size) +
+        labs(fill = color_nodes_by)
+
+    }
+
+  } else {
+    p = p + ggnetwork::geom_nodelabel(data = g,
+                                      aes(label = label_nodes_by),
+                                      size = node_size)
+  }
+
+  p = p + scale_size_identity() +
+    monocle3:::monocle_theme_opts() +
+    ggnetwork::theme_blank() +
+    theme(legend.position="none")
+  return(p)
+}
+
 
 #' helper function for adding attributes to network node
 #' assumes gene id is in the dataframe

@@ -392,3 +392,24 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
   return(penalty_matrix)
 }
 
+
+
+#' Builds a model formula for time series models based on the range of the data
+#'
+#' This is just a utility function that puts the knots in reasonable positions based on the range of the data
+#' @export
+build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){
+  if (is.null(interval_start)){
+    interval_start = as.numeric(min(colData(ccs@cds)[,interval_var]))
+  }
+  if (is.null(interval_stop)){
+    interval_stop = as.numeric(max(colData(ccs@cds)[,interval_var]))
+  }
+
+  interval_breakpoints = seq(interval_start, interval_stop, length.out=num_breaks)
+  interval_breakpoints = interval_breakpoints[2:(length(interval_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
+  interval_formula_str = paste("~ splines::ns(", interval_var, ", knots=", paste("c(",paste(interval_breakpoints, collapse=","), ")", sep=""), ")")
+  return(interval_formula_str)
+}
+#debug(build_interval_formula)
+

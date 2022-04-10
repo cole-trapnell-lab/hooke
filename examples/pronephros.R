@@ -12,6 +12,10 @@ kidney_cds = readRDS("/Users/coletrap/dropbox_lab/Analysis/fish-mutants/kidney/k
 
 kidney_cds = detect_genes(kidney_cds)
 
+# Drop clusters that are likely to be multiplets that got stuck together during the initial labeling.
+kidney_cds = kidney_cds[,clusters(kidney_cds) %in% c(10) == FALSE]
+
+
 # assign best celltype column and reduce dims
 colData(kidney_cds)$cell_type = colData(kidney_cds)$kidney.celltype
 colData(kidney_cds)$cluster = monocle3::clusters(kidney_cds)
@@ -59,16 +63,16 @@ colData(kidney_cds)$new_cluster = colData(kidney_cds)$cluster
 plot_cells(kidney_cds)
 
 colData(kidney_cds)$cell_type_ct = case_when(
-  colData(kidney_cds)$cluster %in% c(12,1,3,5,26,21) ~ "Proximal Convoluted Tubule",
-  colData(kidney_cds)$cluster %in% c(7,16,13) ~ "Distal Early",
-  colData(kidney_cds)$cluster %in% c(6,9,4) ~ "Distal Late", #
-  colData(kidney_cds)$cluster %in% c(2,25) ~ "Proximal Straight Tubule", #"Early duct",
-  colData(kidney_cds)$cluster %in% c(29,14) ~ "Cloaca",
-  colData(kidney_cds)$cluster %in% c(19,31,23,11) ~ "Podocyte",
-  colData(kidney_cds)$cluster %in% c(36,22,39,8) ~ "Neck", #
+  colData(kidney_cds)$cluster %in% c(4, 11, 3, 19, 12) ~ "Proximal Convoluted Tubule",
+  colData(kidney_cds)$cluster %in% c(23, 1, 16) ~ "Distal Early",
+  colData(kidney_cds)$cluster %in% c(6, 17, 2, 8, 31) ~ "Distal Late", #
+  colData(kidney_cds)$cluster %in% c(29, 15, 5) ~ "Proximal Straight Tubule", #"Early duct",
+  colData(kidney_cds)$cluster %in% c(14, 26) ~ "Cloaca",
+  colData(kidney_cds)$cluster %in% c(18, 27, 22, 9) ~ "Podocyte",
+  colData(kidney_cds)$cluster %in% c(34, 21, 7, 38) ~ "Neck", #
   colData(kidney_cds)$cluster %in% c(20) ~ "Corpuscles of Stannius",
-  colData(kidney_cds)$cluster %in% c(28) ~ "Multiciliated cells",
-  colData(kidney_cds)$cluster %in% c(10,15,27) ~ "Renal progenitors",
+  colData(kidney_cds)$cluster %in% c(25) ~ "Multiciliated cells",
+  colData(kidney_cds)$cluster %in% c(28, 13, 10) ~ "Renal progenitors",
   #colData(kidney_cds)$cluster == 16 ~ "Unknown",
   TRUE ~ "Unknown"
 )
@@ -82,7 +86,8 @@ pronephros_classifier <- train_cell_classifier(cds = kidney_cds,
                                          marker_file_gene_id_type = "SYMBOL")
 saveRDS(pronephros_classifier, "pronephros_classifier.RDS")
 
-kidney_cds = classify_cells(kidney_cds, pronephros_classifier, db="none")
+colData(kidney_cds)$garnett_cluster = clusters(kidney_cds)
+kidney_cds = classify_cells(kidney_cds, pronephros_classifier, db="none", cluster_extend=TRUE)
 
 colData(kidney_cds)$segment = case_when(
   colData(kidney_cds)$cell_type %in% c("Renal progenitors") ~ -1,
@@ -114,7 +119,13 @@ kidney_markers = c("slc20a1a", # PCT
                    "slc4a4a", "slc4a2a", "slc26a2" # PCT*
 ) %>% unique
 plot_cells(kidney_cds, genes=kidney_markers) +
-  ggsave("kidney_cell_marker_genes.png", width=12, height=12)
+  ggsave("kidney_cell_marker_genes_1_2.png", width=12, height=12)
+
+plot_cells(kidney_cds, 1, 3, genes=kidney_markers) +
+  ggsave("kidney_cell_marker_genes_1_3.png", width=12, height=12)
+
+plot_cells(kidney_cds, 2, 3, genes=kidney_markers) +
+  ggsave("kidney_cell_marker_genes_2_3.png", width=12, height=12)
 
 
 early_kidney_markers = c("hoxb4a", "hoxb7a", "lhx1a", "lhx1b", "osr1",  # AIM
@@ -154,6 +165,16 @@ plot_cells(kidney_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE) 
         axis.title.y=element_blank()) +
   ggsave("kidney_cell_types.png", width=4, height=4)
 
+plot_cells(kidney_cds, color_cells_by="cluster_ext_type", show_trajectory_graph=FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank()) +
+  ggsave("kidney_cell_types_cluster_ext_type.png", width=4, height=4)
+
+
 plot_cells(kidney_cds, color_cells_by="cell_type_ct", show_trajectory_graph=FALSE) +
   theme(axis.line=element_blank(),
         axis.text.x=element_blank(),
@@ -170,6 +191,8 @@ plot_cells(kidney_cds, color_cells_by="cell_type_ct", show_trajectory_graph=FALS
 
 kidney_cds = kidney_cds[,is.na(colData(kidney_cds)$Oligo) == FALSE & is.na(colData(kidney_cds)$timepoint.1) == FALSE & colData(kidney_cds)$timepoint <= 48]
 
+# Use the Garnett labels
+colData(kidney_cds)$cell_type = colData(kidney_cds)$cluster_ext_type
 
 plot_cells(kidney_cds, color_cells_by="timepoint.1", show_trajectory_graph=FALSE, label_cell_groups=FALSE) +
   theme(axis.line=element_blank(),
@@ -185,7 +208,7 @@ plot_cells(kidney_cds, color_cells_by="timepoint.1", show_trajectory_graph=FALSE
 
 
 wt_cds = kidney_cds[,colData(kidney_cds)$gene_target %in% c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met") &
-                      colData(kidney_cds)$experiment %in% c("GAP13", "GAP14", "GAP18", "HF4")  ]
+                      colData(kidney_cds)$experiment %in% c("GAP13", "GAP14", "GAP16", "GAP18", "HF4")  ]
 
 
 colData(wt_cds)$cluster = clusters(wt_cds)
@@ -196,27 +219,6 @@ wt_ccs = new_cell_count_set(wt_cds,
                             cell_group = "cluster")
 
 
-get_valid_origins <- function(wt_ccm){
-  timepoints = seq(18, 48, 2)
-
-  timepoint_pred_df = get_timepoint_pred(wt_ccm)
-  timepoint_pred_df = timepoint_pred_df %>% group_by(cell_group) %>% mutate(max_abundance = max(exp(log_abund)),
-                                                                            percent_max_abund = exp(log_abund) / max_abundance)
-  cell_types_present = timepoint_pred_df %>% filter(percent_max_abund > 0.01)
-  valid_origins = tibble(cell_group = unique(colData(wt_ccm@ccs)$cell_group))
-
-  filter_origins <- function(ct, cell_types_present){
-    ct_times = cell_types_present %>% filter(cell_group == ct) %>% pull(timepoint) %>% unique()
-    possible_origins = cell_types_present %>% filter(timepoint %in% ct_times & cell_group != ct) %>% pull(cell_group) %>%unique
-    return (possible_origins)
-  }
-  valid_origins = valid_origins %>% mutate(possible_origins = purrr::map(.f = filter_origins,
-                                                                         .x = cell_group,
-                                                                         cell_types_present=cell_types_present))
-  return(valid_origins)
-}
-
-
 wt_time_start = 18
 wt_time_stop = 48
 num_time_breaks = 3
@@ -224,420 +226,62 @@ time_breakpoints = seq(wt_time_start, wt_time_stop, length.out=num_time_breaks)
 time_breakpoints = time_breakpoints[2:(length(time_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
 wt_main_model_formula_str = paste("~ splines::ns(timepoint, knots=", paste("c(",paste(time_breakpoints, collapse=","), ")", sep=""), ")")
 
-wt_ccm  = new_cell_count_model(wt_ccs,
-                               main_model_formula_str = wt_main_model_formula_str,
-                               nuisance_model_formula_str = "~experiment",
-                               whitelist = NULL )
-
-valid_origins = get_valid_origins(wt_ccm)
-paga_edges = get_paga_graph(wt_ccs@cds) %>% igraph::as_data_frame() %>% as_tibble()
 
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  main_model_formula_str = wt_main_model_formula_str,
-                                 nuisance_model_formula_str = "~experiment",
-                                 whitelist = wl )
+                                 nuisance_model_formula_str = "~1",
+                                 whitelist = initial_pcor_graph(wt_ccs) )
 
-wt_ccm_01 = select_model(wt_ccm, criterion = "EBIC", sparsity_factor=0.1)
-wt_ccm_02 = select_model(wt_ccm, criterion = "EBIC", sparsity_factor=0.2)
-
-wt_ccm_wl_001 = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.01)
-wt_ccm_wl_01 = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.1)
-wt_ccm_wl_02 = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.2)
-
-wt_ccm_wl_bl = new_cell_count_model(wt_ccs,
-                                    main_model_formula_str = wt_main_model_formula_str,
-                                    nuisance_model_formula_str = "~experiment",
-                                    whitelist = wl,
-                                    blacklist = bl)
+kidney_cell_type_abundances = get_extant_cell_types(wt_ccm_wl, start = 18, stop = 48,
+                                                    log_abund_detection_thresh=-2,
+                                                    percent_max_threshold=0.01, experiment="GAP14")
+ggplot(aes(timepoint, log_abund, color=present_above_thresh), data=kidney_cell_type_abundances) + geom_point() + facet_wrap(~cell_group, scale="free_y")
 
 
-
-get_timepoint_pred <- function(wt_ccm) {
-
-  timepoint_pred_df = tibble(timepoint=seq(18,48))
-
-  timepoint_pred_df = timepoint_pred_df %>%
-    dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
-      function(tp){ estimate_abundances(wt_ccm, tibble(timepoint=tp, experiment="GAP14"))}, NA_real_),
-      .x = timepoint)) %>%
-    select(timepoint_abund) %>%
-    tidyr::unnest(c(timepoint_abund))
-
-  cell_type_assignments = colData(wt_ccm@ccs@cds) %>%
-    as.data.frame %>%
-    dplyr::count(cluster, cell_type) %>%
-    group_by(cluster) %>% slice_max(n) %>%
-    dplyr::select(cell_group=cluster, cell_type)
-
-  timepoint_pred_df = left_join(timepoint_pred_df, cell_type_assignments)
-  timepoint_pred_df = timepoint_pred_df %>% mutate(cell_group_label = paste(cell_type, " (", cell_group, ")", sep=""))
-
-  return(timepoint_pred_df)
-
-}
-
-
-timepoint_pred = get_timepoint_pred(wt_ccm)
-timepoint_pred_01 = get_timepoint_pred(wt_ccm_01)
-timepoint_pred_02 = get_timepoint_pred(wt_ccm_02)
-
-timepoint_pred_wl = get_timepoint_pred(wt_ccm_wl)
-timepoint_pred_wl_01 = get_timepoint_pred(wt_ccm_wl_01)
-timepoint_pred_wl_02 = get_timepoint_pred(wt_ccm_wl_02)
-
+wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.1)
 
 # -----------------------------------------------------------------------------
 
 
-plot_contrast_wrapper <- function(wt_ccm, t1, t2) {
+plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
 
-  timepoint_pred_df = get_timepoint_pred(wt_ccm)
+  timepoint_pred_df = estimate_abundances_over_interval(ccm, t1, t2, interval_col="timepoint", experiment="GAP14")
 
-  plot_contrast(wt_ccm, compare_abundances(wt_ccm,
-                                           timepoint_pred_df %>% filter(timepoint == t1),
-                                           timepoint_pred_df %>% filter(timepoint == t2)),
-                scale_shifts_by = "sender",
-                q_value_thresh = 0.01)
+  plot_contrast(ccm, compare_abundances(ccm,
+                                        timepoint_pred_df %>% filter(timepoint == t1),
+                                        timepoint_pred_df %>% filter(timepoint == t2)),
+                scale_shifts_by = "none",
+                q_value_thresh = q_val)
 
 }
 
 t1 = 18
 t2 = 22
-plot_contrast_wrapper(wt_ccm, t1, t2)
-plot_contrast_wrapper(wt_ccm_01, t1, t2)
-plot_contrast_wrapper(wt_ccm_wl_02, t1, t2)
-
 plot_contrast_wrapper(wt_ccm_wl, t1, t2)
-plot_contrast_wrapper(wt_ccm_wl_001, t1, t2)
-plot_contrast_wrapper(wt_ccm_wl_01, t1, t2)
-plot_contrast_wrapper(wt_ccm_wl_02, t1, t2)
+
+
+
+wt_possible_origins = find_origins(wt_ccm_wl,
+                                   start=18, stop=48,
+                                   interval_col="timepoint",
+                                   min_interval = 2,
+                                   log_abund_detection_thresh=-2,
+                                   #percent_max_threshold=0.00,
+                                   require_presence_at_all_timepoints=TRUE,
+                                   initial_origin_policy="closest-origin",
+                                   experiment="GAP14")
+
+#wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "closest-origin")
+
+wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
+hooke:::plot_path(wt_ccm_wl, path_df = wt_origins, edge_size=0.25)
+
+plot_state_transition_graph(wt_ccm_wl, wt_origins, color_nodes_by = "cell_type", group_nodes_by="cell_type")
+
 
 # -----------------------------------------------------------------------------
 
 
-find_union_path <- function(wt_ccm, q_val=0.01, time_diff = 4) {
-
-  timepoints = seq(18, 48, 2)
-
-  timepoint_pred_df = get_timepoint_pred(wt_ccm)
-
-  select_timepoints <- function(timepoint_pred_df, t1, t2)  {
-    cond_x = timepoint_pred_df %>% filter(timepoint == t1)
-    cond_y = timepoint_pred_df %>% filter(timepoint == t2)
-    return(compare_abundances(wt_ccm, cond_x, cond_y))
-  }
-
-  times = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
-    filter(t1 < t2, (t2-t1) >= time_diff) %>%
-    mutate(comp_abund = purrr::map2(.f = select_timepoints,
-                                    .x = t1,
-                                    .y = t2,
-                                    timepoint_pred_df = timepoint_pred_df)) %>%
-    mutate(neg_rec_edges = purrr::map(.f = hooke:::get_neg_dir_edges,
-                                      .x = comp_abund,
-                                      ccm = wt_ccm,
-                                      q_value_threshold = q_val)) %>%
-    mutate(pos_rec_edges = purrr::map(.f = hooke:::get_positive_edges,
-                                      .x = comp_abund,
-                                      ccm = wt_ccm,
-                                      q_value_threshold = q_val)) %>%
-    mutate(path = purrr::map(.f = purrr::possibly(hooke:::get_path, NA_real_),
-                             .x = comp_abund,
-                             ccm = wt_ccm,
-                             q_value_threshold = q_val,
-                             origin_policy="best"))
-
-  distinct_edges = times %>%
-    select(neg_rec_edges) %>%
-    tidyr::unnest(neg_rec_edges) %>%
-    group_by(from, to) %>%
-    summarise(pcor = abs(sum(pcor))) %>%
-    mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
-
-  pos_edges = times %>%
-    select(pos_rec_edges) %>%
-    tidyr::unnest(pos_rec_edges) %>%
-    group_by(from, to) %>%
-    summarise(pcor = abs(sum(pcor))) %>%
-    mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
-
-  paths = times %>% select(path) %>%
-    filter(!is.na(path)) %>%
-    tidyr::unnest(path) %>%
-    group_by(from, to) %>%
-    tally() %>%
-    mutate(scaled_weight = abs(n) / max(abs(n)))
-
-  return(list(neg_rec_edges = distinct_edges,
-              pos_edges = pos_edges,
-              paths = paths))
-
-}
-#debug(find_union_path)
-
-find_parsimonius_origins <- function(wt_ccm, q_val=0.01, time_diff = 4) {
-
-  timepoints = seq(18, 48, 2)
-
-  timepoint_pred_df = get_timepoint_pred(wt_ccm)
-
-  select_timepoints <- function(timepoint_pred_df, t1, t2)  {
-    cond_x = timepoint_pred_df %>% filter(timepoint == t1)
-    cond_y = timepoint_pred_df %>% filter(timepoint == t2)
-    return(compare_abundances(wt_ccm, cond_x, cond_y))
-  }
-
-  times = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
-    filter(t1 < t2, (t2-t1) >= time_diff) %>%
-    mutate(comp_abund = purrr::map2(.f = select_timepoints,
-                                    .x = t1,
-                                    .y = t2,
-                                    timepoint_pred_df = timepoint_pred_df)) %>%
-    mutate(neg_rec_edges = purrr::map(.f = hooke:::get_neg_dir_edges,
-                                      .x = comp_abund,
-                                      ccm = wt_ccm,
-                                      q_value_threshold = q_val)) %>%
-    mutate(pos_rec_edges = purrr::map(.f = hooke:::get_positive_edges,
-                                      .x = comp_abund,
-                                      ccm = wt_ccm,
-                                      q_value_threshold = q_val)) %>%
-    mutate(path = purrr::map(.f = purrr::possibly(hooke:::get_path, NA_real_),
-                             .x = comp_abund,
-                             ccm = wt_ccm,
-                             q_value_threshold = q_val,
-                             origin_policy="best"))
-
-  valid_origins = get_valid_origins(wt_ccm)
-
-  distinct_edges = times %>%
-    select(neg_rec_edges) %>%
-    tidyr::unnest(neg_rec_edges) %>%
-    group_by(from, to) %>%
-    summarise(pcor = abs(sum(pcor))) %>%
-    mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
-
-  pos_edges = times %>%
-    select(pos_rec_edges) %>%
-    tidyr::unnest(pos_rec_edges) %>%
-    group_by(from, to) %>%
-    summarise(pcor = abs(sum(pcor))) %>%
-    mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
-
-  paths = times %>% select(path) %>%
-    filter(!is.na(path)) %>%
-    tidyr::unnest(path)
-
-  indirect_paths = paths
-  indirect_paths$path_type = "indirect"
-  indirect_paths = indirect_paths %>% select(origin, destination, path_type, from, to)
-
-  direct_paths = distinct_edges # these are all negative reciprocal
-  direct_paths = direct_paths %>% mutate (origin=from,
-                         destination=to,
-                         path_type = "direct")
-  direct_paths = direct_paths %>% select(origin, destination, path_type, from, to)
-
-
-  paths = rbind(indirect_paths, direct_paths)
-
-  paths = left_join(paths, valid_origins, by=c("destination"="cell_group"))
-  paths = paths %>% filter(origin %in% unlist(possible_origins)) %>% select(-possible_origins) %>% distinct()
-
-  destinations_with_indirect_origins = paths %>%
-    group_by(destination) %>%
-    summarize(num_origin = n()) %>%
-    ungroup %>%
-    filter(num_origin_types > 1) %>%
-    pull(destination) %>% unique()
-
-  paths = paths %>% filter((destination %in% destinations_with_indirect_origins & path_type == "indirect") |
-                            (destination %in% destinations_with_indirect_origins == FALSE & path_type == "direct"))
-  paths = paths %>%
-    group_by(from, to) %>%
-    tally() %>%
-    mutate(scaled_weight = abs(n) / max(abs(n)))
-
-  return(list(neg_rec_edges = distinct_edges,
-              pos_edges = pos_edges,
-              paths = paths))
-
-}
-debug(find_parsimonius_origins)
-
-results_00 = find_union_path(wt_ccm)
-results_01 = find_union_path(wt_ccm_01)
-results_02 = find_union_path(wt_ccm_02)
-
-results_wl = find_union_path(wt_ccm_wl)
-results_wl_01 = find_union_path(wt_ccm_wl_01)
-results_wl_02 = find_union_path(wt_ccm_wl_02)
-
-
-hooke:::plot_path(wt_ccm, path_df = results_00$paths)
-hooke:::plot_path(wt_ccm, path_df = results_01$paths)
-hooke:::plot_path(wt_ccm, path_df = results_02$paths)
-
-hooke:::plot_path(wt_ccm_01, path_df = results_wl$paths)
-hooke:::plot_path(wt_ccm_01, path_df = results_wl_01$paths)
-hooke:::plot_path(wt_ccm_01, path_df = results_wl_02$paths)
-
-
-
-
-# how many clusters are connected
-union(results_wl$paths$to, results_wl$paths$from) %>% unique %>% length()
-
-plot_state_transition_graph <- function(ccm,
-                                        edges,
-                                        color_nodes_by=NULL,
-                                        label_nodes_by=NULL,
-                                        group_nodes_by=NULL,
-                                        layer_nodes_by=NULL,
-                                        arrow.gap=0.03,
-                                        arrow_unit = 2,
-                                        bar_unit = .075,
-                                        node_size = 2,
-                                        num_layers=10,
-                                        unlabeled_groups = c("Unknown"),
-                                        hide_unlinked_nodes=TRUE){
-
-  # # remove any edge duplicates
-  # ade = edges %>%
-  #   group_by(from,to) %>%
-  #   arrange(edge_type) %>% # needs to deal w this later, only ggnetwork can't handle it
-  #   slice(1) %>% # currently chooses the activator if multiple
-  #   ungroup() %>%
-  #   mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
-
-  edges = hooke:::distance_to_root(edges)
-
-  #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = colData(ccm@ccs)[,c("cell_group",
-                                            color_nodes_by,
-                                            label_nodes_by,
-                                            group_nodes_by,
-                                            layer_nodes_by)] %>%
-    as.data.frame
-  node_metadata = tibble(id=unique(cell_group_metadata$cell_group))
-  if (is.null(color_nodes_by) == FALSE){
-    color_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(color_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(color_by_metadata) = c("cell_group", "color_nodes_by")
-    node_metadata = left_join(node_metadata, color_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(group_nodes_by) == FALSE){
-    group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(group_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
-    node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(layer_nodes_by) == FALSE){
-    layer_by_metadata = cell_group_metadata[,c("cell_group", layer_nodes_by)] %>%
-      as.data.frame
-    if (is.numeric(cell_group_metadata[,c(layer_nodes_by)])){
-      layer_by_metadata = layer_by_metadata %>%
-        group_by(cell_group) %>%
-        summarize(mean_layer_var = mean(!!sym(layer_nodes_by), na.rm=TRUE)) %>%
-        mutate(layer = ntile(desc(mean_layer_var),num_layers)) %>% dplyr::select(-mean_layer_var)
-    }else{
-      layer_by_metadata = layer_by_metadata %>%
-        count(cell_group, !!sym(layer_nodes_by)) %>%
-        group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    }
-    colnames(layer_by_metadata) = c("cell_group", "layer_nodes_by")
-    node_metadata = left_join(node_metadata, layer_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(label_nodes_by) == FALSE){
-    label_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(label_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(label_by_metadata) = c("cell_group", "label_nodes_by")
-    node_metadata = left_join(node_metadata, label_by_metadata, by=c("id"="cell_group"))
-  }else{
-    node_metadata$label_nodes_by = node_metadata$id
-  }
-  node_metadata = node_metadata %>% distinct() %>% as.data.frame
-  row.names(node_metadata) = node_metadata$id
-  if (hide_unlinked_nodes){
-    node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
-  }
-
-  G = edges %>% select(from, to, scaled_weight) %>% distinct()  %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
-
-  #state_order = path %>% select(to, distance_from_root) %>%
-  #  rbind(data.frame("to"="4", distance_from_root=0)) %>%
-  #  mutate("cell_group" = paste0("cluster_", to))
-
-  # level_df = data.frame("name" = V(G)$name) %>%
-  #   #left_join(gene_id_level, by = c("name" = "gene_id")) %>%
-  #   left_join(state_order, by = "cell_group") %>%
-  #   group_by(distance_from_root) %>%
-  #   mutate(rn = row_number()) %>%
-  #   mutate(group = cut(rn, num_levels, labels=F)) %>%
-  #   mutate(group_label = as.numeric(distance_from_root) + (group-1)*(0.75/num_levels)) %>%
-  #   ungroup() %>%
-  #   tibble::column_to_rownames("name")
-
-  # run sugiyama layout
-  layers = NULL
-  if (is.null(layer_nodes_by) == FALSE) {
-    layers=igraph::V(G)$layer_nodes_by
-  }
-  lay1 <- igraph::layout_with_sugiyama(G, layers=layers)
-
-  g = ggnetwork::ggnetwork(G, layout = lay1$layout, arrow.gap = arrow.gap)
-
-  # add level information
-  #g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
-  #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
-
-
-  p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend, size = scaled_weight)) +
-    # draw activator edges
-    ggnetwork::geom_edges(data = g,
-               arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-  if (is.null(group_nodes_by) == FALSE){
-    p = p + ggforce::geom_mark_rect(aes(fill = group_nodes_by, label=group_nodes_by, filter = group_nodes_by %in% unlabeled_groups == FALSE), size=0, data=g)
-  }
-
-  if (is.null(color_nodes_by) == FALSE) {
-
-    # if numerical
-    if (is.numeric(g[[color_nodes_by]])) {
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                             aes(fill = as.factor(color_nodes_by),
-                                 label = label_nodes_by),
-                             size = node_size) +
-        labs(fill = color_nodes_by) +
-        scale_fill_gradient2(low = "darkblue", mid = "white", high="red4")
-    }
-    else {
-      # if categorical
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                             aes(fill = color_nodes_by,
-                                 label = label_nodes_by),
-                             size = node_size) +
-        labs(fill = color_nodes_by)
-
-    }
-
-  } else {
-    p = p + ggnetwork::geom_nodelabel(data = g,
-                           aes(label = label_nodes_by),
-                           size = node_size)
-  }
-
-  p = p + scale_size_identity() +
-    monocle3:::monocle_theme_opts() +
-    ggnetwork::theme_blank()
-  return(p)
-}
-undebug(plot_state_transition_graph)
 plot_state_transition_graph(wt_ccm_01, results_wl$paths, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="segment")
 plot_state_transition_graph(wt_ccm_wl_01, results_wl_01$paths, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="segment")
 plot_state_transition_graph(wt_ccm_wl_02, results_wl_02$paths, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="segment")
@@ -654,12 +298,12 @@ plot_state_transition_graph(wt_ccm_wl_02, results_wl_02$paths, color_nodes_by = 
 # edges = pos_edges %>%
 #   add_umap_coords(centroids(wt_ccs))
 
-my_plot_path <- function(wt_ccs, edges, x = 1, y = 2) {
+my_plot_path <- function(ccs, edges, x = 1, y = 2) {
 
-  gp = hooke:::my_plot_cells(wt_ccs, color_cells_by = "timepoint", x=x, y=y)
+  gp = hooke:::my_plot_cells(ccs, color_cells_by = "timepoint", x=x, y=y)
 
   edges = edges %>%
-    hooke:::add_umap_coords(centroids(wt_ccs))
+    hooke:::add_umap_coords(centroids(ccs))
 
   gp +
     geom_segment(data = edges,
@@ -689,7 +333,7 @@ my_plot_path <- function(wt_ccs, edges, x = 1, y = 2) {
 
 
 # gp = my_plot_cells(wt_ccs, color_cells_by = "timepoint")
-my_plot_path(wt_ccs, results_wl$paths) %>%
+my_plot_path(wt_ccs, wt_origins) %>%
   ggsave(filename = "kidney_wt_path.png")
 
 
@@ -986,8 +630,8 @@ plot_pronephros_transitions <- function(ccm,
   return(gp)
 }
 #debug(plot_pronephros_transitions)
-plot_pronephros_transitions(wt_ccm,
-                            compare_abundances(wt_ccm,
+plot_pronephros_transitions(wt_ccm_wl,
+                            compare_abundances(wt_ccm_wl,
                                                timepoint_pred_df %>% filter(timepoint == 18),
                                                timepoint_pred_df %>% filter(timepoint == 24)),
                             q_value_thresh = 0.1,

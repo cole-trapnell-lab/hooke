@@ -49,6 +49,7 @@ compute_vhat = function(ccm) {
   }
   vhat
 }
+
 #' Predict cell type abundances given a PLN model and a set of inputs for its covariates
 #'
 #' @param newdata needs to be suitable input to pln_model
@@ -95,6 +96,33 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   pred_out_tbl = cbind(newdata, pred_out_tbl)
   return(pred_out_tbl)
 }
+
+#' Predict cell type abundances given a PLN model over a range of time or other interval
+#'
+#' @importFrom tibble tibble
+#' @export
+estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="timepoint", interval_step=2, ...) {
+
+  timepoint_pred_df = tibble(IV= seq(start, stop, interval_step), ...)
+  colnames(timepoint_pred_df)[1] = interval_col
+
+  time_interval_pred_helper = function(tp, ...){
+    tp_tbl = tibble(IV=tp, ...)
+    colnames(tp_tbl)[1] = interval_col
+    estimate_abundances(ccm, tp_tbl)
+  }
+
+  timepoint_pred_df = timepoint_pred_df %>%
+    dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
+      .f = time_interval_pred_helper, NA_real_),
+      .x = !!sym(interval_col),
+      ...)) %>%
+    select(timepoint_abund) %>%
+    tidyr::unnest(c(timepoint_abund))
+
+  return(timepoint_pred_df)
+}
+
 
 #' Compare two estimates of cell abundances from a Hooke model
 #' @param ccm A cell_count_model
