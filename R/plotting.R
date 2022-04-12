@@ -616,12 +616,14 @@ plot_state_transition_graph <- function(ccm,
                                         bar_unit = .075,
                                         node_size = 2,
                                         num_layers=10,
+                                        edge_size=0.5,
                                         unlabeled_groups = c("Unknown"),
                                         hide_unlinked_nodes=TRUE,
                                         label_font_size=6,
                                         label_conn_linetype="dotted"){
 
-  edges = hooke:::distance_to_root(edges)
+  #edges = hooke:::distance_to_root(edges)
+  edges = edges %>% dplyr::ungroup()
 
   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   node_metadata = tibble(id=cell_groups)
@@ -682,7 +684,7 @@ plot_state_transition_graph <- function(ccm,
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
   }
 
-  G = edges %>% select(from, to, scaled_weight) %>% distinct()  %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+  G = edges %>% select(from, to) %>% distinct()  %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
 
   # run sugiyama layout
   layers = NULL
@@ -698,7 +700,7 @@ plot_state_transition_graph <- function(ccm,
   #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
 
 
-  p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend, size = scaled_weight)) +
+  p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
     # draw activator edges
     ggnetwork::geom_edges(data = g,
                           arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
@@ -744,6 +746,78 @@ plot_state_transition_graph <- function(ccm,
     ggnetwork::theme_blank() +
     theme(legend.position="none")
   return(p)
+}
+
+#' Simple function for inspecting origins for each cell state
+#'
+#' @export
+plot_origins <- function(data,
+                         path_df = path_df,
+                         edge_size=2,
+                         path_color = "black",
+                         color_cells_by = "cluster",
+                         color_path_by = NULL,
+                         cond_b_vs_a_tbl = NULL) {
+
+
+
+  if (class(data) == "cell_count_set") {
+    umap_centers = centroids(data)
+  } else if (class(data) == "cell_count_model") {
+    umap_centers = centroids(data@ccs)
+  }
+
+  path_df = path_df %>% dplyr::select(destination=cell_group, origin, to, from, origin_score, weight, distance_from_root) %>%
+    hooke:::add_umap_coords(umap_centers)
+
+  print (path_df)
+  if (is.null(color_path_by) == FALSE) {
+
+    gp = ggplot(data=path_df) +
+      ggnewscale::new_scale_color() +
+      geom_segment(aes(x = umap_to_1,
+                       y = umap_to_2,
+                       xend=umap_from_1,
+                       yend = umap_from_2,
+                       color = get(color_path_by)),
+                   size=edge_size) +
+      geom_segment(aes(x = umap_from_1,
+                       y = umap_from_2,
+                       xend = (umap_to_1+umap_from_1)/2,
+                       yend = (umap_to_2+umap_from_2)/2,
+                       color = get(color_path_by)),
+                   size=edge_size,
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+      scale_color_gradient2(
+        low = "#122985",
+        mid = "white",
+        high = "red4",
+        na.value = "white"
+      )
+
+  } else {
+    gp = ggplot(data = path_df) +
+      geom_segment(aes(x = umap_to_1,
+                       y = umap_to_2,
+                       xend=umap_from_1,
+                       yend = umap_from_2),
+                   color = path_color,
+                   size = edge_size ) +
+      geom_segment(aes(x = umap_from_1,
+                       y = umap_from_2,
+                       xend = (umap_to_1+umap_from_1)/2,
+                       yend = (umap_to_2+umap_from_2)/2),
+                   size= edge_size,
+                   color=path_color,
+                   linejoin='mitre',
+                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))+
+      geom_text(aes(umap_from_1, umap_from_2, label=from), color="blue", data=path_df %>% filter (from == origin)) +
+      geom_text(aes(umap_to_1, umap_to_2, label=to), color="red", data=path_df %>% filter (to == destination))
+  }
+
+  return(gp)
+
 }
 
 

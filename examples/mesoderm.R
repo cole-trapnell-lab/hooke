@@ -87,6 +87,62 @@ plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
 #debug(plot_contrast_wrapper)
 plot_contrast_wrapper(wt_ccm_wl, 18, 22)
 
+
+# Reboot
+# -----------------------------------------------------------------------------
+
+#debug(find_timeseries_origins)
+wt_possible_origins = find_timeseries_origins(wt_ccm_wl,
+                                   start=18, stop=96,
+                                   interval_col="adjusted_timepoint",
+                                   min_interval = 2,
+                                   log_abund_detection_thresh=-2,
+                                   #percent_max_threshold=0.00,
+                                   require_presence_at_all_timepoints=TRUE,
+                                   experiment="GAP14")
+
+
+#debug(plot_origins)
+plot_origins(wt_ccm_wl, wt_possible_origins, edge_size=0.25) + facet_wrap(~destination)
+
+#debug(select_timeseries_origins)
+
+# Now we have to actually choose the right origins for each cell type. This is hard because if you
+# get them wrong you create weird backwards flows in the trajectory or undesirable shortcuts.
+
+# There are a bunch of policies we could use to pick the best origin(s) for a given cell state
+# The most conservative is to take the closest one or the one that has the highest ratio of pcor:geodesic
+# distance in the pathfinding graph or over the UMAP manifold. These two are very similar. Moreover, paths
+# from cell types that emerge during the time series are way easier to identify than those that are present
+# at the outset. I think we should conservatively start with the policy "max-score-dist-ratio-origin"
+# only assigning origins for emergent cell types. We could then use these paths to orient edges within the
+# pathfinding graph and then run a second round of origin finding on this graph, and assigning origins using
+# more relaxed policy (e.g. allowing multiple origins for an emergent cell type or allowing origins for cell
+# types that were present at the outset). We could also explore using the information about when cell types
+# become extinct somehow.
+
+selected_origins = select_timeseries_origins(wt_possible_origins, "max-score-origin")
+plot_origins(wt_ccm_wl, selected_origins, edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, selected_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
+
+selected_origins = select_timeseries_origins(wt_possible_origins, "max-score-dist-ratio-origin")
+plot_origins(wt_ccm_wl, selected_origins, edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, selected_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
+
+selected_origins = select_timeseries_origins(wt_possible_origins, "closest-origin")
+plot_origins(wt_ccm_wl, selected_origins, edge_size=0.25) + facet_wrap(~destination)
+
+selected_origins = select_timeseries_origins(wt_possible_origins, "all-origins")
+plot_origins(wt_ccm_wl, selected_origins, edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, selected_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
+
+
+
+
+
+
+
+
 # -----------------------------------------------------------------------------
 
 

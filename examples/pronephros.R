@@ -8,6 +8,7 @@ library(msigdbr)
 
 #kidney_cds = readRDS("/Users/coletrap/dropbox_lab/Analysis/macrophages/PAP/monos.al.cds_2021-11-01.RDS")
 
+setwd("/Users/coletrap/dropbox_lab/Analysis/fish-mutants/kidney")
 kidney_cds = readRDS("/Users/coletrap/dropbox_lab/Analysis/fish-mutants/kidney/kidney.cds.cole.RDS")
 
 kidney_cds = detect_genes(kidney_cds)
@@ -84,7 +85,9 @@ pronephros_classifier <- train_cell_classifier(cds = kidney_cds,
                                          cds_gene_id_type = "SYMBOL",
                                          num_unknown = 50,
                                          marker_file_gene_id_type = "SYMBOL")
-saveRDS(pronephros_classifier, "pronephros_classifier.RDS")
+
+# Commenting this out so I don't actually overwrite the classifier:
+#saveRDS(pronephros_classifier, "pronephros_classifier.RDS")
 
 colData(kidney_cds)$garnett_cluster = clusters(kidney_cds)
 kidney_cds = classify_cells(kidney_cds, pronephros_classifier, db="none", cluster_extend=TRUE)
@@ -262,22 +265,24 @@ plot_contrast_wrapper(wt_ccm_wl, t1, t2)
 
 
 
-wt_possible_origins = find_origins(wt_ccm_wl,
-                                   start=18, stop=48,
-                                   interval_col="timepoint",
-                                   min_interval = 2,
-                                   log_abund_detection_thresh=-2,
-                                   #percent_max_threshold=0.00,
-                                   require_presence_at_all_timepoints=TRUE,
-                                   initial_origin_policy="closest-origin",
-                                   experiment="GAP14")
+wt_possible_origins = find_timeseries_origins(wt_ccm_wl,
+                                              start=18, stop=48,
+                                              interval_col="timepoint",
+                                              min_interval = 2,
+                                              log_abund_detection_thresh=-2,
+                                              #percent_max_threshold=0.00,
+                                              require_presence_at_all_timepoints=TRUE,
+                                              experiment="GAP14")
 
-wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "closest-origin")
+
+selected_origins = select_timeseries_origins(wt_possible_origins, "max-score-dist-ratio-origin")
+plot_origins(wt_ccm_wl, selected_origins, edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, selected_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
 
 #wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
-hooke:::plot_path(wt_ccm_wl, path_df = wt_origins, edge_size=0.25)
+hooke:::plot_path(wt_ccm_wl, path_df = selected_origins, edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, wt_origins, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+plot_state_transition_graph(wt_ccm_wl, selected_origins %>% select(origin, destination=cell_group, from, to), color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 
 # -----------------------------------------------------------------------------
