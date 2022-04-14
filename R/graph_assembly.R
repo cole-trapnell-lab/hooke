@@ -506,19 +506,37 @@ find_timeseries_origins <- function(ccm,
                                       .y = t2,
                                       interval_col=interval_col,
                                       timepoint_pred_df = timepoint_pred_df)) %>%
-      mutate(neg_rec_edges = purrr::map(.f = purrr::possibly(hooke:::get_neg_dir_edges, NULL),
+      mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
                                         .x = comp_abund,
-                                        ccm = ccm,
-                                        q_value_threshold = q_val))
+                                        ccm = ccm))
 
     # Could add additional constraints here on origins if desired?
     valid_origins = origin_stats_df %>% filter(dist_on_pcor_effect < origin_dist_effect_thresh) %>% pull(from)
 
     relevant_comparisons = relevant_comparisons %>%
-      tidyr::unnest(neg_rec_edges) %>%
-      dplyr::filter(from %in% valid_origins & to == destination & to_delta_log_abund > 0 & from_delta_log_abund < 0)
+      tidyr::unnest(rec_edges) %>%
+      dplyr::filter((to %in% valid_origins & from == destination & from_delta_log_abund > 0 & to_delta_log_abund < 0) |
+                    (from %in% valid_origins & to == destination & to_delta_log_abund > 0 & from_delta_log_abund < 0))
     #possible_origins = relevant_comparisons %>% dplyr::select(origin=from, origin_score = pcor) %>% distinct()
     possible_origins = relevant_comparisons %>% dplyr::select(from, to)
+
+    backwards_edges = possible_origins %>% dplyr::filter(from == destination)
+    ok_edges = possible_origins %>% dplyr::filter(to == destination)
+
+    be_colnames = colnames(backwards_edges)
+    be_colnames = unlist(lapply(be_colnames, stringr::str_replace, "^to", "from"))
+
+    from_cols = grepl("^from", colnames(backwards_edges))
+    be_colnames[from_cols] = unlist(lapply(be_colnames[from_cols], stringr::str_replace, "^from", "to"))
+    colnames(backwards_edges) = be_colnames
+
+    if (nrow(backwards_edges) != 0) {
+      #backwards_edges$edge_type = "directed_from_to"
+      backwards_edges = backwards_edges[colnames(ok_edges)]
+    }
+
+    possile_origins = rbind(ok_edges, backwards_edges)
+
     possible_origins = possible_origins %>% left_join(origin_stats_df, by=c("from", "to"))
     possible_origins = possible_origins %>% dplyr::select(-to) %>% dplyr::rename(origin=from)
     return (possible_origins)
