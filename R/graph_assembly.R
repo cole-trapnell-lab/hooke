@@ -293,6 +293,64 @@ get_neg_rec_edges_for_cells_that_need_origins <- function(neg_rec_edge_df, need_
   return(neg_rec_edge_df %>% filter(to %in% need_origins))
 }
 
+#' Function that computes a bunch of statistics on possible origin states
+compute_origin_stats <- function(ccm, tp_pred_df, ext_ct_df){
+  pf_gr = init_pathfinding_graph(ccm, ext_ct_df)
+
+  #tp_pred_df = estimate_abundances_over_interval(ccm, 18, 24, interval_col="timepoint", experiment="GAP14")
+
+  reduced_model_pcors_between_cell_groups = model(ccm, "reduced")$latent_network(type = "partial_cor") %>% as.matrix() %>% as.data.frame.table(responseName = "reduced_pcor")
+  full_model_pcors_between_cell_groups = model(ccm, "full")$latent_network(type = "partial_cor") %>% as.matrix() %>% as.data.frame.table(responseName = "full_pcor")
+
+  geodesic_distances_between_cell_groups = igraph::distances(pf_gr, mode="out")  %>% as.data.frame.table(responseName = "geodesic_dist")
+
+  cell_group_centroids = centroids(ccm@ccs)
+  euclidean_distances_between_cell_groups = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", diag = T)) %>% as.data.frame.table(responseName = "euclidean_dist")
+
+  pcor_dist_df = left_join(geodesic_distances_between_cell_groups, euclidean_distances_between_cell_groups)
+  pcor_dist_df = left_join(pcor_dist_df, reduced_model_pcors_between_cell_groups)
+  pcor_dist_df = left_join(pcor_dist_df, full_model_pcors_between_cell_groups)
+
+  pcor_dist_df = pcor_dist_df %>% as_tibble()
+  pcor_dist_df = pcor_dist_df %>% dplyr::rename(from=Var1, to=Var2) %>% mutate(from = as.character(from),
+                                                                               to = as.character(to))
+  pcor_dist_df = pcor_dist_df %>% filter(from != to)
+
+  pcor_dist_df = pcor_dist_df %>% filter(is.finite(geodesic_dist))
+  pcor_dist_df = pcor_dist_df %>% filter(reduced_pcor != 0)
+  #pcor_dist_df = pcor_dist_df %>% filter(full_pcor != 0)
+
+
+  pcor_dist_df = pcor_dist_df %>% tidyr::nest(data=-from)
+
+  pcor_dist_models = pcor_dist_df %>%
+    mutate(dist_model = purrr::map(data, ~ lm(reduced_pcor ~ geodesic_dist, data=.x))) %>%
+    mutate(model_summary = purrr::map(dist_model, broom::tidy)) #%>%
+
+  origin_stats = pcor_dist_models %>%
+    tidyr::unnest(model_summary) %>%
+    dplyr::filter(term == "geodesic_dist") %>%
+    dplyr::select(from, dist_on_pcor_effect=estimate, dist_effect_pval=p.value)
+
+  origin_stats = left_join(origin_stats, geodesic_distances_between_cell_groups, by=c("from"="Var1")) %>% dplyr::rename(to=Var2)
+  origin_stats = left_join(origin_stats, reduced_model_pcors_between_cell_groups, by=c("from"="Var1", "to"="Var2"))
+  origin_stats = left_join(origin_stats, full_model_pcors_between_cell_groups, by=c("from"="Var1", "to"="Var2"))
+  origin_stats = origin_stats %>% dplyr::select(from,
+                                                to,
+                                                dist_on_pcor_effect,
+                                                dist_effect_pval,
+                                                distance=geodesic_dist,
+                                                reduced_pcor,
+                                                full_pcor)
+  return (origin_stats)
+
+  #valid_origins = pcor_dist_models %>%
+  #  tidyr::unnest(model_summary) %>%
+  #  filter(term == "geodesic_dist" & estimate < 0) %>%
+  #  pull(from)
+
+}
+
 # Helper function
 find_origin_paths_from_time_contrasts <- function(ccm,
                                                   traversal_graph,
@@ -345,59 +403,49 @@ find_origin_paths_from_time_contrasts <- function(ccm,
 #' Select the origins for each destination and report a set of paths between them
 #'
 #' @export
-select_timeseries_origins <- function(possible_origins, selection_policy=c("closest-origin", "best-origin","max-score-origin", "max-score-dist-ratio-origin", "all-origins")){
-  possible_origins = possible_origins %>% group_by(cell_group, origin) %>% mutate(path_geodesic_umap_dist = sum(weight)) %>% ungroup()
+select_timeseries_origins <- function(possible_origins,
+                                         selection_policy=c("closest-origin",
+                                                            "best-origin",
+                                                            "max-score-origin",
+                                                            "max-score-dist-ratio-origin",
+                                                            "all-origins")){
+  possible_origins = possible_origins %>% group_by(cell_group)
 
-  possible_origins = possible_origins %>% mutate(origin_score = -origin_score,
-                                                 origin_score_dist_ratio = origin_score / path_geodesic_umap_dist)
+  possible_origins = possible_origins %>% mutate(origin_score = reduced_pcor,
+                                                 origin_score_dist_ratio = origin_score / distance)
 
-  possible_origins = possible_origins %>% group_by(cell_group) %>% mutate(max_origin_score = max(origin_score),
-                                                                          fraction_max_origin_score = origin_score / max_origin_score,
-                                                                          max_origin_score_dist_ratio = max(origin_score_dist_ratio),
-                                                                          fraction_origin_score_dist_ratio = origin_score_dist_ratio / max_origin_score_dist_ratio)
-  possible_origins = possible_origins %>% group_by(cell_group) %>% mutate(closest_origin_dist = min(path_geodesic_umap_dist),
-                                                                          distance_ratio_over_closest = path_geodesic_umap_dist / closest_origin_dist)
-  distance_to_best_origin_df = possible_origins %>%
-    select(origin, cell_group, origin_score, max_origin_score, path_geodesic_umap_dist) %>%
-    slice_max(origin_score, with_ties=FALSE) %>%
-    select(cell_group, distance_to_best_origin = path_geodesic_umap_dist)
-  possible_origins = left_join(possible_origins, distance_to_best_origin_df)
-
-  possible_origins = possible_origins %>% mutate (distance_ratio_over_best = path_geodesic_umap_dist / distance_to_best_origin)
-
-  if (selection_policy == "acceptable-origins"){
-    possible_origins = possible_origins %>% filter(distance_ratio_over_best < max_origin_distance_ratio)
-    possible_origins = possible_origins %>% filter(fraction_max_origin_score > fraction_origin_score_thresh)
-  }else if(selection_policy == "max-score-origin"){
-    possible_origins = possible_origins %>% filter(fraction_max_origin_score == 1.0)
+  if(selection_policy == "max-score-origin"){
+    possible_origins = possible_origins %>% slice_min(origin_score, n=1)
   }else if(selection_policy == "max-score-dist-ratio-origin"){
-    possible_origins = possible_origins %>% filter(fraction_origin_score_dist_ratio == 1.0)
+    possible_origins = possible_origins %>% filter (is.finite(distance)) %>% slice_min(origin_score_dist_ratio, n=1)
   }
   else if(selection_policy == "closest-origin"){
-    possible_origins = possible_origins %>% filter(distance_ratio_over_closest == 1.0)
+    possible_origins = possible_origins %>% filter (is.finite(distance)) %>% slice_min(distance, n=1)
   }else if (selection_policy == "all-origins"){
 
   }
+  possible_origins = possible_origins %>% ungroup()
   return (possible_origins)
 }
 
 #' Identify the possible origins for each destination
 #'
 #' @export
-
 find_timeseries_origins <- function(ccm,
-                                    q_val=0.01,
-                                    start = NULL,
-                                    stop = NULL,
-                                    interval_col="timepoint",
-                                    interval_step = 2,
-                                    min_interval = 4,
-                                    max_interval = 24,
-                                    percent_max_threshold=0.0,
-                                    log_abund_detection_thresh=-5,
-                                    require_presence_at_all_timepoints=TRUE,
-                                    initial_origin_policy="best-origin",
-                                    ...) {
+                                       extant_cell_type_df,
+                                       timeseries_pathfinding_graph,
+                                       q_val=0.01,
+                                       start = NULL,
+                                       stop = NULL,
+                                       interval_col="timepoint",
+                                       interval_step = 2,
+                                       min_interval = 4,
+                                       max_interval = 24,
+                                       percent_max_threshold=0.0,
+                                       log_abund_detection_thresh=-5,
+                                       require_presence_at_all_timepoints=TRUE,
+                                       initial_origin_policy="best-origin",
+                                       ...) {
 
   # First, let's figure out when each cell type is present and
   # which ones emerge over the course of the caller's time interval
@@ -410,23 +458,7 @@ find_timeseries_origins <- function(ccm,
 
   timepoints = seq(start, stop, interval_step)
 
-  extant_cell_type_df = get_extant_cell_types(ccm,
-                                              start,
-                                              stop,
-                                              interval_col=interval_col,
-                                              percent_max_threshold=percent_max_threshold,
-                                              log_abund_detection_thresh=log_abund_detection_thresh,
-                                              ...)
-
   timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_col=interval_col, interval_step, ...)
-
-  # Now let's set up a directed graph that links the states between which cells *could* directly
-  # transition. If we don't know the direction of flow, add edges in both directions. The idea is
-  # that we will find shortest paths over this graph between destination states and their plausible
-  # origin states, then choose the best origins for each destination.
-
-  timeseries_pathfinding_graph = init_pathfinding_graph(ccm, extant_cell_type_df)
-
 
 
   # Now let's iterate over the cell types, finding origins for all the ones that emerge
@@ -438,6 +470,7 @@ find_timeseries_origins <- function(ccm,
 
   destination_cell_types = extant_cell_type_df %>% select(cell_group, emerges_at=longest_contig_start) %>% distinct()
 
+  origin_stats_df = compute_origin_stats(ccm, timepoint_pred_df, extant_cell_type_df)
 
   time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
     filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
@@ -445,10 +478,11 @@ find_timeseries_origins <- function(ccm,
   get_possible_origins_for_destination <- function(destination,
                                                    emerges_at,
                                                    ccm,
-                                                   extand_cell_type_df,
+                                                   origin_stats_df,
                                                    time_contrasts,
                                                    timepoint_pred_df,
-                                                   q_val){
+                                                   q_val,
+                                                   origin_dist_effect_thresh=0){
 
     select_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
       cond_x = timepoint_pred_df %>% filter(!!sym(interval_col) == t1)
@@ -464,6 +498,8 @@ find_timeseries_origins <- function(ccm,
     }
 
     # Now let's actually compare the abundances between the endpoints of all those contrasts
+    # FIXME: we should be able to relax this to look at edges with positive pcor too, instead of just negative
+    # provided that one of the endpoints is the destination.
     relevant_comparisons = time_contrasts %>%
       mutate(comp_abund = purrr::map2(.f = select_timepoints,
                                       .x = t1,
@@ -474,34 +510,37 @@ find_timeseries_origins <- function(ccm,
                                         .x = comp_abund,
                                         ccm = ccm,
                                         q_value_threshold = q_val))
+
+    # Could add additional constraints here on origins if desired?
+    valid_origins = origin_stats_df %>% filter(dist_on_pcor_effect < origin_dist_effect_thresh) %>% pull(from)
+
     relevant_comparisons = relevant_comparisons %>%
       tidyr::unnest(neg_rec_edges) %>%
-      dplyr::filter(to == destination & to_delta_log_abund > 0 & from_delta_log_abund < 0)
-    possible_origins = relevant_comparisons %>% dplyr::select(origin=from, origin_score = pcor) %>% distinct()
+      dplyr::filter(from %in% valid_origins & to == destination & to_delta_log_abund > 0 & from_delta_log_abund < 0)
+    #possible_origins = relevant_comparisons %>% dplyr::select(origin=from, origin_score = pcor) %>% distinct()
+    possible_origins = relevant_comparisons %>% dplyr::select(from, to)
+    possible_origins = possible_origins %>% left_join(origin_stats_df, by=c("from", "to"))
+    possible_origins = possible_origins %>% dplyr::select(-to) %>% dplyr::rename(origin=from)
     return (possible_origins)
   }
   #debug(get_possible_origins_for_destination)
 
-  destination_cell_types = destination_cell_types %>%
+  possible_origins = destination_cell_types %>%
     mutate(possible_origins = purrr::map2(.f = get_possible_origins_for_destination,
                                           .x = cell_group,
                                           .y = emerges_at,
                                           ccm,
-                                          extant_cell_type_df,
+                                          origin_stats_df,
                                           time_contrasts,
                                           timepoint_pred_df,
                                           q_val)) %>%
     tidyr::unnest(possible_origins)
 
-  possible_origins = destination_cell_types %>%
-    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
-                              .x = origin, .y = cell_group,
-                              timeseries_pathfinding_graph)) %>%
-    tidyr::unnest(path) %>%
-    filter(is.na(from) == FALSE & is.na(to) == FALSE)
+  possible_origins = possible_origins %>% distinct()
 
   return (possible_origins)
 }
+
 
 #' Initialize a graph over which cells can transition
 #'
@@ -549,6 +588,81 @@ init_pathfinding_graph <- function(ccm, extant_cell_type_df){
 
 #debug(find_origins)
 
+find_paths_to_origins <- function(possible_origins, timeseries_pathfinding_graph){
+  possible_origins = possible_origins %>%
+    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+                              .x = origin, .y = cell_group,
+                              timeseries_pathfinding_graph)) %>%
+    tidyr::unnest(path) %>%
+    filter(is.na(from) == FALSE & is.na(to) == FALSE)
+  return (possible_origins)
+}
+
+#' A function to assemble a state transition graph from a timeseries model
+#' @export
+assemble_timeseries_transitions <- function(ccm,
+                                            q_val=0.01,
+                                            start = NULL,
+                                            stop = NULL,
+                                            interval_col="timepoint",
+                                            interval_step = 2,
+                                            min_interval = 4,
+                                            max_interval = 24,
+                                            percent_max_threshold=0.0,
+                                            log_abund_detection_thresh=-5,
+                                            initial_origin_policy="closest-origin",
+                                            ...){
+
+  extant_cell_type_df = get_extant_cell_types(ccm,
+                                              start,
+                                              stop,
+                                              interval_col=interval_col,
+                                              percent_max_threshold=percent_max_threshold,
+                                              log_abund_detection_thresh=log_abund_detection_thresh,
+                                              ...)
+  timeseries_pathfinding_graph = init_pathfinding_graph(ccm, extant_cell_type_df)
+
+
+  # Now let's set up a directed graph that links the states between which cells *could* directly
+  # transition. If we don't know the direction of flow, add edges in both directions. The idea is
+  # that we will find shortest paths over this graph between destination states and their plausible
+  # origin states, then choose the best origins for each destination.
+
+
+  possible_origins = find_timeseries_origins(ccm,
+                                                extant_cell_type_df,
+                                                timeseries_pathfinding_graph,
+                                                start=start,
+                                                stop=stop,
+                                                interval_col=interval_col,
+                                                min_interval = min_interval,
+                                                percent_max_threshold=percent_max_threshold,
+                                                log_abund_detection_thresh=log_abund_detection_thresh,
+                                                #percent_max_threshold=0.00,
+
+                                                ...)
+
+
+  # Now we have to actually choose the right origins for each cell type. This is hard because if you
+  # get them wrong you create weird backwards flows in the trajectory or undesirable shortcuts.
+
+  # There are a bunch of policies we could use to pick the best origin(s) for a given cell state
+  # The most conservative is to take the closest one or the one that has the highest ratio of pcor:geodesic
+  # distance in the pathfinding graph or over the UMAP manifold. These two are very similar. Moreover, paths
+  # from cell types that emerge during the time series are way easier to identify than those that are present
+  # at the outset. I think we should conservatively start with the policy "max-score-dist-ratio-origin"
+  # only assigning origins for emergent cell types. We could then use these paths to orient edges within the
+  # pathfinding graph and then run a second round of origin finding on this graph, and assigning origins using
+  # more relaxed policy (e.g. allowing multiple origins for an emergent cell type or allowing origins for cell
+  # types that were present at the outset). We could also explore using the information about when cell types
+  # become extinct somehow.
+
+  selected_origins = select_timeseries_origins(possible_origins, initial_origin_policy)
+
+  paths_to_origins = find_paths_to_origins(selected_origins, timeseries_pathfinding_graph)
+
+  return(paths_to_origins)
+}
 
 
 

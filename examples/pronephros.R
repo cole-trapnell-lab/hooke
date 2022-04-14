@@ -247,46 +247,185 @@ wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.01)
 # -----------------------------------------------------------------------------
 
 
-plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01) {
+plot_contrast_wrapper <- function(ccm, t1, t2, q_val=0.01, model_for_pcors="reduced") {
 
   timepoint_pred_df = estimate_abundances_over_interval(ccm, t1, t2, interval_col="timepoint", experiment="GAP14")
 
   plot_contrast(ccm, compare_abundances(ccm,
                                         timepoint_pred_df %>% filter(timepoint == t1),
                                         timepoint_pred_df %>% filter(timepoint == t2)),
-                scale_shifts_by = "none",
-                q_value_thresh = q_val)
+                scale_shifts_by = "sender",
+                q_value_thresh = q_val,
+                model_for_pcors=model_for_pcors)
 
 }
 
 t1 = 18
 t2 = 22
-plot_contrast_wrapper(wt_ccm_wl, t1, t2)
+plot_contrast_wrapper(wt_ccm_wl, 24, 36, model_for_pcors="reduced")
 
+paths_to_origins = assemble_timeseries_transitions(wt_ccm_wl,
+                                                   start=18, stop=48,
+                                                   interval_col="timepoint",
+                                                   min_interval = 2,
+                                                   log_abund_detection_thresh=-2,
+                                                   #initial_origin_policy="max-score-dist-ratio-origin",
+                                                   #percent_max_threshold=0.00,
 
+                                                   experiment="GAP14")
 
-wt_possible_origins = find_timeseries_origins(wt_ccm_wl,
-                                              start=18, stop=48,
-                                              interval_col="timepoint",
-                                              min_interval = 2,
-                                              log_abund_detection_thresh=-2,
-                                              #percent_max_threshold=0.00,
-                                              require_presence_at_all_timepoints=TRUE,
-                                              experiment="GAP14")
-
-
-selected_origins = select_timeseries_origins(wt_possible_origins, "max-score-dist-ratio-origin")
-plot_origins(wt_ccm_wl, selected_origins, edge_size=0.25) + facet_wrap(~destination)
-plot_origins(wt_ccm_wl, selected_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, paths_to_origins, edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, paths_to_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
 
 #wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
-hooke:::plot_path(wt_ccm_wl, path_df = selected_origins, edge_size=0.25)
+hooke:::plot_path(wt_ccm_wl, path_df = paths_to_origins, edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, selected_origins %>% select(origin, destination=cell_group, from, to), color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+plot_state_transition_graph(wt_ccm_wl, paths_to_origins %>% select(origin, destination=cell_group, from, to), color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 
 # -----------------------------------------------------------------------------
 
+
+#debug(compute_origin_stats)
+#compute_origin_stats(wt_ccm_wl, tp_pred_df, ext_ct_df)
+
+
+# extant_cell_type_df = get_extant_cell_types(wt_ccm_wl,
+#                                             18,
+#                                             22,
+#                                             interval_col="timepoint",
+#                                             #percent_max_threshold=percent_max_threshold,
+#                                             #log_abund_detection_thresh=log_abund_detection_thresh,
+#                                             experiment="GAP14")
+# timeseries_pathfinding_graph = init_pathfinding_graph(wt_ccm_wl, extant_cell_type_df)
+
+
+#debug(find_timeseries_origins_v2)
+# wt_possible_origins = find_timeseries_origins_v2(wt_ccm_wl,
+#                                                  extant_cell_type_df,
+#                                                  timeseries_pathfinding_graph,
+#                                                  start=18, stop=22,
+#                                                  interval_col="timepoint",
+#                                                  min_interval = 2,
+#                                                  log_abund_detection_thresh=-2,
+#                                                  #percent_max_threshold=0.00,
+#                                                  require_presence_at_all_timepoints=TRUE,
+#                                                  experiment="GAP14")
+
+
+paths_to_origins = assemble_timeseries_transitions(wt_ccm_wl,
+                                                   start=18, stop=48,
+                                                   interval_col="timepoint",
+                                                   min_interval = 2,
+                                                   log_abund_detection_thresh=-2,
+                                                   #percent_max_threshold=0.00,
+                                                   experiment="GAP14")
+
+#selected_origins = select_timeseries_origins(wt_possible_origins, "max-score-dist-ratio-origin")
+plot_origins(wt_ccm_wl, paths_to_origins, edge_size=0.25) + facet_wrap(~destination)
+plot_origins(wt_ccm_wl, paths_to_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
+
+# -----------------------------------------------------------------------------
+
+
+ext_ct_df  = get_extant_cell_types(wt_ccm_wl,
+                                   start=18,
+                                   stop=48,
+                                   interval_col="timepoint",
+                                   #percent_max_threshold=0,
+                                   log_abund_detection_thresh=-2,
+                                   experiment="GAP14")
+
+pf_gr = init_pathfinding_graph(wt_ccm_wl, ext_ct_df)
+
+tp_pred_df = estimate_abundances_over_interval(wt_ccm_wl, 18, 24, interval_col="timepoint", experiment="GAP14")
+
+reduced_model_pcors_between_cell_groups = model(wt_ccm_wl, "reduced")$latent_network(type = "partial_cor") %>% as.matrix() %>% as.data.frame.table(responseName = "reduced_pcor")
+full_model_pcors_between_cell_groups = model(wt_ccm_wl, "full")$latent_network(type = "partial_cor") %>% as.matrix() %>% as.data.frame.table(responseName = "full_pcor")
+
+geodesic_distances_between_cell_groups = igraph::distances(pf_gr)  %>% as.data.frame.table(responseName = "geodesic_dist")
+
+cell_group_centroids = centroids(wt_ccm_wl@ccs)
+euclidean_distances_between_cell_groups = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", diag = T)) %>% as.data.frame.table(responseName = "euclidean_dist")
+
+
+pcor_dist_df = left_join(geodesic_distances_between_cell_groups, euclidean_distances_between_cell_groups)
+pcor_dist_df = left_join(pcor_dist_df, reduced_model_pcors_between_cell_groups)
+pcor_dist_df = left_join(pcor_dist_df, full_model_pcors_between_cell_groups)
+
+pcor_dist_df = pcor_dist_df %>% as_tibble()
+pcor_dist_df = pcor_dist_df %>% dplyr::rename(from=Var1, to=Var2) %>% mutate(from = as.character(from),
+                                                                             to = as.character(to))
+pcor_dist_df = pcor_dist_df %>% filter(from != to)
+
+pcor_dist_df = pcor_dist_df %>% filter(is.finite(geodesic_dist))
+pcor_dist_df = pcor_dist_df %>% filter(reduced_pcor != 0)
+#pcor_dist_df = pcor_dist_df %>% filter(full_pcor != 0)
+
+
+pcor_dist_df = pcor_dist_df %>% tidyr::nest(data=-from)
+
+pcor_dist_models = pcor_dist_df %>%
+  mutate(dist_model = purrr::map(data, ~ lm(reduced_pcor ~ geodesic_dist, data=.x))) %>%
+  mutate(model_summary = purrr::map(dist_model, broom::tidy)) #%>%
+  # mutate(dist_model_resids = purrr::map2(
+  #   .f=function(model_obj, input_df){
+  #     r = residuals(model_obj)
+  #     return(data.frame(dest_group=names(r), dist_model_resids=r))
+  #   },
+  #   .x=dist_model,
+  #   .y=data))
+
+# origin_stats = pcor_dist_models %>%
+#   select(from, dist_model_resids) %>%
+#   #tidyr::unnest(data) %>%
+#   tidyr::unnest(dist_model_resids) %>%
+#   #dplyr::select(from, geodesic_dist, reduced_pcor, full_pcor, dist_model_resids) %>% distinct() %>%
+#   dplyr::rename(to=dest_group) %>% ungroup() %>%
+#   left_join(geodesic_distances_between_cell_groups, by=c("from"="Var1", "to"="Var2")) %>%
+#   filter(from != to)
+
+valid_origins = pcor_dist_models %>% tidyr::unnest(model_summary) %>% filter(term == "geodesic_dist" & estimate < 0) %>% pull(from)
+
+origin_stats = pcor_dist_models %>%
+  select(from, data) %>%
+  tidyr::unnest(data) %>%
+  #tidyr::unnest(dist_model_resids) %>%
+  #dplyr::select(from, geodesic_dist, reduced_pcor, full_pcor, dist_model_resids) %>% distinct() %>%
+  #dplyr::rename(to=dest_group) %>% ungroup() %>%
+  ungroup()
+
+#selected_origins = origin_stats %>% filter(from %in% valid_origins) %>% group_by(to) %>% arrange(dist_model_resids) #slice_min(dist_model_resids, n=1)
+
+#selected_origins = origin_stats %>% filter(from %in% valid_origins) %>% group_by(to) %>% arrange(dist_model_resids) %>% slice_min(dist_model_resids, n=1)
+
+selected_origins = origin_stats %>% filter(from %in% valid_origins & is.finite(geodesic_dist)) %>% group_by(to) %>% arrange(geodesic_dist) %>% slice_min(geodesic_dist, n=1)
+
+
+pcor_dist_models %>%
+  select(from, data) %>%
+  tidyr::unnest(data) %>%
+  #tidyr::unnest(dist_model_resids) %>%
+  #dplyr::select(from, geodesic_dist, reduced_pcor, full_pcor
+  ggplot(aes(geodesic_dist, reduced_pcor, label=to)) + geom_text() + facet_wrap(~from, scale="free_y") + geom_smooth(method="lm")
+
+
+pln_edges = hooke:::collect_pln_graph_edges(wt_ccm_wl, compare_abundances(wt_ccm_wl,
+                                                                    tp_pred_df %>% filter(timepoint == 18),
+                                                                    tp_pred_df %>% filter(timepoint == 24)),
+                                            model_for_pcors="full") %>% as_tibble()
+
+pln_edges = pln_edges %>% mutate(sp = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+                                                  .x = from, .y = to,
+                                                  pf_gr))
+pln_edges = pln_edges %>% dplyr::select(origin=from, destination=to,pcor, sp) %>% tidyr::unnest(sp)
+pln_edges = pln_edges %>% group_by(destination, origin) %>% mutate(path_geodesic_umap_dist = sum(weight)) %>% ungroup()
+pln_edges %>% select(origin, destination, pcor, path_geodesic_umap_dist) %>% distinct  %>% ggplot(aes(path_geodesic_umap_dist, pcor)) + geom_smooth(method="lm") + geom_point() + facet_wrap(~origin, scale="free_y")
+
+pln_edges %>% select(origin, destination, pcor, path_geodesic_umap_dist) %>% distinct  %>% ggplot(aes(path_geodesic_umap_dist, pcor)) +
+  geom_smooth(aes(color=origin), method="lm", se=F) +
+  geom_point()
+# -------------------------------------
 
 plot_state_transition_graph(wt_ccm_01, results_wl$paths, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="segment")
 plot_state_transition_graph(wt_ccm_wl_01, results_wl_01$paths, color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="segment")
