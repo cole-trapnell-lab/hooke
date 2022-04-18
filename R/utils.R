@@ -171,26 +171,24 @@ switch_umap_space <- function(cds, sub_space = TRUE) {
 #'
 plot_sub_contrast <- function (ccm,
                                cond_b_vs_a_tbl,
-                               cell_group = "cell_type_broad",
                                facet_group = "major_group",
                                select_group = NULL,
                                log_abundance_thresh = -5,
-                               scale_shifts_by=c("receiver", "sender", "none"),
                                edge_size=2,
                                cell_size=1,
                                q_value_thresh = 1.0,
                                group_label_size=2,
+                               label_cell_groups = list(),
                                plot_labels = c("significant", "all", "none"),
+                               plot_edges = c("all", "directed", "undirected", "none"),
                                fc_limits=c(-3,3),
-                               sender_cell_groups=NULL,
-                               receiver_cell_groups=NULL,
-                               plot_edges = TRUE,
-                               sub_space = T) {
+                               sub_space = T,
+                               ...) {
 
 
   ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, sub_space = sub_space)
 
-  colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[cell_group]]
+  colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
 
   cg_to_mg = as.data.frame(colData(ccm@ccs@cds)) %>%
@@ -212,16 +210,15 @@ plot_sub_contrast <- function (ccm,
 
   plot_contrast(ccm,
                 cond_b_vs_a_tbl,
-                scale_shifts_by=scale_shifts_by,
                 edge_size=edge_size,
                 cell_size=cell_size,
                 q_value_thresh = q_value_thresh,
                 group_label_size=group_label_size,
                 plot_labels = plot_labels,
                 fc_limits=fc_limits,
-                sender_cell_groups=sender_cell_groups,
-                receiver_cell_groups=receiver_cell_groups,
-                plot_edges = plot_edges) +
+                label_cell_groups = label_cell_groups,
+                plot_edges = plot_edges,
+                ...) +
     facet_wrap(~facet_group)
 
 }

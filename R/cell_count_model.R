@@ -18,7 +18,8 @@ setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit
 #' @exportClass cell_count_set
 setClass("cell_count_set",
          contains = "cell_data_set",
-         slots = c(cds = "cell_data_set")
+         slots = c(cds = "cell_data_set",
+                   info = "SimpleList")
 )
 
 
@@ -73,6 +74,21 @@ new_cell_count_set <- function(cds,
                                cell_metadata = NULL,
                                lower_threshold = NULL,
                                upper_threshold = NULL) {
+
+  # check if anything contains NAs in it
+  # if so drop them
+  num_sample_group_NAs = sum(is.na(colData(cds)[[sample_group]]))
+  if (num_sample_group_NAs != 0) {
+    message(paste(num_sample_group_NAs, "NAs found in sample group. Dropping NAs."))
+    cds = cds[, !is.na(colData(cds)[[sample_group]])]
+  }
+
+  num_cell_group_NAs = sum(is.na(colData(cds)[[cell_group]]))
+  if (num_cell_group_NAs != 0) {
+    message(paste(num_cell_group_NAs, "NAs found in cell group. Dropping NAs."))
+    cds = cds[, !is.na(colData(cds)[[cell_group]])]
+  }
+
 
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
@@ -131,7 +147,9 @@ new_cell_count_set <- function(cds,
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
                                            gene_metadata=cell_metadata),
-               cds=cds)
+               cds=cds,
+               info=SimpleList(sample_group=sample_group,
+                               cell_group=cell_group))
 
 
   # assertthat::assert_that(class(expression_data) == "matrix" ||
