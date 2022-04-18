@@ -20,8 +20,12 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = TRUE,
-                          model_for_pcors="reduced"){
+                          plot_edges = c("all", "directed", "undirected", "none"),
+                          label_cell_groups = list(),
+                          repel_labels = TRUE,
+                          model_for_pcors="reduced",
+                          x=1,
+                          y=2){
 
   umap_centers = centroids(ccm@ccs)
 
@@ -82,8 +86,8 @@ plot_contrast <- function(ccm,
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
   plot_df$cell = row.names(plot_df)
 
-  plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,1]
-  plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
+  plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,y]
 
   plot_df = dplyr::left_join(plot_df,
                              cond_b_vs_a_tbl,
@@ -136,60 +140,85 @@ plot_contrast <- function(ccm,
     #theme(legend.position = "none") +
     monocle3:::monocle_theme_opts()
 
-  if (plot_edges) {
+  # force to be empty
+  if (plot_edges == "directed") {
+    undirected_edge_df = undirected_edge_df %>% dplyr::filter(!edge_type %in% c("undirected"))
+  } else if (plot_edges == "undirected") {
+    directed_edge_df = directed_edge_df %>% dplyr::filter(edge_type %in% c("undirected"))
+  }
+
+  if (plot_edges != "none") {
     gp = gp  +
       geom_segment(data = undirected_edge_df,
-                   aes(x = to_umap_1,
-                       y = to_umap_2,
-                       xend=from_umap_1,
-                       yend = from_umap_2,
-                       size=edge_size * scaled_weight),
-                   #size=edge_size / 4,
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend = get(paste0("from_umap_", x)),
+                       yend = get(paste0("from_umap_", y)),
+                       size = edge_size * scaled_weight),
                    color="lightgray") +
       geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                   aes(x = to_umap_1,
-                       y = to_umap_2,
-                       xend=from_umap_1,
-                       yend = from_umap_2,
-                       size=edge_size * scaled_weight),
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend = get(paste0("from_umap_", x)),
+                       yend = get(paste0("from_umap_", y)),
+                       size = edge_size * scaled_weight),
                    color="black") +
       geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_to_from"),
-                   aes(x = to_umap_1,
-                       y = to_umap_2,
-                       xend=(to_umap_1+from_umap_1)/2,
-                       yend = (to_umap_2+from_umap_2)/2,
+                   aes(x = get(paste0("to_umap_", x)),
+                       y = get(paste0("to_umap_", y)),
+                       xend=(get(paste0("to_umap_", x))+get(paste0("from_umap_", x)))/2,
+                       yend = (get(paste0("to_umap_", y))+get(paste0("from_umap_", x)))/2,
                        size=edge_size * scaled_weight),
                    color="black",
                    linejoin='mitre',
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
       geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                   aes(x = from_umap_1,
-                       y = from_umap_2,
-                       xend=to_umap_1,
-                       yend = to_umap_2,
+                   aes(x = get(paste0("from_umap_", x)),
+                       y = get(paste0("from_umap_", y)),
+                       xend = get(paste0("to_umap_", x)),
+                       yend = get(paste0("to_umap_", y)),
                        size=edge_size * scaled_weight),
                    color="black") +
       geom_segment(data = directed_edge_df %>% dplyr::filter(edge_type == "directed_from_to"),
-                   aes(x = from_umap_1,
-                       y = from_umap_2,
-                       xend=(from_umap_1+to_umap_1)/2,
-                       yend = (from_umap_2+to_umap_2)/2,
+                   aes(x = get(paste0("from_umap_", x)),
+                       y = get(paste0("from_umap_", y)),
+                       xend=(get(paste0("from_umap_", x))+get(paste0("to_umap_", x)))/2,
+                       yend = (get(paste0("from_umap_", y))+get(paste0("to_umap_", y)))/2,
                        size=edge_size * scaled_weight),
                    color="black",
                    linejoin='mitre',
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
       scale_size_identity()
+
   }
 
   if (plot_labels != "none") {
     label_df = umap_centers_delta_abund
+
     if (plot_labels == "significant")
       label_df = label_df %>% filter(delta_log_abund != 0)
-    gp <- gp + ggrepel::geom_label_repel(data = label_df,
-                                         mapping = aes(umap_1, umap_2, label=cell_group),
-                                         size=I(group_label_size),
-                                         fill = "white")
+
+    if (length(label_cell_groups) > 0)
+      label_df = label_df %>% filter(cell_group %in% label_cell_groups)
+
+    if (repel_labels) {
+      gp = gp + ggrepel::geom_label_repel(data = label_df,
+                                          mapping = aes(get(paste0("umap_", x)),
+                                                        get(paste0("umap_", y)),
+                                                        label=cell_group),
+                                          size=I(group_label_size),
+                                          fill = "white")
+    } else {
+
+      gp <- gp + geom_text(data = label_df,
+                           mapping = aes(get(paste0("umap_", x)),
+                                         get(paste0("umap_", y)),
+                                         label=cell_group),
+                           size=I(group_label_size))
+    }
   }
+
+  gp = gp + xlab(paste0("UMAP",x)) + ylab(paste0("UMAP",y))
   return(gp)
 }
 
@@ -248,7 +277,7 @@ my_plot_cells <- function(data,
                           plot_labels = TRUE,
                           plot_label_switch = NULL,
                           group_label_size=2,
-                          repel_labels = FALSE,
+                          repel_labels = TRUE,
                           lab_title = NULL,
                           x = 1,
                           y = 2) {
