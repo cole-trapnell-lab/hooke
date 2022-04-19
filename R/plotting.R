@@ -7,11 +7,9 @@
 #' @import ggplot2
 #' @import dplyr
 plot_contrast <- function(ccm,
-                          #umap_centers,
                           cond_b_vs_a_tbl,
                           log_abundance_thresh = -5,
                           scale_shifts_by=c("receiver", "sender", "none"),
-                          #cell_group="cluster",
                           edge_size=2,
                           cell_size=1,
                           q_value_thresh = 1.0,
@@ -24,8 +22,29 @@ plot_contrast <- function(ccm,
                           label_cell_groups = list(),
                           repel_labels = TRUE,
                           model_for_pcors="reduced",
+                          sub_cds = NULL,
                           x=1,
                           y=2){
+
+
+  if (!is.null(sub_cds)) {
+
+    colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
+    # get cell groups in sub
+    sub_cell_group = colData(sub_cds)[[ccm@ccs@info$cell_group]] %>% unique()
+
+    # subset to select group
+    ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["cell_group"]] %in% sub_cell_group]
+    ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
+
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(cell_group %in% sub_cell_group)
+
+    # switch coords to the new ones
+    sub_umap = reducedDims(sub_cds)[["UMAP"]]
+    reducedDims(ccm@ccs@cds)[["UMAP"]] = sub_umap[colnames(ccm@ccs@cds),]
+
+  }
+
 
   umap_centers = centroids(ccm@ccs)
 
