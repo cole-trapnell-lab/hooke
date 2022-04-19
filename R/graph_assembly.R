@@ -179,7 +179,7 @@ get_extant_cell_types <- function(ccm,
     )
   }
 
-  undebug(longest_present_interval)
+  # undebug(longest_present_interval)
   nested_timepoints_df = timepoint_pred_df %>%
     select(cell_group, !!sym(interval_col), present_flag) %>%
     group_by(cell_group)
