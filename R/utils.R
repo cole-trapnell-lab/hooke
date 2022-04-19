@@ -255,4 +255,26 @@ run_projection <- function(query_cds,
   return(query_cds)
 }
 
+convert_cluster_to_cell_group = function(ccs, cell_group) {
 
+  colData(ccs@cds)[["cell_group"]] = colData(ccs@cds)[[cell_group]]
+
+  cluster_to_cellgroup = colData(ccs@cds) %>%
+    as.data.frame() %>%
+    group_by(cluster, cell_group) %>%
+    tally() %>%
+    top_n(1)
+
+  return(cluster_to_cellgroup)
+
+}
+
+convert_to_col = function(ccs, df, colname) {
+
+  df %>%
+    left_join(convert_cluster_to_cell_group(ccs, colname),
+              by = c("cell_group" = "cluster")) %>%
+    select(-cell_group, -n) %>%
+    rename("cell_group" = cell_group.y)
+
+}

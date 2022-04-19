@@ -294,7 +294,7 @@ my_plot_cells <- function(data,
                           q_value_thresh = 1.0,
                           fc_limits = c(-3,3),
                           plot_labels = TRUE,
-                          plot_label_switch = NULL,
+                          label_cells_by = NULL,
                           group_label_size=2,
                           repel_labels = TRUE,
                           lab_title = NULL,
@@ -463,8 +463,16 @@ my_plot_cells <- function(data,
 
     label_df = centroids(ccs)
 
-    if (is.null(plot_label_switch) == FALSE)
-      label_df = convert_to_col(ccs, label_df, plot_label_switch)
+    # if the ccs is grouped on something else, by default label it like this
+    # if it is currently not defined
+    if (color_cells_by != wt_ccs@info$cell_group & is.null(label_cells_by))
+      label_cells_by = color_cells_by
+
+    if (is.null(label_cells_by) == FALSE) {
+
+      label_df = convert_to_col(ccs, label_df, label_cells_by)
+
+    }
 
 
     if (repel_labels) {
