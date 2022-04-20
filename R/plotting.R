@@ -516,10 +516,12 @@ plot_path <- function(data,
                       path_color = "black",
                       color_cells_by = "cluster",
                       color_path_by = NULL,
-                      cond_b_vs_a_tbl = NULL) {
+                      cond_b_vs_a_tbl = NULL,
+                      x=1,
+                      y=2) {
 
 
-  gp = my_plot_cells(data, color_cells_by = color_cells_by, cond_b_vs_a_tbl = cond_b_vs_a_tbl)
+  gp = my_plot_cells(data, color_cells_by = color_cells_by, cond_b_vs_a_tbl = cond_b_vs_a_tbl,x=x,y=y)
 
   if (class(data) == "cell_count_set") {
     umap_centers = centroids(data)
@@ -534,17 +536,17 @@ plot_path <- function(data,
     gp = gp +
       ggnewscale::new_scale_color() +
       geom_segment(data = path_df,
-                           aes(x = umap_to_1,
-                               y = umap_to_2,
-                               xend=umap_from_1,
-                               yend = umap_from_2,
-                               color = get(color_path_by)),
-                           size=edge_size) +
+                   aes(x = get(paste0("umap_to_", x)),
+                       y = get(paste0("umap_to_", y)),
+                       xend=get(paste0("from_to_", x)),
+                       yend = get(paste0("from_to_", y)),
+                       color = get(color_path_by)),
+                   size=edge_size ) +
       geom_segment(data = path_df,
                    aes(x = umap_from_1,
                        y = umap_from_2,
-                       xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2,
+                       xend = (get(paste0("umap_to_", x))+get(paste0("umap_from_", x)))/2,
+                       yend = (get(paste0("umap_to_", y))+get(paste0("umap_from_", y)))/2,
                        color = get(color_path_by)),
                    size=edge_size,
                    linejoin='mitre',
@@ -558,19 +560,19 @@ plot_path <- function(data,
 
   } else {
     gp = gp + geom_segment(data = path_df,
-                           aes(x = umap_to_1,
-                               y = umap_to_2,
-                               xend=umap_from_1,
-                               yend = umap_from_2),
+                           aes(x = get(paste0("umap_to_", x)),
+                               y = get(paste0("umap_to_", y)),
+                               xend=get(paste0("umap_from_", x)),
+                               yend = get(paste0("umap_from_", y))),
                            color = path_color,
-                           size = edge_size ) +
+                           size = edge_size) +
       geom_segment(data = path_df,
-                   aes(x = umap_from_1,
-                       y = umap_from_2,
-                       xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2),
-                   size= edge_size,
-                   color=path_color,
+                   aes(x = get(paste0("umap_from_", x)),
+                       y = get(paste0("umap_from_", y)),
+                       xend = (get(paste0("umap_to_", x)) + get(paste0("umap_from_", x)))/2,
+                       yend = (get(paste0("umap_to_", y)) + get(paste0("umap_from_", y)))/2),
+                   size = edge_size,
+                   color = path_color,
                    linejoin='mitre',
                    arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
   }
