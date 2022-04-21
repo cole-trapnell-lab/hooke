@@ -284,7 +284,7 @@ get_colors <- function(num_colors, type = "rainbow") {
 
 
 my_plot_cells <- function(data,
-                          color_cells_by = "cluster",
+                          color_cells_by = NULL,
                           cell_size=1,
                           legend_position="none",
                           coefficients = NULL,
@@ -309,8 +309,10 @@ my_plot_cells <- function(data,
   } else if (class(data) == "cell_data_set") {
     cds = data
     plot_df = as.data.frame(colData(cds))
-    plot_df$cell_group = plot_df$cluster
-    # plot_df = data@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+    if (is.null(color_cells_by)) {
+      color_cells_by = "cluster"
+    }
+    plot_df$cell_group = plot_df[[color_cells_by]]
   } else if (class(data) == "cell_count_model") {
     ccs = data@ccs
     cds = data@ccs@cds
@@ -320,6 +322,9 @@ my_plot_cells <- function(data,
     print("some error message")
   }
 
+  if (is.null(color_cells_by)) {
+    color_cells_by = ccs@info$cell_group
+  }
 
   plot_df$cell = row.names(plot_df)
   plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
@@ -465,7 +470,7 @@ my_plot_cells <- function(data,
 
     # if the ccs is grouped on something else, by default label it like this
     # if it is currently not defined
-    if (color_cells_by != wt_ccs@info$cell_group & is.null(label_cells_by))
+    if (color_cells_by != ccs@info$cell_group & is.null(label_cells_by))
       label_cells_by = color_cells_by
 
     if (is.null(label_cells_by) == FALSE) {
@@ -512,16 +517,17 @@ my_plot_cells <- function(data,
 #' @param cond_b_vs_a_tbl
 plot_path <- function(data,
                       path_df = path_df,
-                      edge_size=2,
+                      edge_size = 1,
                       path_color = "black",
-                      color_cells_by = "cluster",
+                      color_cells_by = NULL,
                       color_path_by = NULL,
                       cond_b_vs_a_tbl = NULL,
-                      x=1,
-                      y=2) {
+                      directed = TRUE,
+                      x = 1,
+                      y = 2,
+                      ...) {
 
-
-  gp = my_plot_cells(data, color_cells_by = color_cells_by, cond_b_vs_a_tbl = cond_b_vs_a_tbl,x=x,y=y)
+  gp = my_plot_cells(data, color_cells_by = color_cells_by, cond_b_vs_a_tbl = cond_b_vs_a_tbl, x=x, y=y, ...)
 
   if (class(data) == "cell_count_set") {
     umap_centers = centroids(data)
@@ -531,51 +537,84 @@ plot_path <- function(data,
 
   path_df = add_umap_coords(path_df, umap_centers)
 
-  if (is.null(color_path_by) == FALSE) {
+  if (directed) {
+    if (is.null(color_path_by) == FALSE) {
 
-    gp = gp +
-      ggnewscale::new_scale_color() +
-      geom_segment(data = path_df,
-                   aes(x = get(paste0("umap_to_", x)),
-                       y = get(paste0("umap_to_", y)),
-                       xend=get(paste0("from_to_", x)),
-                       yend = get(paste0("from_to_", y)),
-                       color = get(color_path_by)),
-                   size=edge_size ) +
-      geom_segment(data = path_df,
-                   aes(x = umap_from_1,
-                       y = umap_from_2,
-                       xend = (get(paste0("umap_to_", x))+get(paste0("umap_from_", x)))/2,
-                       yend = (get(paste0("umap_to_", y))+get(paste0("umap_from_", y)))/2,
-                       color = get(color_path_by)),
-                   size=edge_size,
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-      scale_color_gradient2(
-        low = "#122985",
-        mid = "white",
-        high = "red4",
-        na.value = "white"
-      )
+      gp = gp +
+        ggnewscale::new_scale_color() +
+        geom_segment(data = path_df,
+                     aes(x = get(paste0("umap_to_", x)),
+                         y = get(paste0("umap_to_", y)),
+                         xend=get(paste0("from_to_", x)),
+                         yend = get(paste0("from_to_", y)),
+                         color = get(color_path_by)),
+                     size=edge_size ) +
+        geom_segment(data = path_df,
+                     aes(x = umap_from_1,
+                         y = umap_from_2,
+                         xend = (get(paste0("umap_to_", x))+get(paste0("umap_from_", x)))/2,
+                         yend = (get(paste0("umap_to_", y))+get(paste0("umap_from_", y)))/2,
+                         color = get(color_path_by)),
+                     size=edge_size,
+                     linejoin='mitre',
+                     arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
+        scale_color_gradient2(
+          low = "#122985",
+          mid = "white",
+          high = "red4",
+          na.value = "white"
+        )
 
+    } else {
+      gp = gp + geom_segment(data = path_df,
+                             aes(x = get(paste0("umap_to_", x)),
+                                 y = get(paste0("umap_to_", y)),
+                                 xend=get(paste0("umap_from_", x)),
+                                 yend = get(paste0("umap_from_", y))),
+                             color = path_color,
+                             size = edge_size) +
+        geom_segment(data = path_df,
+                     aes(x = get(paste0("umap_from_", x)),
+                         y = get(paste0("umap_from_", y)),
+                         xend = (get(paste0("umap_to_", x)) + get(paste0("umap_from_", x)))/2,
+                         yend = (get(paste0("umap_to_", y)) + get(paste0("umap_from_", y)))/2),
+                     size = edge_size,
+                     color = path_color,
+                     linejoin='mitre',
+                     arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
+    }
   } else {
-    gp = gp + geom_segment(data = path_df,
-                           aes(x = get(paste0("umap_to_", x)),
-                               y = get(paste0("umap_to_", y)),
-                               xend=get(paste0("umap_from_", x)),
-                               yend = get(paste0("umap_from_", y))),
-                           color = path_color,
-                           size = edge_size) +
-      geom_segment(data = path_df,
-                   aes(x = get(paste0("umap_from_", x)),
-                       y = get(paste0("umap_from_", y)),
-                       xend = (get(paste0("umap_to_", x)) + get(paste0("umap_from_", x)))/2,
-                       yend = (get(paste0("umap_to_", y)) + get(paste0("umap_from_", y)))/2),
-                   size = edge_size,
-                   color = path_color,
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
+
+    if (is.null(color_path_by) == FALSE) {
+      gp = gp +
+        ggnewscale::new_scale_color() +
+        geom_segment(data = path_df,
+                     aes(x = get(paste0("umap_to_", x)),
+                         y = get(paste0("umap_to_", y)),
+                         xend=get(paste0("from_to_", x)),
+                         yend = get(paste0("from_to_", y)),
+                         color = get(color_path_by)),
+                     size=edge_size) +
+        scale_color_gradient2(
+          low = "#122985",
+          mid = "white",
+          high = "red4",
+          na.value = "white"
+        )
+
+    } else {
+      gp = gp + geom_segment(data = path_df,
+                             aes(x = get(paste0("umap_to_", x)),
+                                 y = get(paste0("umap_to_", y)),
+                                 xend = get(paste0("umap_from_", x)),
+                                 yend = get(paste0("umap_from_", y))),
+                             color = path_color,
+                             size = edge_size)
+    }
+
+
   }
+
 
   return(gp)
 
