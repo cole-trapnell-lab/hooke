@@ -97,6 +97,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   return(pred_out_tbl)
 }
 
+
+# To do : need better error message for when you are missing a column that needs to be specified for the model
 #' Predict cell type abundances given a PLN model over a range of time or other interval
 #'
 #' @importFrom tibble tibble

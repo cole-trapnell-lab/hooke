@@ -447,6 +447,24 @@ my_plot_cells <- function(data,
   } else if (color_cells_by == "none") {
     # do nothing
   }
+  else if (is.numeric(plot_df[[color_cells_by]])) {
+
+    # num_colors = unique(plot_df[[color_cells_by]]) %>% sort() %>% length()
+    # full_spectrum_timepoint = get_colors(num_colors, type="rainbow")
+    # names(full_spectrum_timepoint) = unique(plot_df$timepoint) %>% sort()
+
+    gp = gp  +
+      geom_point(
+        data = plot_df,
+        aes(umap2D_1, umap2D_2,
+            color = color_cells_by),
+        size = cell_size,
+        stroke = 0
+      ) +
+      # scale_color_gradientn(colors = full_spectrum_timepoint)+
+      viridis::scale_color_viridis(option = "C")
+
+  }
   else {
     num_colors = unique(plot_df[[color_cells_by]]) %>% sort() %>% length()
     full_spectrum = get_colors(num_colors, "vibrant")
@@ -527,7 +545,7 @@ plot_path <- function(data,
                       y = 2,
                       ...) {
 
-  gp = my_plot_cells(data, color_cells_by = color_cells_by, cond_b_vs_a_tbl = cond_b_vs_a_tbl, x=x, y=y, ...)
+  gp = my_plot_cells(data,  x=x, y=y, ...)
 
   if (class(data) == "cell_count_set") {
     umap_centers = centroids(data)
