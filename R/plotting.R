@@ -23,6 +23,7 @@ plot_contrast <- function(ccm,
                           repel_labels = TRUE,
                           model_for_pcors="reduced",
                           sub_cds = NULL,
+                          alpha = 1.0,
                           x=1,
                           y=2){
 
@@ -146,6 +147,7 @@ plot_contrast <- function(ccm,
                 abs(delta_log_abund)),
       aes(umap2D_1, umap2D_2, color = delta_log_abund),
       size = cell_size,
+      alpha = alpha,
       stroke = 0
     ) +
     scale_color_gradient2(
@@ -298,6 +300,7 @@ my_plot_cells <- function(data,
                           group_label_size=2,
                           repel_labels = TRUE,
                           lab_title = NULL,
+                          alpha = 1.0,
                           x = 1,
                           y = 2) {
 
@@ -395,6 +398,7 @@ my_plot_cells <- function(data,
         aes(umap2D_1, umap2D_2,
             color = as.character(timepoint)),
         size = cell_size,
+        alpha = alpha,
         stroke = 0
       ) +
       scale_color_manual(values = full_spectrum_timepoint)
@@ -406,6 +410,7 @@ my_plot_cells <- function(data,
         aes(umap2D_1, umap2D_2,
             color = color_cells_by),
         size = cell_size,
+        alpha = alpha,
         stroke = 0
       ) +
       scale_color_gradient2(
@@ -424,6 +429,7 @@ my_plot_cells <- function(data,
         aes(umap2D_1, umap2D_2,
             color = coefficients),
         size = cell_size,
+        alpha = alpha,
         stroke = 0) +
       viridis::scale_color_viridis(option = color_cells_by)
 
@@ -435,6 +441,7 @@ my_plot_cells <- function(data,
                   abs(delta_log_abund)),
         aes(umap2D_1, umap2D_2, color = delta_log_abund),
         size = cell_size,
+        alpha = alpha,
         stroke = 0
       ) +
       scale_color_gradient2(
@@ -459,6 +466,7 @@ my_plot_cells <- function(data,
         aes(umap2D_1, umap2D_2,
             color = color_cells_by),
         size = cell_size,
+        alpha = alpha,
         stroke = 0
       ) +
       # scale_color_gradientn(colors = full_spectrum_timepoint)+
@@ -475,6 +483,7 @@ my_plot_cells <- function(data,
       aes(umap2D_1, umap2D_2,
           color = color_cells_by),
       size = cell_size,
+      alpha = alpha,
       stroke = 0
     ) +
       scale_color_manual(values = full_spectrum)
