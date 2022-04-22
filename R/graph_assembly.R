@@ -152,16 +152,27 @@ get_extant_cell_types <- function(ccm,
                                   interval_step = 2,
                                   log_abund_detection_thresh = -5,
                                   percent_max_threshold=0.0,
+                                  pct_dynamic_range = 0.25,
+                                  min_cell_range = 2,
                                   ...){
 
   timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_col=interval_col, interval_step=interval_step, ...)
+
+  if (is.null(log_abund_detection_thresh)) {
+    abund_range = range(timepoint_pred_df$log_abund)
+    dynamic_range = abund_range[2]-abund_range[1]
+    log_abund_detection_thresh = abund_range[1] + pct_dynamic_range*dynamic_range
+  }
+
   timepoint_pred_df = timepoint_pred_df %>%
     group_by(cell_group) %>%
     mutate(max_abundance = max(exp(log_abund)),
            percent_max_abund = exp(log_abund) / max_abundance,
-           above_log_abund_thresh = log_abund - 2*log_abund_se > log_abund_detection_thresh,
+           cell_type_range = max(log_abund)-(min(log_abund)),
+           above_log_abund_thresh = (log_abund - 2*log_abund_se > log_abund_detection_thresh) | cell_type_range < min_cell_range,
            above_percent_max_thresh = percent_max_abund > percent_max_threshold,
-           present_flag = ifelse(above_log_abund_thresh & above_percent_max_thresh, TRUE, NA)) %>% ungroup()
+           present_flag = ifelse(above_log_abund_thresh & above_percent_max_thresh, TRUE, NA)) %>%
+    ungroup()
 
   longest_present_interval <- function(tps_df){
     tryCatch(
@@ -191,7 +202,6 @@ get_extant_cell_types <- function(ccm,
   #                            .y=present_flag))
 
   timepoint_pred_df = left_join(timepoint_pred_df, nested_timepoints_df)
-
 
   timepoint_pred_df = timepoint_pred_df %>%
     mutate(present_above_thresh = !!sym(interval_col) >= longest_contig_start & !!sym(interval_col) <= longest_contig_end,
