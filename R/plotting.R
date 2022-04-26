@@ -35,7 +35,8 @@ plot_contrast <- function(ccm,
     sub_cell_group = colData(sub_cds)[[ccm@ccs@info$cell_group]] %>% unique()
 
     # subset to select group
-    ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["cell_group"]] %in% sub_cell_group]
+    ccm@ccs@cds = ccm@ccs@cds[, colnames(sub_cds)]
+    # ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["cell_group"]] %in% sub_cell_group]
     ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
 
     cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(cell_group %in% sub_cell_group)
@@ -45,7 +46,6 @@ plot_contrast <- function(ccm,
     reducedDims(ccm@ccs@cds)[["UMAP"]] = sub_umap[colnames(ccm@ccs@cds),]
 
   }
-
 
   umap_centers = centroids(ccm@ccs)
 
@@ -744,7 +744,8 @@ plot_state_transition_graph <- function(ccm,
                                         unlabeled_groups = c("Unknown"),
                                         hide_unlinked_nodes=TRUE,
                                         label_font_size=6,
-                                        label_conn_linetype="dotted"){
+                                        label_conn_linetype="dotted",
+                                        legend_position = "none"){
 
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
@@ -868,7 +869,7 @@ plot_state_transition_graph <- function(ccm,
   p = p + scale_size_identity() +
     monocle3:::monocle_theme_opts() +
     ggnetwork::theme_blank() +
-    theme(legend.position="none")
+    theme(legend.position=legend_position)
   return(p)
 }
 
