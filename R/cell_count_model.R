@@ -90,6 +90,7 @@ new_cell_count_set <- function(cds,
   }
 
 
+
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
@@ -136,6 +137,11 @@ new_cell_count_set <- function(cds,
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
   }
 
+
+
+  # remove from cds
+  removed_cell_states = setdiff(cell_states, rownames(cell_counts_wide))
+
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
@@ -147,7 +153,7 @@ new_cell_count_set <- function(cds,
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
                                            gene_metadata=cell_metadata),
-               cds=cds,
+               cds=cds[, !colData(cds)[[cell_group]] %in% removed_cell_states],
                info=SimpleList(sample_group=sample_group,
                                cell_group=cell_group))
 
@@ -210,8 +216,11 @@ new_cell_count_set <- function(cds,
   # cds <- estimate_size_factors(cds)
   # cds
 
+
+
   ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
   row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(cds)
+  ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
 
   return (ccs)
 }
