@@ -300,6 +300,7 @@ my_plot_cells <- function(data,
                           group_label_size=2,
                           repel_labels = TRUE,
                           lab_title = NULL,
+                          color_values = NULL,
                           alpha = 1.0,
                           x = 1,
                           y = 2) {
@@ -422,6 +423,37 @@ my_plot_cells <- function(data,
       )
 
 
+  } else if (grepl("dose", color_cells_by)) {
+
+    # plot_df$color_cells_by
+
+
+    gp =  gp  +
+      # geom_point(
+      #   data = plot_df %>% filter(is.na(color_cells_by)),
+      #   aes(umap2D_1, umap2D_2),
+      #   color = "gray",
+      #   size = cell_size,
+      #   alpha = 0.2,
+      #   stroke = 0) +
+      geom_point(
+        data = plot_df %>% filter(!is.na(color_cells_by),
+                                  color_cells_by > 0),
+        aes(umap2D_1, umap2D_2,
+            color = log_dose),
+        size = cell_size,
+        alpha = alpha,
+        stroke = 0) +
+      # viridis::scale_color_viridis(option = "C")
+    scale_color_gradient2(
+      low = "#122985",
+      mid = "white",
+      high = "red4",
+      na.value = "white",
+      limits = fc_limits
+    )
+
+
   } else if (color_cells_by %in% c("viridis", "inferno", "C")) {
     gp = gp  +
       geom_point(
@@ -474,9 +506,12 @@ my_plot_cells <- function(data,
 
   }
   else {
-    num_colors = unique(plot_df[[color_cells_by]]) %>% sort() %>% length()
-    full_spectrum = get_colors(num_colors, "vibrant")
-    names(full_spectrum) = unique(plot_df[[color_cells_by]]) %>% sort()
+
+    if (is.null(color_values)) {
+      num_colors = unique(plot_df[[color_cells_by]]) %>% sort() %>% length()
+      color_values = get_colors(num_colors, "vibrant")
+      names(color_values) = unique(plot_df[[color_cells_by]]) %>% sort()
+    }
 
     gp = gp + geom_point(
       data = plot_df,
@@ -486,7 +521,7 @@ my_plot_cells <- function(data,
       alpha = alpha,
       stroke = 0
     ) +
-      scale_color_manual(values = full_spectrum)
+      scale_color_manual(values = color_values)
   }
 
   # add labels
@@ -546,7 +581,6 @@ plot_path <- function(data,
                       path_df = path_df,
                       edge_size = 1,
                       path_color = "black",
-                      color_cells_by = NULL,
                       color_path_by = NULL,
                       cond_b_vs_a_tbl = NULL,
                       directed = TRUE,
