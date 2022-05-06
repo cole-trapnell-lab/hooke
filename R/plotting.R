@@ -837,7 +837,7 @@ plot_state_transition_graph <- function(ccm,
   }else{
     node_metadata$label_nodes_by = node_metadata$id
   }
-  node_metadata = node_metadata %>% distinct() %>% as.data.frame
+  node_metadata = node_metadata %>% distinct() %>% as.data.frame(stringsAsFactor=FALSE)
   row.names(node_metadata) = node_metadata$id
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
@@ -850,21 +850,69 @@ plot_state_transition_graph <- function(ccm,
   if (is.null(layer_nodes_by) == FALSE) {
     layers=igraph::V(G)$layer_nodes_by
   }
-  lay1 <- igraph::layout_with_sugiyama(G, layers=layers, maxiter=1000)
 
-  g = ggnetwork::ggnetwork(G, layout = lay1$layout, arrow.gap = arrow.gap)
+
+  #lay1 <- igraph::layout_with_sugiyama(G, layers=layers, maxiter=1000)
+  #sg1 = test_graph %>% graph::subGraph(snodes=c("13", "9", "10", "1", "33"))
+  #subGList <- vector(mode="list", length=1)
+  #subGList[[1]] <- list(graph=sg1)
+  #subGList[[2]] <- list(graph=sg2, cluster=FALSE)
+  #subGList[[3]] <- list(graph=sg3)
+
+
+  G_nel = graph::graphAM(igraph::get.adjacency(G) %>% as.matrix(),
+                         edgemode = 'directed') %>%
+    as("graphNEL")
+
+  make_subgraphs_for_groups <- function(grouping_set, G_nel, node_meta_df){
+    nodes = node_meta_df %>% filter(group_nodes_by == grouping_set) %>% pull(id) %>% as.character
+    sg = list(graph=graph::subGraph(snodes=nodes, graph=G_nel))
+    return (sg)
+  }
+
+  subgraph_df = node_metadata %>% group_by(group_nodes_by) %>%
+    summarize(subgraph = purrr::map(.f = purrr::possibly(make_subgraphs_for_groups, NULL),
+                                    .x = group_nodes_by,
+                                    G_nel,
+                                    node_metadata))
+
+  gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
+  gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
+
+  beziers = lapply(gvizl@renderInfo@edges$splines, function(bc) {
+    bc_segments = lapply(bc, Rgraphviz::bezierPoints)
+    bezier_cp_df = do.call(rbind, bc_segments) %>% as.data.frame
+    colnames(bezier_cp_df) = c("x", "y")
+    #bezier_cp_df$point = "control"
+    #bezier_cp_df$point[1] = "end"
+    #bezier_cp_df$point[nrow(bezier_cp_df)] = "end"
+    bezier_cp_df
+    #control_point_coords = lapply(bc, function(cp) Rgraphviz::getPoints)
+    #control_point_coords = rbind(control_point_coords)
+  })
+  bezier_df = do.call(rbind, beziers)
+  bezier_df$edge_name = stringr::str_split_fixed(row.names(bezier_df), "\\.", 2)[,1]
+  #bezier_df = bezier_df %>% mutate(x = ggnetwork:::scale_safely(x),
+  #                                 y = ggnetwork:::scale_safely(y))
+  g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
   # add level information
   #g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
   #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
 
 
-  p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
-    # draw activator edges
-    ggnetwork::geom_edges(data = g,
-                          arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+  # p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
+  #   # draw activator edges
+  #   ggnetwork::geom_edges(data = g,
+  #                         arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+  p <- ggplot() +
+    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+  # draw activator edges
+  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
+  #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
-    p = p + ggforce::geom_mark_rect(aes(fill = group_nodes_by,
+    p = p + ggforce::geom_mark_rect(aes(x, y, xend = xend, yend = yend,
+                                        fill = group_nodes_by,
                                         label=group_nodes_by,
                                         filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                     size=0,
@@ -878,7 +926,8 @@ plot_state_transition_graph <- function(ccm,
     # if numerical
     if (is.numeric(g[[color_nodes_by]])) {
       p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(fill = as.factor(color_nodes_by),
+                                        aes(x, y, xend = xend, yend = yend,
+                                            fill = as.factor(color_nodes_by),
                                             label = label_nodes_by),
                                         size = node_size) +
         labs(fill = color_nodes_by) +
@@ -887,7 +936,8 @@ plot_state_transition_graph <- function(ccm,
     else {
       # if categorical
       p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(fill = color_nodes_by,
+                                        aes(x, y, xend = xend, yend = yend,
+                                            fill = color_nodes_by,
                                             label = label_nodes_by),
                                         size = node_size) +
         labs(fill = color_nodes_by)
@@ -896,7 +946,8 @@ plot_state_transition_graph <- function(ccm,
 
   } else {
     p = p + ggnetwork::geom_nodelabel(data = g,
-                                      aes(label = label_nodes_by),
+                                      aes(x, y, xend = xend, yend = yend,
+                                          label = label_nodes_by),
                                       size = node_size)
   }
 
