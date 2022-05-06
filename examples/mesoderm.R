@@ -92,6 +92,18 @@ plot_contrast_wrapper(wt_ccm_wl, 18, 22)
 # -----------------------------------------------------------------------------
 
 
+state_transition_graph = assemble_timeseries_transitions(wt_ccm_wl,
+                                                            start_time=18, stop_time=96,
+                                                            interval_col="adjusted_timepoint",
+                                                            min_interval = 2,
+                                                            log_abund_detection_thresh=-2,
+                                                            experiment="GAP14")
+
+
+plot_state_transition_graph(wt_ccm_wl, state_transition_graph %>% igraph::as_data_frame(),
+                            color_nodes_by = "cell_type_sub", group_nodes_by="cell_type_broad")
+
+
 paths_to_origins = assemble_timeseries_transitions(wt_ccm_wl,
                                                    start=18, stop=96,
                                                    interval_col="adjusted_timepoint",

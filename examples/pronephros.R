@@ -203,9 +203,9 @@ plot_cells(kidney_cds, color_cells_by="timepoint.1", show_trajectory_graph=FALSE
         axis.text.y=element_blank(),
         axis.ticks=element_blank(),
         axis.title.x=element_blank(),
-        axis.title.y=element_blank()) +
+        axis.title.y=element_blank())
   #theme(legend.position="none") +
-  ggsave("kidney_time.png", width=7, height=6)
+ggsave("kidney_time.png", width=7, height=6)
 
 ###### Stuff from Maddy:
 
@@ -264,24 +264,42 @@ t1 = 18
 t2 = 22
 plot_contrast_wrapper(wt_ccm_wl, 24, 36, model_for_pcors="reduced")
 
-paths_to_origins = assemble_timeseries_transitions(wt_ccm_wl,
+state_transition_graph = assemble_timeseries_transitions(wt_ccm_wl,
                                                    start=18, stop=48,
                                                    interval_col="timepoint",
                                                    min_interval = 2,
                                                    log_abund_detection_thresh=-2,
-                                                   #initial_origin_policy="max-score-dist-ratio-origin",
-                                                   #percent_max_threshold=0.00,
-
+                                                   min_dist_vs_time_r_sq=0.0,
                                                    experiment="GAP14")
 
-plot_origins(wt_ccm_wl, paths_to_origins, edge_size=0.25) + facet_wrap(~destination)
-plot_origins(wt_ccm_wl, paths_to_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
+#plot_origins(wt_ccm_wl, paths_to_origins, edge_size=0.25) + facet_wrap(~destination)
+#plot_origins(wt_ccm_wl, paths_to_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
 
 #wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
-hooke:::plot_path(wt_ccm_wl, path_df = paths_to_origins, edge_size=0.25)
+hooke:::plot_path(wt_ccm_wl, path_df = state_transition_graph %>% igraph::as_data_frame() , edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, paths_to_origins %>% select(origin, destination=cell_group, from, to), color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+plot_state_transition_graph(wt_ccm_wl, state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
+# ----------------------------------------------------------------------------
+
+# For debugging:
+xxx_extant_cell_type_df = get_extant_cell_types(wt_ccm_wl,
+                                            18,
+                                            48,
+                                            interval_col="timepoint",
+                                            percent_max_threshold=0,
+                                            log_abund_detection_thresh=-2,
+                                            experiment="GAP14")
+
+xxx_timepoint_pred_df = estimate_abundances_over_interval(wt_ccm_wl, 18, 48, interval_col="timepoint", 2)
+
+xxx_timeseries_pathfinding_graph = init_pathfinding_graph(wt_ccm_wl, xxx_extant_cell_type_df)
+
+xxx_origin_stats_df = hooke:::compute_origin_stats(wt_ccm_wl, xxx_timepoint_pred_df, xxx_extant_cell_type_df)
+
+valid_origins = xxx_origin_stats_df %>% filter(dist_on_pcor_effect < 0) %>% pull(from) %>% unique()
+
+qplot(distance, reduced_pcor, data=xxx_origin_stats_df %>% filter (reduced_pcor != 0 & distance > 0), color=from %in% valid_origins) + facet_wrap(~from) + geom_smooth(method="lm", se=F, color="black")
 
 # -----------------------------------------------------------------------------
 
