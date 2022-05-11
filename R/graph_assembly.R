@@ -561,13 +561,16 @@ compute_min_path_cover <- function(ccm, G){
   sink_edge_df = data.frame(from=possible_termini, to="sink")
   node_dag = igraph::union(node_dag, sink_edge_df %>% igraph::graph_from_data_frame())
 
+  # replace NA values with weight 0
+  igraph::E(node_dag)$weight = tidyr::replace_na(igraph::E(node_dag)$weight, 0)
+
   paths_from_chains = matching %>% as_tibble() %>%
     mutate(chain_leg = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
                                    .x = from, .y = to,
                                    node_dag))
 
   covered_graph = paths_from_chains %>% select(chain_leg) %>%
-    tidyr::unnest() %>%
+    tidyr::unnest(c(chain_leg)) %>%
     igraph::graph_from_data_frame(vertices=data.frame(id=igraph::V(G_tr)$name))
 
   chain_heads = names(which(igraph::degree(covered_graph, mode="in") == 0))
@@ -588,7 +591,7 @@ compute_min_path_cover <- function(ccm, G){
                                    node_dag))
 
   covered_graph = paths_to_chain_heads %>% select(chain_leg) %>%
-    tidyr::unnest() %>%
+    tidyr::unnest(c(chain_leg)) %>%
     igraph::graph_from_data_frame(vertices=data.frame(id=igraph::V(node_dag)$name)) %>%
     igraph::union(covered_graph)
 
