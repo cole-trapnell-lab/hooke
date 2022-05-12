@@ -22,6 +22,7 @@ plot_contrast <- function(ccm,
                           label_cell_groups = list(),
                           repel_labels = TRUE,
                           model_for_pcors="reduced",
+                          switch_label = NULL,
                           sub_cds = NULL,
                           alpha = 1.0,
                           x=1,
@@ -212,6 +213,34 @@ plot_contrast <- function(ccm,
       scale_size_identity()
 
   }
+
+  if (is.null(switch_label) == FALSE) {
+    label_df = centroids(ccs, switch_group = switch_label)
+
+    if (length(label_cell_groups) > 0)
+      label_df = label_df %>% filter(cell_group %in% label_cell_groups)
+
+    # can't have both
+    plot_labels = "none"
+
+    if (repel_labels) {
+      gp = gp + ggrepel::geom_label_repel(data = label_df,
+                                          mapping = aes(get(paste0("umap_", x)),
+                                                        get(paste0("umap_", y)),
+                                                        label=cell_group),
+                                          size=I(group_label_size),
+                                          fill = "white")
+    } else {
+
+      gp <- gp + geom_text(data = label_df,
+                           mapping = aes(get(paste0("umap_", x)),
+                                         get(paste0("umap_", y)),
+                                         label=cell_group),
+                           size=I(group_label_size))
+    }
+
+  }
+
 
   if (plot_labels != "none") {
     label_df = umap_centers_delta_abund
@@ -769,6 +798,9 @@ plot_state_transition_graph <- function(ccm,
                                         label_nodes_by=NULL,
                                         group_nodes_by=NULL,
                                         layer_nodes_by=NULL,
+                                        cond_b_v_a_tbl = NULL,
+                                        fc_limits = NULL,
+                                        qval_threshold = 0.05,
                                         arrow.gap=0.03,
                                         arrow_unit = 2,
                                         bar_unit = .075,
@@ -843,7 +875,28 @@ plot_state_transition_graph <- function(ccm,
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
   }
 
-  G = edges %>% select(from, to) %>% distinct()  %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+  if (is.null(cond_b_v_a_tbl) == FALSE) {
+    cond_b_v_a_tbl = cond_b_v_a_tbl %>%
+      mutate(delta_log_abund = ifelse(delta_q_value < qval_threshold, delta_log_abund, 0))
+
+    if (is.null(fc_limits) == FALSE) {
+      min = fc_limits[1]
+      max = fc_limits[2]
+      cond_b_v_a_tbl = cond_b_v_a_tbl %>%
+        mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+        mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+    }
+
+    node_metadata = node_metadata %>% left_join(cond_b_v_a_tbl, by = c("id" = "cell_group"))
+
+    # might be better way to do this
+    color_nodes_by = "delta_log_abund"
+    #idk what to do about this currently
+    # group_nodes_by = NULL
+  }
+
+
+  G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
 
   # run sugiyama layout
   layers = NULL
@@ -896,6 +949,7 @@ plot_state_transition_graph <- function(ccm,
   #                                 y = ggnetwork:::scale_safely(y))
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
+
   # add level information
   #g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
   #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
@@ -911,9 +965,9 @@ plot_state_transition_graph <- function(ccm,
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
-    p = p + ggforce::geom_mark_rect(aes(x, y, xend = xend, yend = yend,
+    p = p + ggforce::geom_mark_rect(aes(x, y,
                                         fill = group_nodes_by,
-                                        label=group_nodes_by,
+                                        label = group_nodes_by,
                                         filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                     size=0,
                                     label.fontsize=label_font_size,
@@ -925,18 +979,19 @@ plot_state_transition_graph <- function(ccm,
 
     # if numerical
     if (is.numeric(g[[color_nodes_by]])) {
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y, xend = xend, yend = yend,
-                                            fill = as.factor(color_nodes_by),
+      p = p + ggnewscale::new_scale_fill() +
+        ggnetwork::geom_nodelabel(data = g,
+                                        aes(x, y,
+                                            fill = !!sym(color_nodes_by),
                                             label = label_nodes_by),
                                         size = node_size) +
         labs(fill = color_nodes_by) +
-        scale_fill_gradient2(low = "darkblue", mid = "white", high="red4")
+        scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
     }
     else {
       # if categorical
       p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y, xend = xend, yend = yend,
+                                        aes(x, y,
                                             fill = color_nodes_by,
                                             label = label_nodes_by),
                                         size = node_size) +
