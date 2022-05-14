@@ -800,6 +800,7 @@ plot_state_transition_graph <- function(ccm,
                                         layer_nodes_by=NULL,
                                         cond_b_v_a_tbl = NULL,
                                         fc_limits = NULL,
+                                        genes = list(),
                                         qval_threshold = 0.05,
                                         arrow.gap=0.03,
                                         arrow_unit = 2,
@@ -807,6 +808,8 @@ plot_state_transition_graph <- function(ccm,
                                         node_size = 2,
                                         num_layers=10,
                                         edge_size=0.5,
+                                        fract_expr = 0.1,
+                                        min_expr = 0.1,
                                         unlabeled_groups = c("Unknown"),
                                         hide_unlinked_nodes=TRUE,
                                         label_font_size=6,
@@ -896,7 +899,33 @@ plot_state_transition_graph <- function(ccm,
   }
 
 
+  if (length(genes) > 0) {
+
+    # ensembl_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
+
+    gene_expr = aggregated_expr_data(ccm@ccs@cds, group_cells_by = ccm@ccs@info$cell_group)
+    sub_gene_expr = gene_expr %>%
+      filter(gene_short_name %in% genes)
+    node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
+
+    node_metadata = node_metadata %>%
+      mutate(gene_expr = case_when(
+        fraction_expressing >= fract_expr ~ TRUE,
+        TRUE ~ FALSE))
+
+    color_nodes_by = "mean_expression"
+
+  }
+  # else {
+  #   # if not specificed, ignore this information
+  #   node_metadata = node_metadata %>% mutate(fraction_expressing = 1.0,
+  #                                            mean_expression = 1.0,
+  #                                            gene_expr = TRUE)
+  # }
+
+
   G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
 
   # run sugiyama layout
   layers = NULL
@@ -980,11 +1009,24 @@ plot_state_transition_graph <- function(ccm,
     # if numerical
     if (is.numeric(g[[color_nodes_by]])) {
       p = p + ggnewscale::new_scale_fill() +
-        ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y,
-                                            fill = !!sym(color_nodes_by),
-                                            label = label_nodes_by),
-                                        size = node_size) +
+        ggnetwork::geom_nodelabel(data = g%>% filter(!gene_expr),
+                                                            aes(x, y,
+                                                                fill = !!sym(color_nodes_by),
+                                                                label = label_nodes_by),
+                                                            alpha=0.5,
+                                                            size = node_size) +
+        # ggnetwork::geom_nodelabel(data = g%>% filter(!gene_expr),
+        #                           aes(x, y,
+        #                               fill = !!sym(color_nodes_by),
+        #                               label = label_nodes_by),
+        #                           alpha=0.5,
+        #                           size = node_size) +
+        # ggnetwork::geom_nodelabel(data = g %>% filter(gene_expr),
+        #                           aes(x, y,
+        #                               fill = !!sym(color_nodes_by),
+        #                               label = label_nodes_by),
+        #                           alpha = 1,
+        #                           size = node_size) +
         labs(fill = color_nodes_by) +
         scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
     }
