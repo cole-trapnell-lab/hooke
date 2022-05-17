@@ -276,9 +276,9 @@ wt_state_transition_graph = assemble_timeseries_transitions(wt_ccm_wl,
 #plot_origins(wt_ccm_wl, paths_to_origins %>% filter(emerges_at > 18), edge_size=0.25) + facet_wrap(~destination)
 
 #wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
-hooke:::plot_path(wt_ccm_wl, path_df = state_transition_graph %>% igraph::as_data_frame() , edge_size=0.25)
+hooke:::plot_path(wt_ccm_wl, path_df = wt_state_transition_graph %>% igraph::as_data_frame() , edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 # ----------------------------------------------------------------------------
 # Differential analysis across space and time in WT
@@ -520,6 +520,327 @@ plot_genes_by_group(wt_cds[,colData(wt_cds)$timepoint == 24 &
 monocle3::plot_percent_cells_positive(wt_cds[grepl("hoxb", rowData(wt_cds)$gene_short_name)],
                                       group_cells_by="segment")
 
+# ---------------------------------------------------------------------------
+
+# gene cell_type self parents siblings children interpretation
+# XXXX XXXX
+
+pseudobulk_cds_for_states <- function(ccm, state_col=NULL){
+
+  if (is.null(state_col)){
+    cell_group_df = tibble::rownames_to_column(ccm@ccs@metadata[["cell_group_assignments"]])
+    cell_group_df = cell_group_df %>% mutate(group_id = cell_group)
+    agg_coldata = cell_group_df %>%
+      dplyr::group_by(group_id, cell_group) %>%
+      dplyr::summarize(num_cells_in_group = n()) %>%
+      as.data.frame
+    #%>% select(rowname, cell_group)
+  }else{
+    #cell_group_df = tibble::rownames_to_column(ccm@ccs@metadata[["cell_group_assignments"]])
+    cell_group_df = colData(ccm@ccs@cds) %>%
+      as.data.frame %>% tibble::rownames_to_column() %>% dplyr::select(rowname, "cell_group" = !!sym(state_col))
+    cell_group_df = cell_group_df %>% mutate(group_id = cell_group)
+    agg_coldata = cell_group_df %>%
+      dplyr::group_by(group_id, cell_group) %>%
+      dplyr::summarize(num_cells_in_group = n()) %>%
+      as.data.frame
+  }
+
+  agg_expr_mat = monocle3::aggregate_gene_expression(wt_ccs@cds,
+                                                     cell_group_df=cell_group_df,
+                                                     norm_method="size_only",
+                                                     scale_agg_values = FALSE,
+                                                     pseudocount=0,
+                                                     cell_agg_fun="mean")
+
+  agg_expr_mat = agg_expr_mat[,agg_coldata$group_id]
+
+  row.names(agg_coldata) = agg_coldata$group_id
+  agg_coldata = agg_coldata[colnames(agg_expr_mat),]
+
+  pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccm@ccs@cds) %>% as.data.frame)
+  pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
+  return(pseudobulk_cds)
+}
+undebug(pseudobulk_cds_for_states)
+pseudobulk_cds_for_states(wt_ccm_wl, "cell_type")
+
+threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.25, abs_expr_thresh = 1e-3, scale_tpc=1e6){
+  norm_expr_mat = norm_expr_mat %>% as.matrix
+  norm_expr_mat = norm_expr_mat #* scale_tpc
+  expression_max_values = norm_expr_mat %>% matrixStats::rowMaxs()
+  names(expression_max_values) = row.names(norm_expr_mat)
+  dynamic_range = expression_max_values # size of dynamic range of expression for each gene, in logs (assuming min is zero)
+
+  dynamic_range_thresh = relative_expr_thresh * dynamic_range
+  #abs_thresh = rep(abs_expr_thresh, nrow(norm_expr_mat))
+
+  expression_thresh_vec = dynamic_range_thresh
+  expression_thresh_vec[expression_thresh_vec < abs_expr_thresh] = Inf
+
+  names(expression_thresh_vec) = row.names(norm_expr_mat)
+  expr_over_thresh = norm_expr_mat > expression_thresh_vec
+  return(expr_over_thresh)
+}
+undebug(threshold_expression_matrix)
+
+get_parents = function(state_graph, cell_state){
+  parents = igraph::neighbors(state_graph, cell_state, mode="in")
+  return(parents)
+}
+
+get_children = function(state_graph, cell_state){
+  children = igraph::neighbors(state_graph, cell_state, mode="out")
+  return(children)
+}
+
+get_siblings = function(state_graph, cell_state){
+  parents = get_parents(state_graph, cell_state)
+  siblings = igraph::neighbors(state_graph, parents, mode="out")
+  siblings = setdiff(siblings$name, cell_state) #exclude self
+  return(siblings)
+}
+
+classify_genes_in_cell_state <- function(cell_state, state_graph, expr_mat){
+  expr_self = expr_mat[,cell_state]
+
+  parents = get_parents(state_graph, cell_state) #igraph::neighbors(state_graph, cell_state, mode="in")
+  if (length(parents) > 0){
+    expressed_in_parents = Matrix::rowSums(expr_mat[,parents$name, drop=F]) > 0
+  }else{
+    expressed_in_parents = rep(NA, nrow(expr_mat))
+  }
+
+  children = get_children(state_graph, cell_state)#igraph::neighbors(state_graph, cell_state, mode="out")
+  if (length(children) > 0){
+    expressed_in_children = Matrix::rowSums(expr_mat[,children$name, drop=F]) > 0
+  }else{
+    expressed_in_children = rep(NA, nrow(expr_mat))
+  }
+
+  if (length(parents) > 0){
+    siblings = get_siblings(state_graph, cell_state)#igraph::neighbors(state_graph, parents, mode="out")
+    #siblings = setdiff(siblings$name, cell_state) #exclude self
+    if (length(siblings) > 0){
+      expressed_in_siblings = Matrix::rowSums(expr_mat[,siblings, drop=F]) > 0
+    }else{
+      expressed_in_siblings = rep(NA, nrow(expr_mat))
+    }
+  }else{
+    expressed_in_siblings = rep(NA, nrow(expr_mat))
+  }
+  expr_df = tibble(gene_id = names(expr_self),
+                   self = expr_self,
+                   parents = expressed_in_parents,
+                   siblings = expressed_in_siblings)
+  expr_df = expr_df %>% tidyr::nest(data = !gene_id)
+
+  pattern_table = expand.grid(rep(list(c(TRUE, FALSE, NA)), 3))
+  colnames(pattern_table) = c("self", "parents", "siblings")
+  pattern_table = pattern_table %>% arrange(desc(self), desc(parents), desc(siblings))
+  interpetation =
+    c("Common",
+      "MLP",
+      "Common",
+      "Activated",
+      "Selectively activated",
+      "Activated",
+      "Common",
+      NA,
+      "Common",
+      "Selectively deactivated",
+      "Deactivated",
+      "Deactivated",
+      "Absent",
+      "Absent",
+      "Absent",
+      NA,
+      NA,
+      "Absent")
+
+  interpret_expression_pattern = function(pat_df, interp_table, interpetation){
+    match_row = match(data.frame(t(pat_df)), data.frame(t(interp_table)))
+    interpetation[match_row]
+  }
+  #debug(interpret_expression_pattern)
+  expr_df = expr_df %>% mutate(interpretation = purrr::map(.f = purrr::possibly(
+    interpret_expression_pattern, NA_real_), .x = data, pattern_table, interpetation))
+  return(expr_df)
+}
+debug(classify_genes_in_cell_state)
+
+classify_genes_over_graph <- function(ccm, state_graph, gene_ids = NULL, group_nodes_by=NULL, ...){
+  if (is.null(group_nodes_by)){
+    pb_cds = pseudobulk_cds_for_states(wt_ccm_wl)
+  }else{
+    pb_cds = pseudobulk_cds_for_states(wt_ccm_wl, state_col = group_nodes_by)
+  }
+
+  norm_expr_mat = normalized_counts(pb_cds, "size_only", pseudocount = 0)
+  expr_over_thresh = threshold_expression_matrix(norm_expr_mat, ...)
+
+  if (is.null(gene_ids) == FALSE){
+    expr_over_thresh = expr_over_thresh[gene_ids,]
+  }
+  cell_states = tibble(cell_state = unlist(igraph::V(state_graph)$name))
+  cell_states = cell_states %>%
+    dplyr::mutate(gene_classes = purrr::map(.f = purrr::possibly(
+      classify_genes_in_cell_state, NA_real_), .x = cell_state, state_graph, expr_over_thresh))
+
+}
+undebug(classify_genes_over_graph)
+marker_ids = rowData(wt_ccm_wl@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% kidney_markers) %>% pull(id)
+
+contract_state_graph <- function(ccm, state_graph, group_nodes_by){
+  # Create simplified cell state graph just on cell type (not cluster):
+  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  node_metadata = tibble(id=cell_groups)
+
+  #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
+  cell_group_metadata = colData(ccm@ccs@cds) %>%
+    as.data.frame %>% select(!!sym(group_nodes_by))
+
+  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+
+  group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
+      as.data.frame %>%
+      count(cell_group, !!sym(group_nodes_by)) %>%
+      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+  colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+  node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
+
+  contraction_mapping = as.factor(node_metadata$group_nodes_by)
+  contraction_mapping_names = as.character(levels(contraction_mapping))
+  contraction_mapping = as.numeric(contraction_mapping)
+  names(contraction_mapping) = node_metadata$id
+  contracted_state_graph = igraph::contract(state_graph, mapping=contraction_mapping, vertex.attr.comb="ignore")
+  igraph::V(contracted_state_graph)$name = unlist(contraction_mapping_names[as.numeric(igraph::V(contracted_state_graph))])
+  contracted_state_graph = igraph::simplify(contracted_state_graph)
+  return(contracted_state_graph)
+}
+undebug(contract_state_graph)
+cell_type_graph = contract_state_graph(wt_ccm_wl, wt_state_transition_graph, "cell_type")
+
+gene_patterns_over_state_graph = classify_genes_over_graph(wt_ccm_wl, wt_state_transition_graph, marker_ids, abs_expr_thresh=1e-3)
+gene_patterns_over_state_graph = gene_patterns_over_state_graph %>% tidyr::unnest(gene_classes) %>% tidyr::unnest(interpretation)
+gene_patterns_over_state_graph = left_join(gene_patterns_over_state_graph,
+                                           rowData(wt_ccm_wl@ccs@cds) %>%
+                                             as_tibble %>%
+                                             select(id, gene_short_name), by=c("gene_id"="id"))
+
+cell_type_graph = contract_state_graph(wt_ccm_wl, wt_state_transition_graph, "cell_type")
+
+# Edit the graph to fix up the errors that currently exist:
+cell_type_graph = igraph::add_edges(cell_type_graph,
+                                   c("Renal progenitors", "Neck",
+                                     "Renal progenitors", "Corpuscles of Stannius",
+                                     "Renal progenitors", "Multiciliated cells",
+                                     "Renal progenitors", "Cloaca",
+                                     "Renal progenitors", "Proximal Straight Tubule"))
+cell_type_graph = igraph::delete_edges(cell_type_graph,
+                                       c("Proximal Straight Tubule|Proximal Convoluted Tubule",
+                                         "Proximal Convoluted Tubule|Proximal Straight Tubule",
+                                         "Podocyte|Proximal Convoluted Tubule"))
+cell_type_graph = igraph::delete_vertices(cell_type_graph, "Unknown")
+
+gene_patterns_over_cell_type_graph = classify_genes_over_graph(wt_ccm_wl, cell_type_graph, group_nodes_by="cell_type", relative_expr_thresh = 0.25, abs_expr_thresh=1e-2)
+gene_patterns_over_cell_type_graph = gene_patterns_over_cell_type_graph %>% tidyr::unnest(gene_classes) %>% tidyr::unnest(interpretation)
+gene_patterns_over_cell_type_graph = left_join(gene_patterns_over_cell_type_graph,
+                                           rowData(wt_ccm_wl@ccs@cds) %>%
+                                             as_tibble %>%
+                                             select(id, gene_short_name), by=c("gene_id"="id"))
+
+# Gut check a few patterns:
+cloaca_sel_activated = gene_patterns_over_cell_type_graph %>%
+  filter(cell_state == "Cloaca" & interpretation == "Selectively activated") %>%
+  dplyr::sample_n(5) %>% pull(gene_short_name)
+plot_cells(kidney_cds, genes=cloaca_sel_activated)
+
+de_sel_activated = gene_patterns_over_cell_type_graph %>%
+  filter(cell_state == "Distal Early" & interpretation == "Selectively activated") %>%
+  dplyr::sample_n(5) %>% pull(gene_short_name)
+plot_cells(kidney_cds, genes=de_sel_activated)
+
+pod_sel_activated = gene_patterns_over_cell_type_graph %>%
+  filter(cell_state == "Podocyte" & interpretation == "Selectively activated") %>%
+  dplyr::sample_n(5) %>% pull(gene_short_name)
+plot_cells(kidney_cds, genes=pod_sel_activated)
+
+de_sel_deactivated = gene_patterns_over_cell_type_graph %>%
+  filter(cell_state == "Distal Early" & interpretation == "Selectively deactivated") %>%
+  dplyr::sample_n(5) %>% pull(gene_short_name)
+plot_cells(kidney_cds, genes=de_sel_deactivated)
+
+mlp = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation == "MLP") %>%
+  dplyr::sample_n(5) %>% pull(gene_short_name)
+plot_cells(kidney_cds, genes=mlp)
+
+pattern_summary = gene_patterns_over_cell_type_graph %>% dplyr::group_by(cell_state, interpretation) %>% tally()
+ggplot(aes(cell_state, n, fill=interpretation), data=pattern_summary %>%
+         filter(interpretation != "Absent")) +
+  geom_bar(stat="identity") + coord_flip()
+
+#gene_set = msigdbr(species = "Homo sapiens", subcategory = "GO:MF")
+#gene_set = msigdbr(species = "Homo sapiens", category = "H")
+gene_set = msigdbr(species = "Danio rerio", subcategory = "GO:BP")
+gene_set_list = split(x = gene_set$gene_symbol, f = gene_set$gs_name)
+gene_set_df = gene_set %>% dplyr::distinct(gs_name, gene_symbol) %>% as.data.frame()
+
+calc_pathway_enrichment_on_state_specific_genes <- function(gene_df, msigdbr_t2g, sig_thresh = 0.1, ...){
+  #gene_set_list = split(x = pathways$gene_symbol, f = pathways$gs_name)
+  #gene_ranking = gene_lfc_tbl %>% pull(gene_state_score)
+  #names(gene_ranking) = gene_lfc_tbl %>% pull(gene_short_name)
+  #pb$tick()
+  #gsea_res = fgsea(pathways=gene_set_list, stats=gene_ranking, ...) %>% as_tibble()
+  #gsea_res = gsea_res %>% filter(padj < sig_thresh)
+  #msigdbr_t2g = msigdbr_df %>% dplyr::distinct(gs_name, gene_symbol) %>% as.data.frame()
+  gene_symbols_vector = gene_df$gene_short_name
+  enrich_res = clusterProfiler::enricher(gene = gene_symbols_vector, TERM2GENE = msigdbr_t2g, ...) %>% as_tibble()
+  gc()
+  return(enrich_res)
+}
+undebug(calc_pathway_enrichment_on_state_specific_genes)
+
+gene_universe = gene_patterns_over_cell_type_graph %>% filter(interpretation != "Absent") %>% pull(gene_short_name) %>% unique()
+state_pattern_pathways = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation %in%  c("Selectively activated", "MLP")) %>%
+  select(cell_state, interpretation, gene_short_name) %>%
+  group_by(cell_state, interpretation) %>% tidyr::nest(data=gene_short_name) %>%
+  dplyr::mutate(pathways = purrr::map(.f = purrr::possibly(
+    calc_pathway_enrichment_on_state_specific_genes, NA_real_), .x = data, gene_set_df, sig_thresh=1, universe=gene_universe)) %>%
+  tidyr::unnest(pathways)
+#tidyr::unnest(degs)
+
+
+gene_set_mf = msigdbr(species = "Danio rerio", subcategory = "GO:MF")
+transcription_regulators = gene_set_mf %>%
+  dplyr::select(gs_id, gene_symbol, gs_name) %>%
+  dplyr::filter(grepl("Transcription", gs_name, ignore.case=TRUE)) %>%
+  pull(gene_symbol) %>% unique %>% sort
+
+signaling_genes = gene_set_mf %>%
+  dplyr::select(gs_id, gene_symbol, gs_name) %>%
+  dplyr::filter(grepl("Signaling", gs_name, ignore.case=TRUE)) %>%
+  pull(gene_symbol) %>% unique %>% sort
+
+selective_tfs = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation %in%  c("Selectively activated", "MLP") & gene_short_name %in% transcription_regulators) %>%
+  pull(gene_short_name) %>% unique
+plot_genes_by_group(wt_ccm_wl@ccs@cds, markers =selective_tfs, group_cells_by = "cell_type",ordering_type="maximal_on_diag", color_by_group=TRUE)
+
+selective_signals = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation %in%  c("Selectively activated", "MLP") & gene_short_name %in% signaling_genes) %>%
+  pull(gene_short_name) %>% unique
+plot_genes_by_group(wt_ccm_wl@ccs@cds, markers =selective_signals, group_cells_by = "cell_type",ordering_type="maximal_on_diag", color_by_group=TRUE)
+
+
+selective_genes = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation %in%  c("Selectively activated", "MLP")) %>%
+  pull(gene_short_name) %>% unique
+selective_genes = selective_genes[grepl("si:", selective_genes) == FALSE]
+plot_genes_by_group(wt_ccm_wl@ccs@cds, markers =selective_genes, group_cells_by = "cell_type",ordering_type="maximal_on_diag", color_by_group=TRUE)
+
 # ----------------------------------------------------------------------------
 ### Genetic analysis
 
@@ -616,34 +937,113 @@ collect_genotype_effects = function(ccm, timepoint=24, experiment="GAP16"){
 }
 #debug(collect_genotype_effects)
 
+# 18 hpf
+
+genotype_models_tbl = genotype_models_tbl %>%
+  dplyr::mutate(genotype_eff = purrr::map(.f = purrr::possibly(
+    collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=18)) #%>%
+#tidyr::unnest(states)
+
+#plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1) + ggtitle(genotype_models_tbl$gene_target[[1]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[2]], genotype_models_tbl$genotype_eff[[2]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[2]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[3]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[4]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[5]], genotype_models_tbl$genotype_eff[[5]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[5]])
+
+
 genotype_models_tbl = genotype_models_tbl %>%
   dplyr::mutate(genotype_eff = purrr::map(.f = purrr::possibly(
     collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=24)) #%>%
 #tidyr::unnest(states)
 
-plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1) + ggtitle(genotype_models_tbl$gene_target[[1]])
-plot_contrast(genotype_models_tbl$genotype_ccm[[2]], genotype_models_tbl$genotype_eff[[2]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[2]])
-plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[3]])
-plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[4]])
-plot_contrast(genotype_models_tbl$genotype_ccm[[5]], genotype_models_tbl$genotype_eff[[5]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[5]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1) + ggtitle(genotype_models_tbl$gene_target[[1]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[2]], genotype_models_tbl$genotype_eff[[2]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[2]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[3]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[4]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[5]], genotype_models_tbl$genotype_eff[[5]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[5]])
+
+
+# noto-mut
+plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("noto-mut vs. ctrl 18hpf")
+ggsave("noto-mut_pronephros_lfc_18hpf.png", width=4, height=4)
 
 
 # noto
-plot_contrast(genotype_models_tbl$genotype_ccm[[8]], genotype_models_tbl$genotype_eff[[8]], q_value_thresh = 1)+
+plot_contrast(genotype_models_tbl$genotype_ccm[[8]], genotype_models_tbl$genotype_eff[[8]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("noto vs. ctrl 18hpf")
+ggsave("noto_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+# smo
+plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("smo vs. ctrl 18hpf")
+ggsave("smo_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+# egr2b
+plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("egr2b vs. ctrl 18hpf")
+ggsave("egr2b_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+
+# tbxta
+plot_contrast(genotype_models_tbl$genotype_ccm[[6]], genotype_models_tbl$genotype_eff[[6]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("tbxta vs. ctrl 18hpf")
+ggsave("tbxta_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+# cdx4
+plot_contrast(genotype_models_tbl$genotype_ccm[[7]], genotype_models_tbl$genotype_eff[[7]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("cdx4 vs. ctrl 18hpf")
+ggsave("cdx4_pronephros_lfc_18hpf.png", width=4, height=4)
+
+
+
+# 24 hpf
+
+genotype_models_tbl = genotype_models_tbl %>%
+  dplyr::mutate(genotype_eff = purrr::map(.f = purrr::possibly(
+    collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=24)) #%>%
+#tidyr::unnest(states)
+
+#plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1) + ggtitle(genotype_models_tbl$gene_target[[1]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[2]], genotype_models_tbl$genotype_eff[[2]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[2]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[3]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[4]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[5]], genotype_models_tbl$genotype_eff[[5]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[5]])
+
+
+# noto-mut
+plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("noto-mut vs. ctrl 24hpf")
+ggsave("noto-mut_pronephros_lfc_24hpf.png", width=4, height=4)
+
+
+# noto
+plot_contrast(genotype_models_tbl$genotype_ccm[[8]], genotype_models_tbl$genotype_eff[[8]], q_value_thresh = 1, plot_edges="none")+
   theme(legend.position="none") +
   ggtitle("noto vs. ctrl 24hpf")
 ggsave("noto_pronephros_lfc_24hpf.png", width=4, height=4)
 
 
 # smo
-plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 1)+
+plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 1, plot_edges="none")+
   theme(legend.position="none") +
   ggtitle("smo vs. ctrl 24hpf")
 ggsave("smo_pronephros_lfc_24hpf.png", width=4, height=4)
 
 
 # egr2b
-plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 1)+
+plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 1, plot_edges="none")+
   theme(legend.position="none") +
   ggtitle("egr2b vs. ctrl 24hpf")
 ggsave("egr2b_pronephros_lfc_24hpf.png", width=4, height=4)
@@ -651,17 +1051,72 @@ ggsave("egr2b_pronephros_lfc_24hpf.png", width=4, height=4)
 
 
 # tbxta
-plot_contrast(genotype_models_tbl$genotype_ccm[[6]], genotype_models_tbl$genotype_eff[[6]], q_value_thresh = 1)+
+plot_contrast(genotype_models_tbl$genotype_ccm[[6]], genotype_models_tbl$genotype_eff[[6]], q_value_thresh = 1, plot_edges="none")+
   theme(legend.position="none") +
   ggtitle("tbxta vs. ctrl 24hpf")
 ggsave("tbxta_pronephros_lfc_24hpf.png", width=4, height=4)
 
 
 # cdx4
-plot_contrast(genotype_models_tbl$genotype_ccm[[7]], genotype_models_tbl$genotype_eff[[7]], q_value_thresh = 1)+
+plot_contrast(genotype_models_tbl$genotype_ccm[[7]], genotype_models_tbl$genotype_eff[[7]], q_value_thresh = 1, plot_edges="none")+
   theme(legend.position="none") +
   ggtitle("cdx4 vs. ctrl 24hpf")
 ggsave("cdx4_pronephros_lfc_24hpf.png", width=4, height=4)
+
+# 36 hpf
+
+genotype_models_tbl = genotype_models_tbl %>%
+  dplyr::mutate(genotype_eff = purrr::map(.f = purrr::possibly(
+    collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=36)) #%>%
+#tidyr::unnest(states)
+
+#plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1) + ggtitle(genotype_models_tbl$gene_target[[1]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[2]], genotype_models_tbl$genotype_eff[[2]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[2]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[3]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[4]])
+#plot_contrast(genotype_models_tbl$genotype_ccm[[5]], genotype_models_tbl$genotype_eff[[5]], q_value_thresh = 0.05) + ggtitle(genotype_models_tbl$gene_target[[5]])
+
+
+# noto-mut
+plot_contrast(genotype_models_tbl$genotype_ccm[[1]], genotype_models_tbl$genotype_eff[[1]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("noto-mut vs. ctrl 36hpf")
+ggsave("noto-mut_pronephros_lfc_36hpf.png", width=4, height=4)
+
+# noto
+plot_contrast(genotype_models_tbl$genotype_ccm[[8]], genotype_models_tbl$genotype_eff[[8]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("noto vs. ctrl 36hpf")
+ggsave("noto_pronephros_lfc_36hpf.png", width=4, height=4)
+
+
+# smo
+plot_contrast(genotype_models_tbl$genotype_ccm[[4]], genotype_models_tbl$genotype_eff[[4]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("smo vs. ctrl 36hpf")
+ggsave("smo_pronephros_lfc_36hpf.png", width=4, height=4)
+
+
+# egr2b
+plot_contrast(genotype_models_tbl$genotype_ccm[[3]], genotype_models_tbl$genotype_eff[[3]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("egr2b vs. ctrl 36hpf")
+ggsave("egr2b_pronephros_lfc_36hpf.png", width=4, height=4)
+
+
+
+# tbxta
+plot_contrast(genotype_models_tbl$genotype_ccm[[6]], genotype_models_tbl$genotype_eff[[6]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("tbxta vs. ctrl 36hpf")
+ggsave("tbxta_pronephros_lfc_36hpf.png", width=4, height=4)
+
+
+# cdx4
+plot_contrast(genotype_models_tbl$genotype_ccm[[7]], genotype_models_tbl$genotype_eff[[7]], q_value_thresh = 1, plot_edges="none")+
+  theme(legend.position="none") +
+  ggtitle("cdx4 vs. ctrl 36hpf")
+ggsave("cdx4_pronephros_lfc_36hpf.png", width=4, height=4)
 
 
 ## What happens when we run the assembler on the noto crispant model?
@@ -693,221 +1148,76 @@ noto_state_transition_graph = assemble_timeseries_transitions(genotype_models_tb
 
 hooke:::plot_path(genotype_models_tbl$genotype_ccm[[8]], path_df = noto_state_transition_graph %>% igraph::as_data_frame() , edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, noto_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+plot_state_transition_graph(genotype_models_tbl$genotype_ccm[[8]], noto_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 
-test_graph = graph::graphAM(igraph::get.adjacency(noto_state_transition_graph) %>% as.matrix(),
-               edgemode = 'directed') %>%
-  as("graphNEL")
-
-sg1 = test_graph %>% graph::subGraph(snodes=c("13", "9", "10", "1", "33"))
-subGList <- vector(mode="list", length=1)
-subGList[[1]] <- list(graph=sg1)
-#subGList[[2]] <- list(graph=sg2, cluster=FALSE)
-#subGList[[3]] <- list(graph=sg3)
-
-Rgraphviz::layoutGraph(test_graph, layoutType="dot", subGList=subGList) %>%
-Rgraphviz::renderGraph()
-
-plot_state_transition_graph_with_graphviz <- function(ccm,
-                                        edges,
-                                        color_nodes_by=NULL,
-                                        label_nodes_by=NULL,
-                                        group_nodes_by=NULL,
-                                        layer_nodes_by=NULL,
-                                        arrow.gap=0.03,
-                                        arrow_unit = 2,
-                                        bar_unit = .075,
-                                        node_size = 2,
-                                        num_layers=10,
-                                        edge_size=0.5,
-                                        unlabeled_groups = c("Unknown"),
-                                        hide_unlinked_nodes=TRUE,
-                                        label_font_size=6,
-                                        label_conn_linetype="dotted",
-                                        legend_position = "none"){
-
-  #edges = hooke:::distance_to_root(edges)
-  edges = edges %>% dplyr::ungroup()
-
-  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
-  node_metadata = tibble(id=cell_groups)
-
-  #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = colData(ccm@ccs@cds)[,c(color_nodes_by,
-                                                label_nodes_by,
-                                                group_nodes_by,
-                                                layer_nodes_by)] %>%
-    as.data.frame
-  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
-
-  if (is.null(color_nodes_by) == FALSE){
-    color_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(color_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(color_by_metadata) = c("cell_group", "color_nodes_by")
-    node_metadata = left_join(node_metadata, color_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(group_nodes_by) == FALSE){
-    group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(group_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
-    node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(layer_nodes_by) == FALSE){
-    layer_by_metadata = cell_group_metadata[,c("cell_group", layer_nodes_by)] %>%
-      as.data.frame
-    if (is.numeric(cell_group_metadata[,c(layer_nodes_by)])){
-      layer_by_metadata = layer_by_metadata %>%
-        group_by(cell_group) %>%
-        summarize(mean_layer_var = mean(!!sym(layer_nodes_by), na.rm=TRUE)) %>%
-        mutate(layer = ntile(desc(mean_layer_var),num_layers)) %>% dplyr::select(-mean_layer_var)
-    }else{
-      layer_by_metadata = layer_by_metadata %>%
-        count(cell_group, !!sym(layer_nodes_by)) %>%
-        group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    }
-    colnames(layer_by_metadata) = c("cell_group", "layer_nodes_by")
-    node_metadata = left_join(node_metadata, layer_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(label_nodes_by) == FALSE){
-    label_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(label_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(label_by_metadata) = c("cell_group", "label_nodes_by")
-    node_metadata = left_join(node_metadata, label_by_metadata, by=c("id"="cell_group"))
-  }else{
-    node_metadata$label_nodes_by = node_metadata$id
-  }
-  node_metadata = node_metadata %>% distinct() %>% as.data.frame(stringsAsFactor=FALSE)
-  row.names(node_metadata) = node_metadata$id
-  if (hide_unlinked_nodes){
-    node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
-  }
-
-  G = edges %>% select(from, to) %>% distinct()  %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
-
-  # run sugiyama layout
-  layers = NULL
-  if (is.null(layer_nodes_by) == FALSE) {
-    layers=igraph::V(G)$layer_nodes_by
-  }
+plot_state_transition_graph(genotype_models_tbl$genotype_ccm[[8]], noto_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 
-  #lay1 <- igraph::layout_with_sugiyama(G, layers=layers, maxiter=1000)
-  #sg1 = test_graph %>% graph::subGraph(snodes=c("13", "9", "10", "1", "33"))
-  #subGList <- vector(mode="list", length=1)
-  #subGList[[1]] <- list(graph=sg1)
-  #subGList[[2]] <- list(graph=sg2, cluster=FALSE)
-  #subGList[[3]] <- list(graph=sg3)
+
+aberrant_state = "33"
+aberrant_state_subgraph_vertices = c(aberrant_state,
+                                     igraph::V(noto_state_transition_graph)[get_parents(noto_state_transition_graph, aberrant_state)]$name,
+                                     igraph::V(noto_state_transition_graph)[get_children(noto_state_transition_graph, aberrant_state)]$name,
+                                     igraph::V(noto_state_transition_graph)[get_siblings(noto_state_transition_graph, aberrant_state)]$name)
+aberrant_state_subgraph = igraph::induced_subgraph(noto_state_transition_graph, igraph::V(noto_state_transition_graph)[aberrant_state_subgraph_vertices])
+
+noto_gene_patterns_over_state_graph = classify_genes_over_graph(genotype_models_tbl$genotype_ccm[[8]], aberrant_state_subgraph,  relative_expr_thresh=0.05, abs_expr_thresh=1e-3)
+noto_gene_patterns_over_state_graph = noto_gene_patterns_over_state_graph %>% tidyr::unnest(gene_classes) %>% tidyr::unnest(interpretation)
+noto_gene_patterns_over_state_graph = left_join(noto_gene_patterns_over_state_graph,
+                                           rowData(genotype_models_tbl$genotype_ccm[[8]]@ccs@cds) %>%
+                                             as_tibble %>%
+                                             select(id, gene_short_name), by=c("gene_id"="id"))
+
+aberrant_state_genes = noto_gene_patterns_over_state_graph %>%
+  filter(cell_state == aberrant_state & interpretation %in%  c("Selectively activated", "MLP")) %>%
+  pull(gene_short_name) %>% unique
+#selective_genes = selective_genes[grepl("si:", selective_genes) == FALSE]
+plot_genes_by_group(genotype_models_tbl$genotype_ccm[[8]]@ccs@cds[,clusters(genotype_models_tbl$genotype_ccm[[8]]@ccs@cds) %in% aberrant_state_subgraph_vertices],
+                    markers = aberrant_state_genes, group_cells_by = "cluster",ordering_type="maximal_on_diag", color_by_group=TRUE)
+
+aberrant_state_marker_table = top_markers(kidney_cds[rowData(kidney_cds)$gene_short_name %in% aberrant_state_genes,], genes_to_test_per_group = 100)
+
+aberrant_markers = aberrant_state_marker_table %>% filter (cell_group == "33" & marker_test_q_value < 0.01) %>% arrange(desc(marker_score)) %>% pull(gene_short_name)
+plot_genes_by_group(genotype_models_tbl$genotype_ccm[[8]]@ccs@cds,
+                    markers = aberrant_markers, group_cells_by = "cluster",ordering_type="maximal_on_diag", color_by_group=TRUE)
+ggsave("aberrant_state_markers.png", width=12, height=6)
+
+aberrant_state_gene_tfs = noto_gene_patterns_over_state_graph %>%
+  filter(cell_state == aberrant_state & interpretation %in%  c("Selectively activated", "MLP") & gene_short_name %in% transcription_regulators) %>%
+  pull(gene_short_name) %>% unique
+#selective_genes = selective_genes[grepl("si:", selective_genes) == FALSE]
+plot_genes_by_group(genotype_models_tbl$genotype_ccm[[8]]@ccs@cds[,clusters(genotype_models_tbl$genotype_ccm[[8]]@ccs@cds) %in% aberrant_state_subgraph_vertices],
+                    markers = aberrant_state_gene_tfs, group_cells_by = "cluster",ordering_type="maximal_on_diag", color_by_group=TRUE)
+
+# Plot the aberrant transcription factors:
+plot_cells(kidney_cds, genes = aberrant_state_gene_tfs)
+
+#gene_universe = gene_patterns_over_cell_type_graph %>% filter(interpretation != "Absent") %>% pull(gene_short_name) %>% unique()
+aberrant_state_pattern_pathways = noto_gene_patterns_over_state_graph %>%
+  filter(cell_state == aberrant_state) %>%
+  select(cell_state, interpretation, gene_short_name) %>%
+  group_by(cell_state, interpretation) %>% tidyr::nest(data=gene_short_name) %>%
+  dplyr::mutate(pathways = purrr::map(.f = purrr::possibly(
+    calc_pathway_enrichment_on_state_specific_genes, NA_real_), .x = data, gene_set_df, sig_thresh=1)) %>%
+  tidyr::unnest(pathways)
+#tidyr::unnest(degs)
+
+plot_cells(kidney_cds, color_cells_by="aberant.noto.smo.cells") + scale_color_manual(values=c("lightgrey", "red")) + theme(legend.position="none")
+ggsave("highlight_aberrant_state.png", width=4, height=4)
+
+plot_cells(kidney_cds, color_cells_by="aberant.noto.smo.cells", 2, 3) + scale_color_manual(values=c("lightgrey", "red")) + theme(legend.position="none")
+ggsave("highlight_aberrant_state_alt_view.png", width=4, height=4)
 
 
-  G_nel = graph::graphAM(igraph::get.adjacency(G) %>% as.matrix(),
-                              edgemode = 'directed') %>%
-    as("graphNEL")
+plot_cells(kidney_cds, genes = c("bcl3","nfkbie", "noxa1", "nox1", "ltb4r2a", "gfpt2"), 2, 3)
+ggsave("nfkb_genes_in_aberrant_state.png", width=10, height=6)
 
-  make_subgraphs_for_groups <- function(grouping_set, G_nel, node_meta_df){
-    nodes = node_meta_df %>% filter(group_nodes_by == grouping_set) %>% pull(id) %>% as.character
-    sg = list(graph=graph::subGraph(snodes=nodes, graph=G_nel))
-    return (sg)
-  }
+plot_cells(kidney_cds, genes = c("aqp3a",  "evx1", "dnase1l4.1"), 2, 3)
+ggsave("cloaca_markers_in_aberrant_state.png", width=10, height=3)
 
-  subgraph_df = node_metadata %>% group_by(group_nodes_by) %>%
-    summarize(subgraph = purrr::map(.f = purrr::possibly(make_subgraphs_for_groups, NULL),
-                                    .x = group_nodes_by,
-                                    G_nel,
-                                    node_metadata))
-
-  gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
-  gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
-
-  beziers = lapply(gvizl@renderInfo@edges$splines, function(bc) {
-    bc_segments = lapply(bc, Rgraphviz::bezierPoints)
-    bezier_cp_df = do.call(rbind, bc_segments) %>% as.data.frame
-    colnames(bezier_cp_df) = c("x", "y")
-    #bezier_cp_df$point = "control"
-    #bezier_cp_df$point[1] = "end"
-    #bezier_cp_df$point[nrow(bezier_cp_df)] = "end"
-    bezier_cp_df
-    #control_point_coords = lapply(bc, function(cp) Rgraphviz::getPoints)
-    #control_point_coords = rbind(control_point_coords)
-    })
-  bezier_df = do.call(rbind, beziers)
-  bezier_df$edge_name = stringr::str_split_fixed(row.names(bezier_df), "\\.", 2)[,1]
-  #bezier_df = bezier_df %>% mutate(x = ggnetwork:::scale_safely(x),
-  #                                 y = ggnetwork:::scale_safely(y))
-  g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
-
-  # add level information
-  #g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
-  #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
-
-
-  # p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
-  #   # draw activator edges
-  #   ggnetwork::geom_edges(data = g,
-  #                         arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-  p <- ggplot() +
-    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-    # draw activator edges
-    #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
-    #                     data = bezier_df)
-  if (is.null(group_nodes_by) == FALSE){
-    p = p + ggforce::geom_mark_rect(aes(x, y, xend = xend, yend = yend,
-                                        fill = group_nodes_by,
-                                        label=group_nodes_by,
-                                        filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                    size=0,
-                                    label.fontsize=label_font_size,
-                                    con.linetype=label_conn_linetype,
-                                    data=g)
-  }
-
-  if (is.null(color_nodes_by) == FALSE) {
-
-    # if numerical
-    if (is.numeric(g[[color_nodes_by]])) {
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y, xend = xend, yend = yend,
-                                            fill = as.factor(color_nodes_by),
-                                            label = label_nodes_by),
-                                        size = node_size) +
-        labs(fill = color_nodes_by) +
-        scale_fill_gradient2(low = "darkblue", mid = "white", high="red4")
-    }
-    else {
-      # if categorical
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y, xend = xend, yend = yend,
-                                            fill = color_nodes_by,
-                                            label = label_nodes_by),
-                                        size = node_size) +
-        labs(fill = color_nodes_by)
-
-    }
-
-  } else {
-    p = p + ggnetwork::geom_nodelabel(data = g,
-                                      aes(x, y, xend = xend, yend = yend,
-                                          label = label_nodes_by),
-                                      size = node_size)
-  }
-
-  p = p + scale_size_identity() +
-    monocle3:::monocle_theme_opts() +
-    ggnetwork::theme_blank() +
-    theme(legend.position=legend_position)
-  return(p)
-}
-#debug(plot_state_transition_graph_with_graphviz)
-plot_state_transition_graph_with_graphviz(wt_ccm_wl, noto_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
-
-plot_state_transition_graph(wt_ccm_wl, noto_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
-
+plot_cells(kidney_cds, genes = c("twist", "snail", "slug", "chd1", "cdh2"), 2, 3)
+ggsave("emt_genes_in_aberrant_state.png", width=10, height=6)
 
 
 #state_transitions = hooke:::collect_pln_graph_edges(ccm, cond_ra_vs_wt_tbl) %>% as_tibble %>%

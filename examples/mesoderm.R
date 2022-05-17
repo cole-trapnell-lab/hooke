@@ -101,6 +101,6 @@ state_transition_graph = assemble_timeseries_transitions(wt_ccm_wl,
 
 
 plot_state_transition_graph(wt_ccm_wl, state_transition_graph %>% igraph::as_data_frame(),
-                            color_nodes_by = "cell_type_sub", group_nodes_by="cell_type_broad")
+                            color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
 
 
