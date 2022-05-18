@@ -809,12 +809,12 @@ plot_state_transition_graph <- function(ccm,
                                         num_layers=10,
                                         edge_size=0.5,
                                         fract_expr = 0.1,
-                                        min_expr = 0.1,
                                         unlabeled_groups = c("Unknown"),
                                         hide_unlinked_nodes=TRUE,
                                         label_font_size=6,
                                         label_conn_linetype="dotted",
-                                        legend_position = "none"){
+                                        legend_position = "none",
+                                        group_outline=FALSE){
 
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
@@ -895,7 +895,7 @@ plot_state_transition_graph <- function(ccm,
     # might be better way to do this
     color_nodes_by = "delta_log_abund"
     #idk what to do about this currently
-    # group_nodes_by = NULL
+    group_outline = TRUE
   }
 
 
@@ -914,6 +914,7 @@ plot_state_transition_graph <- function(ccm,
         TRUE ~ FALSE))
 
     color_nodes_by = "mean_expression"
+    group_outline = TRUE
 
   }
   # else {
@@ -994,14 +995,27 @@ plot_state_transition_graph <- function(ccm,
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
-    p = p + ggforce::geom_mark_rect(aes(x, y,
-                                        fill = group_nodes_by,
-                                        label = group_nodes_by,
-                                        filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                    size=0,
-                                    label.fontsize=label_font_size,
-                                    con.linetype=label_conn_linetype,
-                                    data=g)
+
+    if (group_outline) {
+      p = p + ggforce::geom_mark_rect(aes(x, y,
+                                          col = group_nodes_by,
+                                          label = group_nodes_by,
+                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                      size=0.5,
+                                      label.fontsize=label_font_size,
+                                      con.linetype=label_conn_linetype,
+                                      data=g)
+    } else {
+      p = p + ggforce::geom_mark_rect(aes(x, y,
+                                          fill = group_nodes_by,
+                                          label = group_nodes_by,
+                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                      size=0,
+                                      label.fontsize=label_font_size,
+                                      con.linetype=label_conn_linetype,
+                                      data=g)
+    }
+
   }
 
   if (is.null(color_nodes_by) == FALSE) {
@@ -1009,26 +1023,19 @@ plot_state_transition_graph <- function(ccm,
     # if numerical
     if (is.numeric(g[[color_nodes_by]])) {
       p = p + ggnewscale::new_scale_fill() +
-        ggnetwork::geom_nodelabel(data = g%>% filter(!gene_expr),
-                                                            aes(x, y,
-                                                                fill = !!sym(color_nodes_by),
-                                                                label = label_nodes_by),
-                                                            alpha=0.5,
-                                                            size = node_size) +
-        # ggnetwork::geom_nodelabel(data = g%>% filter(!gene_expr),
-        #                           aes(x, y,
-        #                               fill = !!sym(color_nodes_by),
-        #                               label = label_nodes_by),
-        #                           alpha=0.5,
-        #                           size = node_size) +
-        # ggnetwork::geom_nodelabel(data = g %>% filter(gene_expr),
-        #                           aes(x, y,
-        #                               fill = !!sym(color_nodes_by),
-        #                               label = label_nodes_by),
-        #                           alpha = 1,
-        #                           size = node_size) +
-        labs(fill = color_nodes_by) +
-        scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+        ggnetwork::geom_nodelabel(data = g,
+                                  aes(x, y,
+                                      fill = !!sym(color_nodes_by),
+                                      label = label_nodes_by),
+                                      size = node_size) +
+        labs(fill = color_nodes_by)
+
+      if (color_nodes_by == "mean_expression") {
+        p = p + viridis::scale_fill_viridis(option = "viridis")
+      } else {
+        p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+      }
+
     }
     else {
       # if categorical
