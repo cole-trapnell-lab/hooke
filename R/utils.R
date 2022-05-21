@@ -242,8 +242,8 @@ run_projection <- function(query_cds,
 
   umap_dims = reducedDims(query_cds)[["UMAP"]]
   annoy_res = uwot:::annoy_search(umap_dims,
-                                k = 10,
-                                ann = query_cds@reduce_dim_aux$UMAP$nn_index$annoy_index)
+                                  k = 10,
+                                  ann = query_cds@reduce_dim_aux$UMAP$nn_index$annoy_index)
 
   labels  = get_nn_labels(umap_dims,
                           annoy_res,
@@ -277,4 +277,73 @@ convert_to_col = function(ccs, df, colname) {
     select(-cell_group, -n) %>%
     rename("cell_group" = cell_group.y)
 
+}
+
+
+fit_genotype_ccm = function(genotype,
+                            ccs,
+                            # ctrl_ids=c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
+                            ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
+                            num_time_breaks = 3,
+                            sparsity_factor = 0.2,
+                            whitelist = NULL,
+                            multiply = F){
+
+  subset_ccs = ccs[,colData(ccs)$gene_target == genotype | colData(ccs)$gene_target %in% ctrl_ids]
+
+  colData(subset_ccs)$knockout = colData(subset_ccs)$gene_target == genotype
+  knockout_time_start = min(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
+  knockout_time_stop = max(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
+  subset_ccs = subset_ccs[,colData(subset_ccs)$timepoint >= knockout_time_start & colData(subset_ccs)$timepoint <= knockout_time_stop]
+  time_breakpoints = c()
+
+  print(unique(colData(subset_ccs)$expt))
+
+  if (num_time_breaks > 2 & knockout_time_stop > knockout_time_start){
+    time_breakpoints = seq(knockout_time_start, knockout_time_stop, length.out=num_time_breaks)
+    time_breakpoints = time_breakpoints[2:(length(time_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
+    main_model_formula_str = paste("~ splines::ns(timepoint, knots=", paste("c(",paste(time_breakpoints, collapse=","), ")", sep=""), ")")
+  }
+  else if (num_time_breaks == 2){
+    main_model_formula_str = "~ as.factor(timepoint)"
+  }
+  else{
+    main_model_formula_str = ""
+  }
+
+  if (multiply) {
+    nuisance_model_formula_str = main_model_formula_str
+
+    if (length(unique(colData(subset_ccs)$expt)) > 1) {
+      nuisance_model_formula_str = paste0(nuisance_model_formula_str, "+ expt")
+    }
+  } else {
+    if (length(unique(colData(subset_ccs)$expt)) > 1)
+      nuisance_model_formula_str = "~ expt"
+    else
+      nuisance_model_formula_str = "~ 1"
+  }
+
+  if (multiply) {
+    main_model_formula_str = paste0(main_model_formula_str, "*knockout")
+  }
+  main_model_formula_str = paste0(main_model_formula_str, " + knockout")
+
+
+  print(main_model_formula_str)
+  print(nuisance_model_formula_str)
+
+  genotype_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
+                                                       main_model_formula_str = main_model_formula_str,
+                                                       nuisance_model_formula_str = nuisance_model_formula_str,
+                                                       whitelist = whitelist
+  ))
+  genotype_ccm = select_model(genotype_ccm, sparsity_factor = sparsity_factor)
+  return(genotype_ccm)
+}
+
+collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
+  control_abund = estimate_abundances(ccm, tibble(knockout=FALSE, timepoint=timepoint, expt=expt))
+  knockout_abund = estimate_abundances(ccm, tibble(knockout=TRUE, timepoint=timepoint, expt=expt))
+  genotype_comparison_tbl = compare_abundances(ccm, control_abund, knockout_abund)
 }

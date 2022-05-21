@@ -85,16 +85,16 @@ plot_contrast <- function(ccm,
     directed_edge_df = directed_edge_df %>%
       dplyr::group_by(to) %>%
       dplyr::mutate(flow_factor = -pmin(0, pcor),
-             total_weight = sum(flow_factor),
-             scaled_weight  = flow_factor / total_weight)
+                    total_weight = sum(flow_factor),
+                    scaled_weight  = flow_factor / total_weight)
     undirected_edge_df = undirected_edge_df %>%
       dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
   }else if (scale_shifts_by == "receiver"){
     directed_edge_df = directed_edge_df %>%
       dplyr::group_by(from) %>%
       dplyr::mutate(flow_factor = -pmin(0, pcor),
-             total_weight = sum(flow_factor),
-             scaled_weight  = flow_factor / total_weight)
+                    total_weight = sum(flow_factor),
+                    scaled_weight  = flow_factor / total_weight)
     undirected_edge_df = undirected_edge_df %>%
       dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
   }else{
@@ -112,8 +112,8 @@ plot_contrast <- function(ccm,
 
   plot_df = dplyr::left_join(plot_df,
                              cond_b_vs_a_tbl,
-                      # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
-                      by=c("cell_group"="cell_group"))
+                             # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
+                             by=c("cell_group"="cell_group"))
 
 
   if (is.null(fc_limits)) {
@@ -296,13 +296,13 @@ get_colors <- function(num_colors, type = "rainbow") {
   } else {
 
     colors =
-        c('#4477AA',
-          '#EE6677',
-          '#228833',
-          '#CCBB44',
-          '#66CCEE',
-          '#AA3377',
-          '#BBBBBB')
+      c('#4477AA',
+        '#EE6677',
+        '#228833',
+        '#CCBB44',
+        '#66CCEE',
+        '#AA3377',
+        '#BBBBBB')
 
   }
 
@@ -474,13 +474,13 @@ my_plot_cells <- function(data,
         alpha = alpha,
         stroke = 0) +
       # viridis::scale_color_viridis(option = "C")
-    scale_color_gradient2(
-      low = "#122985",
-      mid = "white",
-      high = "red4",
-      na.value = "white",
-      limits = fc_limits
-    )
+      scale_color_gradient2(
+        low = "#122985",
+        mid = "white",
+        high = "red4",
+        na.value = "white",
+        limits = fc_limits
+      )
 
 
   } else if (color_cells_by %in% c("viridis", "inferno", "C")) {
@@ -716,27 +716,27 @@ add_edge <- function(gp,
                      umap_centers,
                      size = 1,
                      color = "black") {
-    path_df = add_umap_coords(path_df, umap_centers)
+  path_df = add_umap_coords(path_df, umap_centers)
 
-    gp = gp +
-      geom_segment(data = path_df,
-              aes(x = umap_to_1,
-                  y = umap_to_2,
-                  xend = umap_from_1,
-                  yend = umap_from_2),
-              size = size,
-              color = color) +
-      geom_segment(data = path_df,
-              aes(x = umap_from_1,
-                  y = umap_from_2,
-                  xend = (umap_to_1+umap_from_1)/2,
-                  yend = (umap_to_2+umap_from_2)/2),
-              size = size,
-              color = color,
-              linejoin='mitre',
-              arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
+  gp = gp +
+    geom_segment(data = path_df,
+                 aes(x = umap_to_1,
+                     y = umap_to_2,
+                     xend = umap_from_1,
+                     yend = umap_from_2),
+                 size = size,
+                 color = color) +
+    geom_segment(data = path_df,
+                 aes(x = umap_from_1,
+                     y = umap_from_2,
+                     xend = (umap_to_1+umap_from_1)/2,
+                     yend = (umap_to_2+umap_from_2)/2),
+                 size = size,
+                 color = color,
+                 linejoin='mitre',
+                 arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))
 
-    return(gp)
+  return(gp)
 }
 
 
@@ -782,10 +782,10 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
   g <- ggnetwork(x = n, layout = geo, arrow.gap=arrow.gap, scale = scale)
 
   show(ggplot(g, aes(x, y, xend = xend, yend = yend)) +
-          geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
-          geom_nodes(size = 7,colour="black",shape=21) +
-          geom_nodetext_repel(aes(label = id), size=3) +
-          theme_blank())
+         geom_edges(arrow = arrow(length = unit(6, "pt"), type="closed")) +
+         geom_nodes(size = 7,colour="black",shape=21) +
+         geom_nodetext_repel(aes(label = id), size=3) +
+         theme_blank())
 
 }
 
@@ -915,18 +915,9 @@ plot_state_transition_graph <- function(ccm,
 
     color_nodes_by = "mean_expression"
     group_outline = TRUE
-
   }
-  # else {
-  #   # if not specificed, ignore this information
-  #   node_metadata = node_metadata %>% mutate(fraction_expressing = 1.0,
-  #                                            mean_expression = 1.0,
-  #                                            gene_expr = TRUE)
-  # }
-
 
   G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
-
 
   # run sugiyama layout
   layers = NULL
@@ -1022,17 +1013,32 @@ plot_state_transition_graph <- function(ccm,
 
     # if numerical
     if (is.numeric(g[[color_nodes_by]])) {
-      p = p + ggnewscale::new_scale_fill() +
-        ggnetwork::geom_nodelabel(data = g,
-                                  aes(x, y,
-                                      fill = !!sym(color_nodes_by),
-                                      label = label_nodes_by),
-                                      size = node_size) +
-        labs(fill = color_nodes_by)
 
       if (color_nodes_by == "mean_expression") {
+
+        p = p + ggnewscale::new_scale_fill() +
+          ggnetwork::geom_nodelabel(data = g %>% filter(gene_expr),
+                                    aes(x, y,
+                                        fill = !!sym(color_nodes_by),
+                                        label = label_nodes_by),
+                                    size = node_size) +
+          ggnetwork::geom_nodelabel(data = g %>% filter(!gene_expr),
+                                    aes(x, y,
+                                        label = label_nodes_by),
+                                    fill="white",
+                                    size = node_size) +
+          labs(fill = color_nodes_by)
+
         p = p + viridis::scale_fill_viridis(option = "viridis")
       } else {
+
+        p = p + ggnewscale::new_scale_fill() +
+          ggnetwork::geom_nodelabel(data = g,
+                                    aes(x, y,
+                                        fill = !!sym(color_nodes_by),
+                                        label = label_nodes_by),
+                                    size = node_size) +
+          labs(fill = color_nodes_by)
         p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
       }
 
