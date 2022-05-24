@@ -808,7 +808,9 @@ plot_state_transition_graph <- function(ccm,
                                         node_size = 2,
                                         num_layers=10,
                                         edge_size=0.5,
-                                        fract_expr = 0.1,
+                                        fract_expr = 0.0,
+                                        mean_expr = 0.0,
+                                        method = "min",
                                         unlabeled_groups = c("Unknown"),
                                         hide_unlinked_nodes=TRUE,
                                         label_font_size=6,
@@ -906,11 +908,20 @@ plot_state_transition_graph <- function(ccm,
     gene_expr = aggregated_expr_data(ccm@ccs@cds, group_cells_by = ccm@ccs@info$cell_group)
     sub_gene_expr = gene_expr %>%
       filter(gene_short_name %in% genes)
+
+    method = get(method)
+    sub_gene_expr = sub_gene_expr %>%
+                    group_by(cell_group) %>%
+                    dplyr::summarise(fraction_expressing = method(fraction_expressing),
+                                     mean_expression = method(mean_expression),
+                                      specificity = method(specificity)) %>%
+      mutate(gene_short_name =  paste(genes, collapse = "-"))
+
     node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
 
     node_metadata = node_metadata %>%
       mutate(gene_expr = case_when(
-        fraction_expressing >= fract_expr ~ TRUE,
+        fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
         TRUE ~ FALSE))
 
     color_nodes_by = "mean_expression"
