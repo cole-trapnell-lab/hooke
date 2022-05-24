@@ -801,6 +801,7 @@ plot_state_transition_graph <- function(ccm,
                                         cond_b_v_a_tbl = NULL,
                                         fc_limits = NULL,
                                         genes = list(),
+                                        labels = NULL,
                                         qval_threshold = 0.05,
                                         arrow.gap=0.03,
                                         arrow_unit = 2,
@@ -961,8 +962,19 @@ plot_state_transition_graph <- function(ccm,
                                     G_nel,
                                     node_metadata))
 
-  gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
+  if (is.null(labels)== FALSE) {
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=labels))
+    label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
+      rownames_to_column("label")
+
+  } else {
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
+  }
+
   gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
+
+
+
 
   beziers = lapply(gvizl@renderInfo@edges$splines, function(bc) {
     bc_segments = lapply(bc, Rgraphviz::bezierPoints)
@@ -1070,6 +1082,11 @@ plot_state_transition_graph <- function(ccm,
                                       aes(x, y, xend = xend, yend = yend,
                                           label = label_nodes_by),
                                       size = node_size)
+  }
+
+  if (is.null(labels) == FALSE) {
+   p = p +  ggnetwork::geom_nodetext(data = label_df,
+                             aes(x,y, label = label))
   }
 
   p = p + scale_size_identity() +

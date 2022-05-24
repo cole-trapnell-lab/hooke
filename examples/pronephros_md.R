@@ -110,10 +110,18 @@ wt_ccs = new_cell_count_set(wt_cds,
 wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="timepoint", interval_start=18, interval_stop=48, num_breaks=4)
 
 
+undebug(new_cell_count_model)
+
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  main_model_formula_str = wt_main_model_formula_str,
                                  nuisance_model_formula_str = "~experiment",
                                  whitelist = initial_pcor_graph(wt_ccs))
+
+
+wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=0.1)
+
+# do we need to fix select model?
+
 
 kidney_cell_type_abundances = get_extant_cell_types(wt_ccm_wl, start = 18, stop = 48,
                                                     log_abund_detection_thresh=-2,
@@ -291,7 +299,7 @@ aug_pathfinding_graph <- function(ccm,
   covered_G = compute_min_path_cover(ccm, G)
 
   # add any new edges
-  new_edges = igraph::difference(covered_G, current_graph) %>%
+  new_edges = igraph::difference(covered_G, curr_graph) %>%
     igraph::as_data_frame() %>%
     filter(from %in% not_in_paga_and_emerge | to %in% not_in_paga_and_emerge) %>%
     igraph::graph_from_data_frame()
@@ -307,10 +315,10 @@ aug_pathfinding_graph <- function(ccm,
 # ------------------------------------------------------------------------------
 
 # run the model with the previous state graph as a whitelist
-wt_ccm_wl_2 = new_cell_count_model(wt_ccs,
-                                   main_model_formula_str = wt_main_model_formula_str,
-                                   nuisance_model_formula_str = "~experiment",
-                                   whitelist = wt_state_transition_graph %>% igraph::as_data_frame())
+# wt_ccm_wl_2 = new_cell_count_model(wt_ccs,
+#                                    main_model_formula_str = wt_main_model_formula_str,
+#                                    nuisance_model_formula_str = "~experiment",
+#                                    whitelist = wt_state_transition_graph %>% igraph::as_data_frame())
 
 augmented_graph = aug_pathfinding_graph(wt_ccm_wl,
                                         wt_state_transition_graph,
@@ -378,6 +386,16 @@ plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_
                             group_nodes_by="cell_type",
                             layer_nodes_by="timepoint")
 
+# test labeling edges
+
+labels = c('test', "test2", "test3")
+names(labels) = c("12~3", "17~11", "22~2")
+
+plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_data_frame(),
+                            color_nodes_by = "cell_type",
+                            labels = labels,
+                            group_nodes_by="cell_type",
+                            layer_nodes_by="timepoint")
 
 
 
