@@ -286,6 +286,7 @@ fit_genotype_ccm = function(genotype,
                             ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
                             num_time_breaks = 3,
                             sparsity_factor = 0.2,
+                            main_model_formula_string = NULL,
                             whitelist = NULL,
                             multiply = F){
 
@@ -296,8 +297,6 @@ fit_genotype_ccm = function(genotype,
   knockout_time_stop = max(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
   subset_ccs = subset_ccs[,colData(subset_ccs)$timepoint >= knockout_time_start & colData(subset_ccs)$timepoint <= knockout_time_stop]
   time_breakpoints = c()
-
-  print(unique(colData(subset_ccs)$expt))
 
   if (num_time_breaks > 2 & knockout_time_stop > knockout_time_start){
     time_breakpoints = seq(knockout_time_start, knockout_time_stop, length.out=num_time_breaks)
@@ -330,14 +329,20 @@ fit_genotype_ccm = function(genotype,
   main_model_formula_str = paste0(main_model_formula_str, " + knockout")
 
 
-  print(main_model_formula_str)
-  print(nuisance_model_formula_str)
+  # if predefined overwrite
+  if (!is.null(main_model_formula_string)) {
+    main_model_formula_str = main_model_formula_string
+  }
+
+  # print(main_model_formula_str)
+  # print(nuisance_model_formula_str)
 
   genotype_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
                                                        main_model_formula_str = main_model_formula_str,
                                                        nuisance_model_formula_str = nuisance_model_formula_str,
                                                        whitelist = whitelist
   ))
+
   genotype_ccm = select_model(genotype_ccm, sparsity_factor = sparsity_factor)
   return(genotype_ccm)
 }
