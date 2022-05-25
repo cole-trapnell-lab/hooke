@@ -12,21 +12,20 @@ setwd("/Users/maddyduran/OneDrive/UW/Trapnell/hooke_split_model/examples/")
 devtools::load_all("/Users/maddyduran/OneDrive/UW/Trapnell/hooke_split_model")
 
 # full meso cds
-meso_cds = readRDS("~/OneDrive/UW/Trapnell/fish-crew/updated_R_objects/mesoderm_all_cells_projected_940k_anno_cds.RDS")
+# meso_cds = readRDS("~/OneDrive/UW/Trapnell/fish-crew/updated_R_objects/mesoderm_all_cells_projected_940k_anno_cds.RDS")
+# meso_wt_cds = meso_cds[, grepl("ctrl", colData(meso_cds)$gene_target)]
 
-
-colData(meso_cds)$sample = NULL
+# colData(meso_cds)$sample = NULL
 # save this clustering ?
 # meso_cds = cluster_cells(meso_cds, resolution=1e-4, random_seed=42)
+# meso_wt_cds = cluster_cells(meso_wt_cds, resolution=1e-4, random_seed=42)
 
-plot_cells(meso_cds)
 
 # meso_cds = readRDS("final-ref_mesoderm-PA_350k_saved-model-algn_anno_cds.RDS")
-# mesocds = readRDS("/Users/maddyduran/OneDrive/UW/Trapnell/fish-crew/updated_R_objects/final-ref_mesoderm-PA_350k_saved-model-algn_anno_cds.RDS")
+meso_wt_cds = readRDS("/Users/maddyduran/OneDrive/UW/Trapnell/fish-crew/updated_R_objects/final-ref_mesoderm-PA_350k_saved-model-algn_anno_cds.RDS")
 
-meso_wt_cds = meso_cds[, grepl("ctrl", colData(meso_cds)$gene_target)]
 
-meso_wt_cds = cluster_cells(meso_wt_cds, resolution=1e-4, random_seed=42)
+
 colData(meso_wt_cds)$cluster = as.character(clusters(meso_wt_cds))
 meso_wt_cds = meso_wt_cds[, is.na(colData(meso_wt_cds)$embryo) == FALSE]
 colData(meso_wt_cds)$cell_type = colData(meso_wt_cds)$cell_type_sub
@@ -50,6 +49,59 @@ staging_df$predicted_timepoint = predict(staging_model)
 
 colData(meso_wt_cds)$adjusted_timepoint = staging_df$predicted_timepoint
 
+
+# apply to mutant -------------------------------------------------------------
+
+meso_mt_cds = readRDS("~/OneDrive/UW/Trapnell/fish-crew/updated_R_objects/mesoderm_gap16_no-ctrls_projected_613k_anno_cds.RDS")
+
+# apply cluster labels
+meso_wt_cds = make_cds_nn_index(meso_wt_cds, reduction_method = "UMAP")
+
+
+meso_wt_coldata = meso_wt_cds@colData %>% as.data.frame
+
+
+meso_mt_cds@reduce_dim_aux$UMAP = meso_wt_cds@reduce_dim_aux$UMAP
+meso_mt_cds = transfer_cell_labels(meso_mt_cds,
+                                 reduction_method = "UMAP",
+                                 ref_coldata = meso_wt_coldata,
+                                 ref_column_name = "cluster",
+                                 nn_control = list())
+
+meso_mt_cds = fix_missing_cell_labels(meso_mt_cds,
+                                      reduction_method = "UMAP",
+                                      from_column_name = "cluster",
+                                      k = 10)
+
+
+colData(meso_wt_cds) %>% as.data.frame() %>%
+  ggplot(aes(subumap3d_1, subumap3d_2, color = cluster)) + geom_point(size=0.5) + monocle3:::monocle_theme_opts()
+
+
+colData(meso_mt_cds) %>% as.data.frame() %>%
+  filter(!is.na(cluster)) %>%
+  ggplot(aes(subumap3d_1, subumap3d_2, color = cluster)) + geom_point(size=0.5) + monocle3:::monocle_theme_opts()
+
+
+colData(meso_mt_cds) %>% as.data.frame() %>%
+  filter(!is.na(cluster)) %>%
+  ggplot(aes(subumap3d_1, subumap3d_3, color = cluster)) + geom_point(size=0.5) + monocle3:::monocle_theme_opts()
+
+colData(meso_mt_cds) %>% as.data.frame() %>%
+  filter(!is.na(cluster)) %>%
+  ggplot(aes(subumap3d_2, subumap3d_3, color = cluster)) + geom_point(size=0.5) + monocle3:::monocle_theme_opts()
+
+
+staging_mt_df = colData(meso_mt_cds) %>% as.data.frame %>% select(cell, embryo, expt, timepoint, mean_nn_time) %>% as_tibble()
+staging_mt_df = staging_mt_df %>% mutate(timepoint = as.numeric(timepoint))
+
+staging_mt_df$predicted_timepoint = predict(staging_model, staging_mt_df)
+
+colData(meso_mt_cds)$adjusted_timepoint = staging_mt_df$predicted_timepoint
+
+# WT HOOKE --------------------------------------------------------------------
+
+
 # JUST FOR DEBUGGING:
 colData(meso_cds)$timepoint = NULL
 
@@ -68,7 +120,7 @@ wt_ccs = new_cell_count_set(meso_wt_cds,
 
 # Use custom breaks because the sampling over the time range is so uneven
 #wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="adjusted_timepoint", interval_start=18, interval_stop=96, num_breaks=6)
-wt_main_model_formula_str = "~ splines::ns( adjusted_timepoint , knots= c(24,48,60), Boundary.knots=c(20,92) )"
+wt_main_model_formula_str = "~ splines::ns( adjusted_timepoint, knots= c(24,48,60), Boundary.knots=c(20,92) )"
 
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #main_model_formula_str = "~expt",
@@ -239,34 +291,44 @@ plot_graph_comparison(lit_tree_meso, meso_stg_ctb)
 
 # benchmark with genetics -----------------------------------------------------
 
-# meso_mt_cds = meso_cds[, !grepl("ctrl", colData(meso_cds)$gene_target) ]
+# combine the wt + mt with the new cds
 
+meso_cds = combine_cds(list(meso_wt_cds, meso_mt_cds), keep_reduced_dims = T)
 colData(meso_cds)$sample = NULL
+
 meso_ccs = new_cell_count_set(meso_cds,
                               sample_group = "embryo",
-                              cell_group = "cell_type_sub")
+                              cell_group = "cluster")
 
 tbx16_ccm = fit_genotype_ccm(genotype = "tbx16",
                             ccs = meso_ccs,
                             ctrl_ids = c("ctrl-uninj", "ctrl-inj"),
                             # multiply = F,
-                            # whitelist = wt_state_transition_graph %>% igraph::as_data_frame(),
+                            whitelist = state_transition_graph %>% igraph::as_data_frame(),
                             sparsity_factor = 0.1)
 
 tbx16_eff = collect_genotype_effects(ccm = tbx16_ccm,
                                     timepoint = 36,
                                     expt = "GAP16")
 
+# test switch label
 plot_contrast(tbx16_ccm, tbx16_eff, plot_edges = "none",
               switch_label = "cell_type_broad", repel_labels = T)
 
 
+parent_child_foldchanges(lit_tree_meso, tbx16_eff)
+parent_child_foldchanges(state_transition_graph, tbx16_eff)
+
+plot_state_transition_graph(wt_ccm_wl,
+                            state_transition_graph %>% igraph::as_data_frame(),
+                            cond_b_v_a_tbl = tbx16_eff,
+                            color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
+
+
+
 # plot on the graph
 
-parent_child_foldchanges(lit_tree_meso, tbx16_eff)
-
-
-# plot_FC_graph <- function() {
+# plot_FC_graph <- function(cond_b_v_a_tbl) {
 #
 #   cond_b_v_a_tbl = cond_b_v_a_tbl %>%
 #     mutate(delta_log_abund = ifelse(delta_q_value < qval_threshold, delta_log_abund, 0))
@@ -309,5 +371,94 @@ parent_child_foldchanges(lit_tree_meso, tbx16_eff)
 #     theme(legend.position=legend_position)
 #
 # }
+
+# scale up --------------------------------------------------------------------
+
+genotype_df = colData(meso_ccs@cds) %>% as_tibble() %>% dplyr::select(gene_target) %>% distinct()
+genotype_df = genotype_df %>% filter(!grepl("ctrl", gene_target))
+
+
+genotype_models_tbl = genotype_df %>%
+  dplyr::mutate(genotype_ccm = purrr::map(.f = purrr::possibly(fit_genotype_ccm, NA_real_),
+                                          .x = gene_target,
+                                          ccs = meso_ccs,
+                                          ctrl_ids=c("ctrl-uninj", "ctrl-inj"),
+                                          sparsity = wt_ccm_wl@sparsity))
+
+genotype_models_tbl = genotype_models_tbl %>%
+  dplyr::mutate(genotype_eff = purrr::map(.f = purrr::possibly(
+    collect_genotype_effects, NA_real_), .x = genotype_ccm, timepoint=24))
+
+genotype_models_tbl = genotype_models_tbl %>%
+  filter(!is.na(genotype_ccm)) %>%
+  filter(!is.na(genotype_eff))
+
+
+filter_genotype_tbl = function(genotype_models_tbl, genotype, type) {
+
+  genotype_filter_tbl = genotype_models_tbl %>% as.data.frame %>% filter(genotype == genotype)
+
+  if (type == "ccm") {
+    return(genotype_filter_tbl$genotype_ccm[[1]])
+  } else if (type == "eff") {
+    return(genotype_filter_tbl$genotype_eff[[1]])
+  }
+}
+
+
+plot_state_transition_graph(wt_ccm_wl,
+                            state_transition_graph %>% igraph::as_data_frame(),
+                            cond_b_v_a_tbl = tbx16_eff,
+                            color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
+
+
+plot_state_transition_graph(wt_ccm_wl,
+                            state_transition_graph %>% igraph::as_data_frame(),
+                            genes = c("tbx16"),
+                            color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
+
+# debug(plot_state_transition_graph)
+plot_state_transition_graph(wt_ccm_wl,
+                            state_transition_graph %>% igraph::as_data_frame(),
+                            genes = c("tbx16", "msgn1"),
+                            fract_expr = 0,
+                            mean_expr = 0,
+                            color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
+
+
+
+
+
+
+
+# # do something similar to seurat's feature blend?
+# # https://github.com/satijalab/seurat/blob/a1294c4d363780548dbf9cc4a4abb3a6078a6d64/R/visualization.R
+#
+# # Blend expression values together
+# #
+# # @param data A two-column data frame with expression values for two features
+# #
+# # @return A three-column data frame with transformed and blended expression values
+# #
+# BlendExpression <- function(data) {
+#   if (ncol(x = data) != 2) {
+#     stop("'BlendExpression' only blends two features")
+#   }
+#   features <- colnames(x = data)
+#   data <- as.data.frame(x = apply(
+#     X = data,
+#     MARGIN = 2,
+#     FUN = function(x) {
+#       return(round(x = 9 * (x - min(x)) / (max(x) - min(x))))
+#     }
+#   ))
+#   data[, 3] <- data[, 1] + data[, 2] * 10
+#   colnames(x = data) <- c(features, paste(features, collapse = '_'))
+#   for (i in 1:ncol(x = data)) {
+#     data[, i] <- factor(x = data[, i])
+#   }
+#   return(data)
+# }
+#
 
 
