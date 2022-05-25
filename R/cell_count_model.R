@@ -50,6 +50,7 @@ setClass("cell_count_model",
                    reduced_model_formula = "formula",
                    reduced_model_family = "PLNnetworkfamily",
                    best_reduced_model = "PLNnetworkfit",
+                   sparsity = "numeric",
                    model_aux = "SimpleList")
 )
 
@@ -330,7 +331,7 @@ new_cell_count_model <- function(ccs,
 
   # Choose a model that isn't very aggressively sparsified
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
-  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty * sparsity_factor)
+  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
 
   ccm <- methods::new("cell_count_model",
@@ -341,7 +342,7 @@ new_cell_count_model <- function(ccs,
                       reduced_model_formula = reduced_model_formula,
                       best_reduced_model = best_reduced_model,
                       reduced_model_family = reduced_pln_model,
-
+                      sparsity = sparsity_factor,
                       model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels)
                       )
   #
@@ -379,6 +380,9 @@ select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to
     best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
     ccm@best_full_model = best_full_model
   #}
+
+  ccm@sparsity = sparsity_factor
+
   return(ccm)
 }
 
