@@ -826,7 +826,7 @@ plot_state_transition_graph <- function(ccm,
   cell_group_metadata = colData(ccm@ccs@cds)[,c(color_nodes_by,
                                                 label_nodes_by,
                                                 group_nodes_by,
-                                                layer_nodes_by)] %>%
+                                                layer_nodes_by), drop=F] %>%
     as.data.frame
   cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
 
