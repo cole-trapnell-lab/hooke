@@ -789,6 +789,28 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 
 }
 
+is_concordant <- function(cond_b_v_a_tbl, state_transition_graph) {
+
+  parent_child_foldchanges(state_transition_graph, cond_b_v_a_tbl) %>%
+    mutate(concordant = case_when( fold_changes == "parent increase, descendents increase" ~ TRUE,
+                                   fold_changes == "parent decrease, descendents decrease" ~ TRUE,
+                                   TRUE~ FALSE)) %>% ungroup #%>%
+  # group_by(consitent) %>% tally() %>%
+  # mutate(pct = n/sum(n))
+
+}
+
+is_discordant <- function(cond_b_v_a_tbl, state_transition_graph) {
+
+  parent_child_foldchanges(state_transition_graph, cond_b_v_a_tbl) %>%
+    mutate(discordant = case_when( fold_changes == "parent decrease, descendents no change" ~ TRUE,
+                                   fold_changes == "parent decrease, descendents increase" ~ TRUE,
+                                   fold_changes == "parent increase, descendents no change" ~ TRUE,
+                                   fold_changes == "parent increase, descendents decrease" ~ TRUE,
+                                   TRUE~ FALSE)) %>% ungroup
+
+}
+
 #' Plot a graph that summarized an assembled state transition graph
 #'
 #' @export
@@ -800,6 +822,8 @@ plot_state_transition_graph <- function(ccm,
                                         layer_nodes_by=NULL,
                                         cond_b_v_a_tbl = NULL,
                                         fc_limits = NULL,
+                                        genotype_models_tbl = NULL,
+                                        concordant = TRUE,
                                         genes = list(),
                                         labels = NULL,
                                         qval_threshold = 0.05,
@@ -965,15 +989,14 @@ plot_state_transition_graph <- function(ccm,
   if (is.null(labels)== FALSE) {
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=labels))
     label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
-      rownames_to_column("label")
+      rownames_to_column("edge_name") %>%
+      left_join(data.frame("label" = labels) %>% rownames_to_column("edge_name"), by = "edge_name")
 
   } else {
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
   }
 
   gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
-
-
 
 
   beziers = lapply(gvizl@renderInfo@edges$splines, function(bc) {
@@ -991,6 +1014,59 @@ plot_state_transition_graph <- function(ccm,
   bezier_df$edge_name = stringr::str_split_fixed(row.names(bezier_df), "\\.", 2)[,1]
   #bezier_df = bezier_df %>% mutate(x = ggnetwork:::scale_safely(x),
   #                                 y = ggnetwork:::scale_safely(y))
+
+
+  if (is.null(genotype_models_tbl) == FALSE) {
+
+    state_transition_graph = edges %>% igraph::graph_from_data_frame()
+    if (concordant) {
+      edge_count = genotype_models_tbl %>%
+      mutate("concordant" = purrr::map(.f = is_concordant,
+                                       .x = genotype_eff,
+                                       state_transition_graph)) %>%
+      select(gene_target, concordant) %>%
+      tidyr::unnest(c(concordant)) %>%
+      select(gene_target, parent, child, concordant) %>%
+      group_by(parent, child, concordant) %>%
+      tally() %>% ungroup() %>%
+      filter(concordant) %>%
+      mutate(edge_name = paste(parent,child, sep="~"))
+    } else {
+      edge_count = genotype_models_tbl %>%
+        mutate("discordant" = purrr::map(.f = is_discordant,
+                                         .x = genotype_eff,
+                                         state_transition_graph)) %>%
+        select(gene_target, discordant) %>%
+        tidyr::unnest(c(discordant)) %>%
+        select(gene_target, parent, child, discordant) %>%
+        group_by(parent, child, discordant) %>%
+        tally() %>% ungroup() %>%
+        filter(discordant) %>%
+      mutate(edge_name = paste(parent,child, sep="~"))
+    }
+
+
+
+    bezier_df = left_join(bezier_df, edge_count, by = "edge_name")
+    bezier_df$n = tidyr::replace_na(bezier_df$n, -1)
+  }
+
+  # if (is.null(edge_count) == FALSE) {
+  #   bezier_df = left_join()
+  #   edge_weights = state_transition_graph %>%
+  #     igraph::as_data_frame() %>%
+  #     left_join(edge_count, by = c("from" = "parent", "to" = "child")) %>%
+  #     filter(concordant) %>%
+  #     mutate(edge_name = paste(from, to, sep="~"))
+  #
+  #   bezier_df = left_join(bezier_df, edge_weights, by = "edge_name")
+  #   bezier_df$n = replace_na(bezier_df$n, -1)
+  #
+  #   bezier_df %>% mutate("" = ifelse())
+  #
+  # }
+
+
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
 
@@ -1003,8 +1079,34 @@ plot_state_transition_graph <- function(ccm,
   #   # draw activator edges
   #   ggnetwork::geom_edges(data = g,
   #                         arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-  p <- ggplot() +
-    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+
+
+  if (is.null(genotype_models_tbl) == FALSE) {
+
+    if (concordant) {
+      edge_colors = c("black", "orangered3")
+      names(edge_colors) = c(-1, 1) %>% as.factor()
+    } else {
+      edge_colors = c("black", "royalblue3")
+      names(edge_colors) = c(-1, 1) %>% as.factor()
+    }
+
+
+    p <- ggplot() +
+      ggplot2::geom_path(aes(x, y, group=edge_name,
+                             size = abs(n)/5, color = as.factor(sign(n))), data=bezier_df,
+                         arrow = arrow(length = unit(arrow_unit, "pt"), type="closed")) +
+      scale_color_manual(values = edge_colors)
+  }
+  else {
+    p <- ggplot() +
+      ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+
+  }
+
+
+
+
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
@@ -1086,7 +1188,7 @@ plot_state_transition_graph <- function(ccm,
 
   if (is.null(labels) == FALSE) {
    p = p +  ggnetwork::geom_nodetext(data = label_df,
-                             aes(x,y, label = label))
+                             aes(x,y, label = label), size=3)
   }
 
   p = p + scale_size_identity() +
