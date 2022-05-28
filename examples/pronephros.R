@@ -1,8 +1,9 @@
 library(ggplot2)
 library(tibble)
 library(dplyr)
+library(tidyr)
 library(monocle3)
-#library(hooke)
+library(hooke)
 library(garnett)
 library(msigdbr)
 
@@ -525,23 +526,30 @@ monocle3::plot_percent_cells_positive(wt_cds[grepl("hoxb", rowData(wt_cds)$gene_
 # gene cell_type self parents siblings children interpretation
 # XXXX XXXX
 
-pseudobulk_cds_for_states <- function(ccm, state_col=NULL){
+pseudobulk_cds_for_states <- function(ccm, state_col=NULL, collapse_samples=FALSE){
 
   if (is.null(state_col)){
     cell_group_df = tibble::rownames_to_column(ccm@ccs@metadata[["cell_group_assignments"]])
-    cell_group_df = cell_group_df %>% mutate(group_id = cell_group)
+    if (collapse_samples)
+      cell_group_df = cell_group_df %>% mutate(group_id = cell_group)
+    cell_group_df = cell_group_df %>%
+      dplyr::mutate(pseudobulk_id = paste(group_id, "cell_group", sep="_")) %>% dplyr::select(rowname, pseudobulk_id, cell_group)
     agg_coldata = cell_group_df %>%
-      dplyr::group_by(group_id, cell_group) %>%
+      dplyr::group_by(pseudobulk_id, cell_group) %>%
       dplyr::summarize(num_cells_in_group = n()) %>%
       as.data.frame
     #%>% select(rowname, cell_group)
   }else{
-    #cell_group_df = tibble::rownames_to_column(ccm@ccs@metadata[["cell_group_assignments"]])
-    cell_group_df = colData(ccm@ccs@cds) %>%
-      as.data.frame %>% tibble::rownames_to_column() %>% dplyr::select(rowname, "cell_group" = !!sym(state_col))
-    cell_group_df = cell_group_df %>% mutate(group_id = cell_group)
+    cell_group_df = tibble::rownames_to_column(ccm@ccs@metadata[["cell_group_assignments"]])
+    cds_group_df = colData(ccm@ccs@cds) %>%
+      as.data.frame %>% tibble::rownames_to_column() %>% dplyr::select(rowname, !!sym(state_col))
+    cell_group_df = left_join(cell_group_df, cds_group_df, by=c("rowname"))
+    if (collapse_samples)
+      cell_group_df = cell_group_df %>% mutate(group_id = !!sym(state_col))
+    cell_group_df = cell_group_df %>%
+      dplyr::mutate(pseudobulk_id = paste(group_id, !!sym(state_col), sep="_")) %>% dplyr::select(rowname, pseudobulk_id, !!sym(state_col))
     agg_coldata = cell_group_df %>%
-      dplyr::group_by(group_id, cell_group) %>%
+      dplyr::group_by(pseudobulk_id, !!sym(state_col)) %>%
       dplyr::summarize(num_cells_in_group = n()) %>%
       as.data.frame
   }
@@ -553,16 +561,16 @@ pseudobulk_cds_for_states <- function(ccm, state_col=NULL){
                                                      pseudocount=0,
                                                      cell_agg_fun="mean")
 
-  agg_expr_mat = agg_expr_mat[,agg_coldata$group_id]
+  agg_expr_mat = agg_expr_mat[,agg_coldata$pseudobulk_id]
 
-  row.names(agg_coldata) = agg_coldata$group_id
+  row.names(agg_coldata) = agg_coldata$pseudobulk_id
   agg_coldata = agg_coldata[colnames(agg_expr_mat),]
 
   pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccm@ccs@cds) %>% as.data.frame)
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
   return(pseudobulk_cds)
 }
-undebug(pseudobulk_cds_for_states)
+#debug(pseudobulk_cds_for_states)
 pseudobulk_cds_for_states(wt_ccm_wl, "cell_type")
 
 threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.25, abs_expr_thresh = 1e-3, scale_tpc=1e6){
@@ -586,12 +594,18 @@ undebug(threshold_expression_matrix)
 
 get_parents = function(state_graph, cell_state){
   parents = igraph::neighbors(state_graph, cell_state, mode="in")
-  return(parents)
+  if (length(parents) > 0)
+    return (parents$name)
+  else
+    return (c())
 }
 
 get_children = function(state_graph, cell_state){
   children = igraph::neighbors(state_graph, cell_state, mode="out")
-  return(children)
+  if (length(children) > 0)
+    return (children$name)
+  else
+    return (c())
 }
 
 get_siblings = function(state_graph, cell_state){
@@ -601,74 +615,6 @@ get_siblings = function(state_graph, cell_state){
   return(siblings)
 }
 
-classify_genes_in_cell_state <- function(cell_state, state_graph, expr_mat){
-  expr_self = expr_mat[,cell_state]
-
-  parents = get_parents(state_graph, cell_state) #igraph::neighbors(state_graph, cell_state, mode="in")
-  if (length(parents) > 0){
-    expressed_in_parents = Matrix::rowSums(expr_mat[,parents$name, drop=F]) > 0
-  }else{
-    expressed_in_parents = rep(NA, nrow(expr_mat))
-  }
-
-  children = get_children(state_graph, cell_state)#igraph::neighbors(state_graph, cell_state, mode="out")
-  if (length(children) > 0){
-    expressed_in_children = Matrix::rowSums(expr_mat[,children$name, drop=F]) > 0
-  }else{
-    expressed_in_children = rep(NA, nrow(expr_mat))
-  }
-
-  if (length(parents) > 0){
-    siblings = get_siblings(state_graph, cell_state)#igraph::neighbors(state_graph, parents, mode="out")
-    #siblings = setdiff(siblings$name, cell_state) #exclude self
-    if (length(siblings) > 0){
-      expressed_in_siblings = Matrix::rowSums(expr_mat[,siblings, drop=F]) > 0
-    }else{
-      expressed_in_siblings = rep(NA, nrow(expr_mat))
-    }
-  }else{
-    expressed_in_siblings = rep(NA, nrow(expr_mat))
-  }
-  expr_df = tibble(gene_id = names(expr_self),
-                   self = expr_self,
-                   parents = expressed_in_parents,
-                   siblings = expressed_in_siblings)
-  expr_df = expr_df %>% tidyr::nest(data = !gene_id)
-
-  pattern_table = expand.grid(rep(list(c(TRUE, FALSE, NA)), 3))
-  colnames(pattern_table) = c("self", "parents", "siblings")
-  pattern_table = pattern_table %>% arrange(desc(self), desc(parents), desc(siblings))
-  interpetation =
-    c("Common",
-      "MLP",
-      "Common",
-      "Activated",
-      "Selectively activated",
-      "Activated",
-      "Common",
-      NA,
-      "Common",
-      "Selectively deactivated",
-      "Deactivated",
-      "Deactivated",
-      "Absent",
-      "Absent",
-      "Absent",
-      NA,
-      NA,
-      "Absent")
-
-  interpret_expression_pattern = function(pat_df, interp_table, interpetation){
-    match_row = match(data.frame(t(pat_df)), data.frame(t(interp_table)))
-    interpetation[match_row]
-  }
-  #debug(interpret_expression_pattern)
-  expr_df = expr_df %>% mutate(interpretation = purrr::map(.f = purrr::possibly(
-    interpret_expression_pattern, NA_real_), .x = data, pattern_table, interpetation))
-  return(expr_df)
-}
-debug(classify_genes_in_cell_state)
-
 classify_genes_over_graph <- function(ccm, state_graph, gene_ids = NULL, group_nodes_by=NULL, ...){
   if (is.null(group_nodes_by)){
     pb_cds = pseudobulk_cds_for_states(wt_ccm_wl)
@@ -676,8 +622,8 @@ classify_genes_over_graph <- function(ccm, state_graph, gene_ids = NULL, group_n
     pb_cds = pseudobulk_cds_for_states(wt_ccm_wl, state_col = group_nodes_by)
   }
 
-  norm_expr_mat = normalized_counts(pb_cds, "size_only", pseudocount = 0)
-  expr_over_thresh = threshold_expression_matrix(norm_expr_mat, ...)
+  #norm_expr_mat = normalized_counts(pb_cds, "size_only", pseudocount = 0)
+  #expr_over_thresh = threshold_expression_matrix(norm_expr_mat, ...)
 
   if (is.null(gene_ids) == FALSE){
     expr_over_thresh = expr_over_thresh[gene_ids,]
@@ -690,6 +636,7 @@ classify_genes_over_graph <- function(ccm, state_graph, gene_ids = NULL, group_n
 }
 undebug(classify_genes_over_graph)
 marker_ids = rowData(wt_ccm_wl@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% kidney_markers) %>% pull(id)
+
 
 contract_state_graph <- function(ccm, state_graph, group_nodes_by){
   # Create simplified cell state graph just on cell type (not cluster):
@@ -704,8 +651,8 @@ contract_state_graph <- function(ccm, state_graph, group_nodes_by){
 
   group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
       as.data.frame %>%
-      count(cell_group, !!sym(group_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+      dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
+    dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
   colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
   node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
 
@@ -721,7 +668,223 @@ contract_state_graph <- function(ccm, state_graph, group_nodes_by){
 undebug(contract_state_graph)
 cell_type_graph = contract_state_graph(wt_ccm_wl, wt_state_transition_graph, "cell_type")
 
+
+
+classify_genes_in_cell_state <- function(cell_state, state_graph, pb_group_model_coefs, state_term="cell_group", log_fc_thresh=1, abs_expr_thresh = 1e-3, sig_thresh=0.05, cores=1){
+  #expr_self = expr_mat[,cell_state]
+
+  parents = get_parents(state_graph, cell_state) #igraph::neighbors(state_graph, cell_state, mode="in")
+
+  children = get_children(state_graph, cell_state)#igraph::neighbors(state_graph, cell_state, mode="out")
+
+  siblings = get_siblings(state_graph, cell_state)#igraph::neighbors(state_graph, parents, mode="out")
+
+  states_in_contrast = c(cell_state, parents, children, siblings) %>% unique()
+
+  pb_group_model_coefs = pb_group_model_coefs %>% filter(term %in% states_in_contrast) %>%
+    group_by(id) %>%
+    nest()
+
+  compare_gene_in_states <- function(gene_res, cell_state, parents, siblings, children, log_fc_thresh, abs_expr_thresh, sig_thresh){
+    expr_self=FALSE
+    expressed_in_parents=NA
+    higher_than_parents=NA
+    expressed_in_siblings=NA
+    higher_than_siblings=NA
+
+    self_term = gene_res %>% filter (term == cell_state) #%>% dplyr::select(estimate, self_stderr = stderr)
+    self_estimate = self_term$estimate[[1]]
+    self_estimate_stderr = self_term$std_err[[1]]
+    selt_delta_above_thresh = self_estimate - log(abs_expr_thresh)
+    self_p_val = self_term$p_value[[1]]
+    #self_p_val = self_term$p_value[[1]]
+
+    self_p_val =  pnorm(selt_delta_above_thresh, sd = self_estimate_stderr, lower.tail=FALSE)
+
+    expr_self = self_p_val < sig_thresh
+
+    if (length(parents) > 0){
+      parent_terms = gene_res %>% filter (term %in% parents) %>% dplyr::select(parent_estimate=estimate, parent_stderr = std_err)
+
+      # Are the parents expressed above threshold?
+      parent_terms = parent_terms %>% mutate(delta_estimate_parent_above_thresh = parent_estimate - log(abs_expr_thresh),
+                                             parent_above_thresh_pvalue = pnorm(delta_estimate_parent_above_thresh, sd = parent_stderr, lower.tail=FALSE),
+                                             expr_in_parents = parent_above_thresh_pvalue < sig_thresh)
+      expressed_in_parents = parent_terms %>% filter(expr_in_parents == TRUE) %>% nrow > 1
+
+       # Is expression similar to self?
+      parent_terms = parent_terms %>% mutate(delta_estimate_parent_v_self = parent_estimate - self_estimate,
+                                           parent_v_self_pvalue = pnorm(abs(delta_estimate_parent_v_self), sd = sqrt(parent_stderr^2 + self_estimate_stderr^2), lower.tail=FALSE),
+                                           higher_than_parents = delta_estimate_parent_v_self > log_fc_thresh & parent_v_self_pvalue > sig_thresh)
+      higher_than_parents = parent_terms %>% filter(higher_than_parents == TRUE) %>% nrow > 1
+
+    }else{
+      expressed_in_parents = NA
+      higher_than_parents = NA
+    }
+
+    if (length(siblings) > 0){
+      sibling_terms = gene_res %>% filter (term %in% siblings) %>% dplyr::select(sibling_estimate=estimate, sibling_stderr = std_err)
+      # Are the siblings expressed above threshold?
+      sibling_terms = sibling_terms %>% mutate(delta_estimate_sibling_above_thresh = sibling_estimate - log(abs_expr_thresh),
+                                               sibling_above_thresh_pvalue = pnorm(delta_estimate_sibling_above_thresh, sd = sibling_stderr, lower.tail=FALSE),
+                                               expr_in_siblings = sibling_above_thresh_pvalue < sig_thresh)
+      expressed_in_siblings = sibling_terms %>% filter(expr_in_siblings == TRUE) %>% nrow > 1
+
+      # Is expression similar to self?
+      sibling_terms = sibling_terms %>% mutate(delta_estimate_sibling_v_self = sibling_estimate - self_estimate,
+                                               sibling_v_self_pvalue = pnorm(abs(delta_estimate_sibling_v_self), sd = sqrt(sibling_stderr^2 + self_estimate_stderr^2), lower.tail=FALSE),
+                                               higher_than_siblings = delta_estimate_sibling_v_self > log_fc_thresh & sibling_v_self_pvalue > sig_thresh)
+      higher_than_siblings = sibling_terms %>% filter(higher_than_siblings == TRUE) %>% nrow > 1
+    }else{
+      expressed_in_siblings = NA
+      higher_than_siblings = NA
+    }
+
+    tibble(expr_self=expr_self,
+           expressed_in_parents=expressed_in_parents,
+           higher_than_parents=higher_than_parents,
+           expressed_in_siblings=expressed_in_siblings,
+           higher_than_siblings=higher_than_siblings)
+  }
+  #debug(compare_gene_in_states)
+
+  message("      examining coeffficients")
+  expr_df = pb_group_model_coefs %>%
+    dplyr::rename(gene_id=id) %>%
+    dplyr::mutate(gene_classes = purrr::map(.f = purrr::possibly(
+      compare_gene_in_states, NA_real_), .x = data, cell_state, parents, siblings, children, log_fc_thresh, abs_expr_thresh, sig_thresh))
+
+  expr_df = expr_df %>% unnest(gene_classes) %>% dplyr::select(-data)
+
+  #expr_df = tibble(gene_id = names(expr_self),
+  #                 expr_self = FALSE,
+  #                 parents = FALSE,
+  #                 higher_than_siblings = FALSE)
+
+  expr_df = expr_df %>% tidyr::nest(data = !gene_id)
+
+  message("      interpreting patterns")
+  interpret_expression_pattern = function(pat_df){
+    if (pat_df$expr_self){
+      if (is.na(pat_df$expressed_in_parents)){
+        # no parents, therefore no siblings
+        return ("Common")
+      }else if (pat_df$expressed_in_parents){
+        if (is.na(pat_df$expressed_in_siblings) | pat_df$expressed_in_siblings){
+          return ("Common")
+        }else{
+          return ("MLP")
+        }
+      }else{
+        if (is.na(pat_df$expressed_in_siblings) | pat_df$expressed_in_siblings){
+          return ("Activated")
+        }else{
+          return ("Selectively activated")
+        }
+      }
+    }else{
+      if (is.na(pat_df$expressed_in_parents)){
+        # no parents, therefore no siblings
+        return ("Absent")
+      }else if (pat_df$expressed_in_parents){
+        if (pat_df$expressed_in_siblings){
+          return ("Selectively deactivated")
+        }else{
+          return ("Deactivated")
+        }
+      }
+      else{
+        return ("Absent")
+      }
+    }
+    #match_row = match(data.frame(t(pat_df)), data.frame(t(interp_table)))
+    #interpetation[match_row]
+  }
+  #debug(interpret_expression_pattern)
+  expr_df = expr_df %>% mutate(interpretation = purrr::map(.f = purrr::possibly(
+    interpret_expression_pattern, NA_real_), .x = data))
+  return(expr_df)
+}
+#debug(classify_genes_in_cell_state)
+
+
+classify_genes_over_graph <- function(ccm,
+                                      state_graph,
+                                      gene_ids = NULL,
+                                      group_nodes_by=NULL,
+                                      log_fc_thresh=1,
+                                      abs_expr_thresh = 1e-3,
+                                      sig_thresh=0.05,
+                                      min_samples_detected = 2,
+                                      min_cells_per_pseudobulk = 3,
+                                      cores=1,
+                                      ...){
+  if (is.null(group_nodes_by)){
+    pb_cds = pseudobulk_cds_for_states(wt_ccm_wl)
+    state_term = "cell_group"
+  }else{
+    pb_cds = pseudobulk_cds_for_states(wt_ccm_wl, state_col = group_nodes_by)
+    state_term = group_nodes_by
+  }
+
+  #cds_to_test = pb_cds[,as.character(colData(pb_cds)[,state_term]) %in% states_in_model]
+
+  #colData(cds_to_test)[,state_term] = factor(as.character(colData(cds_to_test)[,state_term]), levels=states_in_model) # set the "self" state as the reference level
+
+  #norm_expr_mat = normalized_counts(pb_cds, "size_only", pseudocount = 0)
+
+  if (is.null(gene_ids) == FALSE){
+    pb_cds = pb_cds[gene_ids,]
+  }
+
+  expr_over_thresh = threshold_expression_matrix(normalized_counts(pb_cds, "size_only", pseudocount = 0), ...)
+  genes_to_test = which(Matrix::rowSums(expr_over_thresh) >= min_samples_detected)
+  pb_cds = pb_cds[genes_to_test,]
+
+  pseudobulks_to_test = which(colData(pb_cds)$num_cells_in_group > min_cells_per_pseudobulk)
+
+  message("fitting regression models")
+  pb_cds = pb_cds[,pseudobulks_to_test]
+  pb_group_models = fit_models(pb_cds,
+                               model_formula_str=paste("~ 0 + ", state_term),
+                               weights=colData(pb_cds)$num_cells_in_group,
+                               cores=cores)
+
+  message("      collecting coeffficients")
+  pb_group_model_coefs = coefficient_table(pb_group_models) %>%
+    mutate(term = stringr::str_replace_all(term, state_term, ""))
+  estimate_matrix = pb_group_model_coefs %>% dplyr::select(id, term, estimate) %>% pivot_wider(names_from=term, values_from=estimate)
+  gene_ids = estimate_matrix$id
+  estimate_matrix$id = NULL
+  estimate_matrix = as.matrix(estimate_matrix)
+  row.names(estimate_matrix) = gene_ids
+
+  stderr_matrix = pb_group_model_coefs %>% dplyr::select(id, term, std_err) %>% pivot_wider(names_from=term, values_from=std_err)
+  gene_ids = stderr_matrix$id
+  stderr_matrix$id = NULL
+  stderr_matrix = as.matrix(stderr_matrix)
+  row.names(stderr_matrix) = gene_ids
+
+  #p_val_matrix = pnorm(estimate_matrix - log(abs_expr_thresh), sd = stderr_matrix, lower.tail=FALSE)
+
+  #expr_thresh_mat = p_val_matrix < sig_thresh
+
+  cell_states = tibble(cell_state = unlist(igraph::V(state_graph)$name))
+  cell_states = cell_states %>%
+    dplyr::mutate(gene_classes = purrr::map(.f = purrr::possibly(
+      classify_genes_in_cell_state, NA_real_), .x = cell_state,
+      state_graph, pb_group_model_coefs, state_term,
+      log_fc_thresh=log_fc_thresh,
+      abs_expr_thresh = abs_expr_thresh,
+      sig_thresh=sig_thresh,
+      cores=cores))
+
+}
+#debug(classify_genes_over_graph)
 gene_patterns_over_state_graph = classify_genes_over_graph(wt_ccm_wl, wt_state_transition_graph, marker_ids, abs_expr_thresh=1e-3)
+
+#gene_patterns_over_state_graph = classify_genes_over_graph(wt_ccm_wl, wt_state_transition_graph, marker_ids, abs_expr_thresh=1e-3)
 gene_patterns_over_state_graph = gene_patterns_over_state_graph %>% tidyr::unnest(gene_classes) %>% tidyr::unnest(interpretation)
 gene_patterns_over_state_graph = left_join(gene_patterns_over_state_graph,
                                            rowData(wt_ccm_wl@ccs@cds) %>%
@@ -737,13 +900,24 @@ cell_type_graph = igraph::add_edges(cell_type_graph,
                                      "Renal progenitors", "Multiciliated cells",
                                      "Renal progenitors", "Cloaca",
                                      "Renal progenitors", "Proximal Straight Tubule"))
+#cell_type_graph = igraph::delete_edges(cell_type_graph,
+#                                       c("Proximal Straight Tubule|Proximal Convoluted Tubule",
+#                                         "Proximal Convoluted Tubule|Proximal Straight Tubule",
+#                                         "Podocyte|Proximal Convoluted Tubule"))
 cell_type_graph = igraph::delete_edges(cell_type_graph,
-                                       c("Proximal Straight Tubule|Proximal Convoluted Tubule",
-                                         "Proximal Convoluted Tubule|Proximal Straight Tubule",
-                                         "Podocyte|Proximal Convoluted Tubule"))
+                                       c("Proximal Straight Tubule|Proximal Convoluted Tubule"))
+
 cell_type_graph = igraph::delete_vertices(cell_type_graph, "Unknown")
 
-gene_patterns_over_cell_type_graph = classify_genes_over_graph(wt_ccm_wl, cell_type_graph, group_nodes_by="cell_type", relative_expr_thresh = 0.25, abs_expr_thresh=1e-2)
+gene_id_sample = rowData(wt_ccm_wl@ccs@cds) %>% as.data.frame %>% dplyr::sample_n(250) %>% pull(id)
+gene_patterns_over_cell_type_graph = classify_genes_over_graph(wt_ccm_wl,
+                                                               cell_type_graph,
+                                                               gene_id_sample,
+                                                               #marker_ids,
+                                                               group_nodes_by="cell_type",
+                                                               log_fc_thresh = 2,
+                                                               abs_expr_thresh=1e-2,
+                                                               cores=4)
 gene_patterns_over_cell_type_graph = gene_patterns_over_cell_type_graph %>% tidyr::unnest(gene_classes) %>% tidyr::unnest(interpretation)
 gene_patterns_over_cell_type_graph = left_join(gene_patterns_over_cell_type_graph,
                                            rowData(wt_ccm_wl@ccs@cds) %>%
@@ -1152,6 +1326,12 @@ plot_state_transition_graph(genotype_models_tbl$genotype_ccm[[8]], noto_state_tr
 
 
 plot_state_transition_graph(genotype_models_tbl$genotype_ccm[[8]], noto_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+
+plot_state_transition_graph(genotype_models_tbl$genotype_ccm[[8]], noto_state_transition_graph %>% igraph::as_data_frame(), cond_b_v_a_tbl=genotype_models_tbl$genotype_eff[[8]], group_nodes_by="cell_type", fc_limits=c(-3,3))
+
+plot_state_transition_graph(genotype_models_tbl$genotype_ccm[[8]], noto_state_transition_graph %>% igraph::as_data_frame(), group_nodes_by="cell_type", genes = c("bcl3"))
+
+###
 
 
 
