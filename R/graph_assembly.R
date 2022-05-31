@@ -689,5 +689,34 @@ assemble_timeseries_transitions <- function(ccm,
   return(covered_G)
 }
 
+#' Simplify a directed state transition graph by grouping nodes according to a specified label
+#' @export
+contract_state_graph <- function(ccm, state_graph, group_nodes_by){
+  # Create simplified cell state graph just on cell type (not cluster):
+  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  node_metadata = tibble(id=cell_groups)
+
+  #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
+  cell_group_metadata = colData(ccm@ccs@cds) %>%
+    as.data.frame %>% select(!!sym(group_nodes_by))
+
+  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+
+  group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
+    as.data.frame %>%
+    dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
+    dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+  colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+  node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
+
+  contraction_mapping = as.factor(node_metadata$group_nodes_by)
+  contraction_mapping_names = as.character(levels(contraction_mapping))
+  contraction_mapping = as.numeric(contraction_mapping)
+  names(contraction_mapping) = node_metadata$id
+  contracted_state_graph = igraph::contract(state_graph, mapping=contraction_mapping, vertex.attr.comb="ignore")
+  igraph::V(contracted_state_graph)$name = unlist(contraction_mapping_names[as.numeric(igraph::V(contracted_state_graph))])
+  contracted_state_graph = igraph::simplify(contracted_state_graph)
+  return(contracted_state_graph)
+}
 
 
