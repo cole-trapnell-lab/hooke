@@ -76,6 +76,8 @@ new_cell_count_set <- function(cds,
                                lower_threshold = NULL,
                                upper_threshold = NULL) {
 
+  colData(cds)$sample = NULL
+
   # check if anything contains NAs in it
   # if so drop them
   num_sample_group_NAs = sum(is.na(colData(cds)[[sample_group]]))
