@@ -110,7 +110,7 @@ wt_ccs = new_cell_count_set(wt_cds,
 wt_main_model_formula_str = build_interval_formula(wt_ccs, interval_var="timepoint", interval_start=18, interval_stop=48, num_breaks=4)
 
 
-undebug(new_cell_count_model)
+# undebug(new_cell_count_model)
 
 wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  main_model_formula_str = wt_main_model_formula_str,
@@ -146,6 +146,7 @@ hooke:::plot_path(wt_ccm_wl, path_df = wt_state_transition_graph %>% igraph::as_
 
 plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_data_frame(),
                             color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+
 
 
 # wt_state_transition_graph_weighted = assemble_timeseries_transitions(wt_ccm_wl,
@@ -397,6 +398,222 @@ plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_
                             group_nodes_by="cell_type",
                             layer_nodes_by="timepoint")
 
+
+# tile different contrasts across each timepoint ------------------------------
+
+gt_by_time_df = kid_ccs@cds@colData %>%
+  as.data.frame() %>%
+  group_by(gene_target, timepoint) %>%
+  filter(!grepl("ctrl", gene_target)) %>%
+  tally()
+
+
+
+gt_by_time_tbl = gt_by_time_df %>% filter(gene_target == "smo") %>%
+  mutate(gt_ccm = purrr::map(.f = fit_genotype_ccm,
+                             .x = gene_target,
+                             ccs = kid_ccs,
+                             ctrl_ids = c("wt", "ctrl-inj"),
+                             multiply = F,
+                             whitelist = wt_state_transition_graph %>% igraph::as_data_frame(),
+                             sparsity = 0.1))
+
+gt_by_time_tbl = gt_by_time_tbl %>%
+                 mutate(gt_eff = purrr::map2(.f = collect_genotype_effects,
+                             .x = gt_ccm,
+                             .y = timepoint,
+                             expt = "GAP16"))
+
+plot_state_transition_wrapper <- function(ccm, cond_b_v_a_tbl, edges) {
+
+  p = plot_state_transition_graph(ccm,
+                                  edges,
+                                  cond_b_v_a_tbl = cond_b_v_a_tbl,
+                                  color_nodes_by = "cell_type",
+                                  group_nodes_by = "cell_type",
+                                  layer_nodes_by = "timepoint")
+
+  timepoint = paste0(unique(cond_b_v_a_tbl$timepoint_x), "hpf")
+
+  p = p + ggtitle(timepoint) + theme(plot.title = element_text(hjust = 0.5))
+
+  return(p)
+
+}
+
+
+gt_by_time_tbl = gt_by_time_tbl %>%
+  mutate(plot = purrr::map2(.f = plot_state_transition_wrapper,
+                            .x = gt_ccm,
+                            .y = gt_eff,
+                            edges = wt_state_transition_graph %>% igraph::as_data_frame()))
+
+plots = gt_by_time_tbl %>% pull(plot)
+
+library(patchwork)
+
+plot_grid <- function(plots, ncol = 2) {
+  grid = NA
+  nrow = length(plots) %% ncol + 1
+  if (ncol == 1) {
+    nrow = length(plots)
+  }
+
+  for (j in seq(nrow)) {
+    row = NA
+    for (i in seq(ncol)) {
+      idx = ncol*(j-1) + i
+      # print(idx)
+      if (i == 1)
+        row = plots[[idx]]
+      else if (idx > length(plots))
+        break
+      else
+        row = row + plots[[idx]]
+
+    }
+    if (j == 1)
+      grid = row
+    else
+      grid = grid / row
+  }
+  return(grid)
+}
+
+
+plot_grid(plots, ncol = 3)
+
+# calculate adjacent fold changes ---------------------------------------------
+
+cond_b_v_a_tbl = gt_by_time_tbl %>%
+  tidyr::unnest(gt_eff)
+
+timepoints = unique(cond_b_v_a_tbl$timepoint) %>% sort()
+
+timepoint_effs = igraph::as_data_frame(state_graph, what = "edges") %>%
+  dplyr::rename("parent"="from", "child"="to") %>%
+  left_join(cond_b_v_a_tbl, by = c("parent" = "cell_group")) %>%
+  left_join(cond_b_v_a_tbl, by = c("child" = "cell_group"), suffix = c(".parent", ".child"))
+
+
+add_fc_info <- function(t1, t2, state_graph) {
+  igraph::as_data_frame(state_graph, what = "edges") %>%
+    dplyr::rename("parent"="from", "child"="to") %>%
+    left_join(cond_b_v_a_tbl %>% filter(timepoint == t1), by = c("parent" = "cell_group")) %>%
+    left_join(cond_b_v_a_tbl %>% filter(timepoint == t2), by = c("child" = "cell_group"),
+              suffix = c(".parent", ".child"))
+}
+
+
+adj_timepoints = expand.grid("t1" = timepoints[1:length(timepoints)-1],
+                             "t2" = timepoints[2:length(timepoints)]) %>%
+  filter(t1 != t2) %>%
+  mutate(diff = t2-t1) %>%
+  group_by(t1) %>% top_n(1, -diff) %>%
+  select(-diff) %>%
+  mutate(fc = purrr:::map2(.f = add_fc_info,
+                           .x = t1,
+                           .y = t2,
+                           wt_state_transition_graph))
+
+
+adj_timepoints %>% tidyr::unnest(fc) %>% head()
+
+adj_timepoints %>%
+  tidyr::unnest(fc) %>%
+  group_by(t1,t2) %>%
+  mutate(case_when(
+    sign(delta_log_abund.parent) == sign(delta_log_abund.child) ~ "concordant",
+    sign(delta_log_abund.parent) != sign(delta_log_abund.child) ~ "disconcordant",
+  ))
+
+
+# run new DEG code ------------------------------------------------------------
+
+kidney_markers = c("slc20a1a", # PCT
+                   "slc12a3", "pppr1b", # Late Distal late
+                   "slc12a1", # Distal early
+                   "clcnk", "mecom", "slc12a3",  # Early Distal late
+                   "trpm7", "slc13a1", # PST
+                   "wt1a", # Early podocyte
+                   "rfx2", # Early duct
+                   "aqp3a", "dnase1l4.1", "evx1", # Cloaca
+                   "pax2a", "rfx2", # Late neck
+                   "slc20a1a", "pdzk1", # PCT*
+                   "wt1b", # Podocyte
+                   "stc1l", # CS Early neck
+                   "rfx2", "pax2a", "odf3b", #Early neck
+                   "odf3b", "rfx2b", # MCCs (duct)
+                   "slc4a4a", "slc4a2a", "slc26a2" # PCT*
+) %>% unique
+
+marker_ids = rowData(wt_ccm_wl@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% kidney_markers) %>% pull(id)
+
+cell_type_graph = contract_state_graph(wt_ccm_wl, wt_state_transition_graph, "cell_type")
+
+debug_marker_ids = rowData(wt_ccm_wl@ccs@cds) %>% as.data.frame() %>% filter(gene_short_name %in% c("prdm1a", "foxa3")) %>% pull(id)
+gene_patterns_over_state_graph = classify_genes_over_graph(wt_ccm_wl,
+                                                           wt_state_transition_graph,
+                                                           debug_marker_ids,
+                                                           abs_expr_thresh=1e-3)
+
+cell_type_graph = contract_state_graph(wt_ccm_wl, wt_state_transition_graph, "cell_type")
+
+
+# Edit the graph to fix up the errors that currently exist:
+cell_type_graph = igraph::add_edges(cell_type_graph,
+                                    c("Renal progenitors", "Neck",
+                                      "Renal progenitors", "Corpuscles of Stannius",
+                                      "Renal progenitors", "Multiciliated cells",
+                                      "Renal progenitors", "Cloaca",
+                                      "Renal progenitors", "Proximal Straight Tubule"))
+#cell_type_graph = igraph::delete_edges(cell_type_graph,
+#                                       c("Proximal Straight Tubule|Proximal Convoluted Tubule",
+#                                         "Proximal Convoluted Tubule|Proximal Straight Tubule",
+#                                         "Podocyte|Proximal Convoluted Tubule"))
+cell_type_graph = igraph::delete_edges(cell_type_graph,
+                                       c("Proximal Straight Tubule|Proximal Convoluted Tubule"))
+
+cell_type_graph = igraph::delete_vertices(cell_type_graph, "Unknown")
+
+gene_id_sample = rowData(wt_ccm_wl@ccs@cds) %>% as.data.frame %>% dplyr::sample_n(250) %>% pull(id)
+gene_patterns_over_cell_type_graph = classify_genes_over_graph(wt_ccm_wl,
+                                                               cell_type_graph,
+                                                               #gene_id_sample,
+                                                               #marker_ids,
+                                                               group_nodes_by="cell_type",
+                                                               log_fc_thresh = 1,
+                                                               abs_expr_thresh=1e-3,
+                                                               cores=1)
+
+gene_patterns_over_cell_type_graph = gene_patterns_over_cell_type_graph %>%
+                                     filter(!is.na(gene_classes)) %>%
+                                     tidyr::unnest(gene_classes) %>%
+                                     tidyr::unnest(interpretation)
+
+gene_patterns_over_cell_type_graph = left_join(gene_patterns_over_cell_type_graph,
+                                               rowData(wt_ccm_wl@ccs@cds) %>%
+                                                 as_tibble %>%
+                                                 select(id, gene_short_name), by=c("gene_id"="id"))
+
+# Gut check a few patterns:
+mlp = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation == "Selectively maintained") %>%
+  dplyr::sample_n(6) %>% pull(gene_short_name)
+
+plot_cells(kidney_cds, genes=mlp)
+
+colData(kidney_cds)$cell_
+
+
+# plot these on the state transition graph ------------------------------------
+
+
+
+
+gene_patterns_over_cell_type_graph %>%
+  group_by(cell_state, interpretation) %>%
+  tally()
 
 
 

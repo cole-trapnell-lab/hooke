@@ -32,12 +32,12 @@ colData(meso_wt_cds)$cell_type = colData(meso_wt_cds)$cell_type_sub
 
 
 ggplot(aes(x=expt, y=mean_nn_time),
-       data=colData(meso_cds) %>% as.data.frame) +
+       data=colData(meso_wt_cds) %>% as.data.frame) +
   geom_boxplot() + facet_wrap(~timepoint, scale="free") +
   monocle3:::monocle_theme_opts()
 
 ggplot(aes(x=as.numeric(timepoint), y=mean_nn_time, color=temp),
-       data=colData(meso_cds) %>% as.data.frame) + geom_jitter() +
+       data=colData(meso_wt_cds) %>% as.data.frame) + geom_jitter() +
   facet_wrap(~expt) + geom_abline(color="grey") + geom_smooth(method="lm", color="black") +
   ylim(c(16,100)) + monocle3:::monocle_theme_opts()
 
@@ -99,11 +99,48 @@ staging_mt_df$predicted_timepoint = predict(staging_model, staging_mt_df)
 
 colData(meso_mt_cds)$adjusted_timepoint = staging_mt_df$predicted_timepoint
 
+# also apply to ----------------------------------------------------------------
+
+atoh7 <- readRDS("~/OneDrive/UW/Trapnell/fish-crew/updated_R_objects/david_amy_expt3.RDS")
+
+atoh7_meso = atoh7[, tidyr::replace_na(colData(atoh7)$major_group == "mesoderm", F)]
+
+
+# switch to subumap
+
+reducedDims(atoh7_meso)[["UMAP"]] = colData(atoh7_meso) %>% as.data.frame %>%
+  select(subumap3d_1, subumap3d_2, subumap3d_3) %>% as.matrix
+
+
+atoh7_meso@reduce_dim_aux$UMAP = meso_wt_cds@reduce_dim_aux$UMAP
+atoh7_meso = transfer_cell_labels(atoh7_meso,
+                                   reduction_method = "UMAP",
+                                   ref_coldata = meso_wt_coldata,
+                                   ref_column_name = "cluster",
+                                   nn_control = list())
+
+
+atoh7_meso = fix_missing_cell_labels(atoh7_meso,
+                                     reduction_method = "UMAP",
+                                      from_column_name = "cluster",
+                                      k = 10)
+
+atoh7_meso@colData %>%
+  as.data.frame %>%
+  ggplot(aes(subumap3d_1, subumap3d_2, color = cluster)) +
+    geom_point(size=0.5) + monocle3:::monocle_theme_opts()
+
+
+colData(atoh7_ccs)$gene_target = colData(atoh7_ccs)$drug
+
+atoh7_ccs@cds@colData$gene_target = atoh7_ccs@cds@colData$drug
+
+
 # WT HOOKE --------------------------------------------------------------------
 
 
 # JUST FOR DEBUGGING:
-colData(meso_cds)$timepoint = NULL
+# colData(meso_wt_cds)$timepoint = NULL
 
 wt_ccs = new_cell_count_set(meso_wt_cds,
                             sample_group = "embryo",
@@ -128,6 +165,9 @@ wt_ccm_wl = new_cell_count_model(wt_ccs,
                                  #nuisance_model_formula_str = "~1",
                                  #nuisance_model_formula_str = "~expt",
                                  whitelist = initial_pcor_graph(wt_ccs))
+
+# to do: choose sparsity here
+
 
 wt_ccm_wl = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor=1)
 
@@ -173,7 +213,9 @@ plot_state_transition_graph(wt_ccm_wl, state_transition_graph %>% igraph::as_dat
 # benchmark using contract graph -----------------------------------------------
 
 
-meso_stg_ctb = contract_state_graph(wt_ccm_wl, state_transition_graph, group_nodes_by = "cell_type_broad")
+meso_stg_ctb = contract_state_graph(wt_ccm_wl,
+                                    state_transition_graph,
+                                    group_nodes_by = "cell_type_broad")
 
 # how to plot these ?
 
@@ -182,7 +224,7 @@ lit_tree <- load_lineage_tree()
 
 # subset lit_tree to just mesoderm
 
-meso_ctb_groups = unique(meso_cds@colData$cell_type_broad)
+meso_ctb_groups = unique(meso_wt_cds@colData$cell_type_broad)
 
 lit_tree_meso = lit_tree %>%
   igraph::as_data_frame() %>%
@@ -193,12 +235,16 @@ lit_tree_meso = lit_tree %>%
 #' @param truth_graph
 #' @param pred_graph
 #' @param legend_position
-plot_graph_comparison <- function(truth_graph, pred_graph, legend_position = "right") {
+plot_graph_comparison <- function(truth_graph,
+                                  pred_graph,
+                                  legend_position = "right",
+                                  arrow.gap = 0.02,
+                                  arrow_unit = 2,
+                                  node_size=2) {
 
   missing_edges = igraph::difference(truth_graph, pred_graph) # blue
   new_edges = igraph::difference(pred_graph, truth_graph) # red
   correct_edges = igraph::intersection(truth_graph, pred_graph) # green
-
 
   igraph::E(missing_edges)$type = "missing"
   igraph::E(new_edges)$type = "new"
@@ -207,7 +253,7 @@ plot_graph_comparison <- function(truth_graph, pred_graph, legend_position = "ri
   # new edges that have nodes in the original
 
   new_edges = new_edges %>% igraph::as_data_frame() %>%
-    filter(from %in% igraph::V(G)$name, to %in% igraph::V(G)$name) %>%
+    filter(from %in% igraph::V(truth_graph)$name, to %in% igraph::V(truth_graph)$name) %>%
     igraph::graph_from_data_frame()
 
   union_graph = igraph::union(missing_edges, new_edges, correct_edges) %>%
@@ -217,9 +263,6 @@ plot_graph_comparison <- function(truth_graph, pred_graph, legend_position = "ri
       !is.na(type_3) ~ type_3,
     )) %>% select(-c(type_1, type_2, type_3)) %>%  igraph::graph_from_data_frame()
 
-
-  # use the correct one as the base for the plot
-  G = truth_graph
 
   # extra nodes just add
 
@@ -289,11 +332,94 @@ plot_graph_comparison <- function(truth_graph, pred_graph, legend_position = "ri
 plot_graph_comparison(lit_tree_meso, meso_stg_ctb)
 
 
+
+# ROC curve -------------------------------------------------------------------
+
+calc_graph_diffs = function(truth_graph, pred_graph) {
+  FN_edges = igraph::difference(truth_graph, pred_graph) # blue
+  FP_edges = igraph::difference(pred_graph, truth_graph) # red
+  TP_edges = igraph::intersection(truth_graph, pred_graph) # green
+
+  TP = length(TP_edges)
+  FN = length(FN_edges)
+  FP = length(FP_edges)
+  TPR = TP / (TP + FN)
+  FDR = FP / (TP + FP)
+  PPV = 1 - FDR
+
+  return(list(TPR =TPR, PPV = PPV))
+}
+
+
+
+sparsity_factors = seq(1:100)/100
+
+calc_graph_diffs(lit_tree_meso, meso_stg_ctb)
+
+roc_curve_calcs = lapply(sparsity_factors, function(sf) {
+
+  ccm_sf = select_model(wt_ccm_wl, criterion = "EBIC", sparsity_factor = sf)
+
+  stg = assemble_timeseries_transitions(ccm_sf,
+                                        start_time=18, stop_time=96,
+                                        interval_col="adjusted_timepoint",
+                                        min_interval = 2,
+                                        log_abund_detection_thresh=-2,
+                                        experiment="GAP14")
+
+  stg_ctb = contract_state_graph(ccm_sf,
+                                 stg,
+                                 group_nodes_by = "cell_type_broad")
+
+  calc_graph_diffs(lit_tree_meso, stg_ctb)
+})
+
+
+tpr_list = sapply(1:length(roc_curve_calcs), function(i) {
+  roc_curve_calcs[[i]]$TPR
+})
+
+ppv_list = apply(1:length(roc_curve_calcs), function(i) {
+  roc_curve_calcs[[i]]$PPV
+})
+
+
+plot_roc_curve = function(sparsity_factors, tpr_values, xlabel = "TPR") {
+
+  p = data.frame(sparsity_factors, tpr_values) %>%
+    ggplot(aes(x = sparsity_factors, y = tpr_values)) +
+    geom_line() +
+    monocle3:::monocle_theme_opts()
+
+  p = p + xlab("sparsity") + ylab(xlabel)
+  return(p)
+
+}
+
+plot_roc_curve(sparsity_factors, tpr_list, "TPR")
+plot_roc_curve(sparsity_factors, ppv_list, "PPV")
+
+
 # benchmark with genetics -----------------------------------------------------
+
+
+# atoh7_ccs = new_cell_count_set(atoh7_meso,
+#                                sample_group = "embryo",
+#                                cell_group = "cluster")
+
+# atoh7_ccm = fit_genotype_ccm(genotype = "ATOH7",
+#                              ccs = atoh7_ccs,
+#                              ctrl_ids = c("WT"),
+#                              # multiply = F,
+#                              # whitelist = state_transition_graph %>% igraph::as_data_frame(),
+#                              sparsity_factor = 0.1)
+
 
 # combine the wt + mt with the new cds
 
 meso_cds = combine_cds(list(meso_wt_cds, meso_mt_cds), keep_reduced_dims = T)
+# meso_cds = combine_cds(list(meso_cds, atoh7_meso), keep_reduced_dims = T)
+
 colData(meso_cds)$sample = NULL
 
 meso_ccs = new_cell_count_set(meso_cds,
@@ -317,12 +443,36 @@ plot_contrast(tbx16_ccm, tbx16_eff, plot_edges = "none",
 
 
 parent_child_foldchanges(lit_tree_meso, tbx16_eff)
+
 parent_child_foldchanges(state_transition_graph, tbx16_eff)
 
 plot_state_transition_graph(wt_ccm_wl,
                             state_transition_graph %>% igraph::as_data_frame(),
                             cond_b_v_a_tbl = tbx16_eff,
+                            qval_threshold = 1,
                             color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
+
+
+
+# cases for DEGs
+
+
+# siblings have the same parent
+state_transition_graph %>%
+  igraph::as_data_frame() %>%
+  left_join(tbx16_eff, by = c("from"="cell_group")) %>%
+  group_by(from) %>%
+  summarise(sum(delta_log_abund < 0))
+
+
+
+
+
+# case_when()
+
+# FC difference in siblings
+
+
 
 
 
@@ -394,6 +544,16 @@ genotype_models_tbl = genotype_models_tbl %>%
   filter(!is.na(genotype_eff))
 
 
+# debug(plot_state_transition_graph)
+plot_state_transition_graph(wt_ccm_wl,
+                            state_transition_graph %>% igraph::as_data_frame(),
+                            genotype_models_tbl = genotype_models_tbl,
+                            concordant =T,
+                            color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
+
+
+
+
 filter_genotype_tbl = function(genotype_models_tbl, genotype, type) {
 
   genotype_filter_tbl = genotype_models_tbl %>% as.data.frame %>% filter(genotype == genotype)
@@ -412,11 +572,14 @@ plot_state_transition_graph(wt_ccm_wl,
                             color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
 
 
+# plot by gene expression ------------------------------------------------------
+
 plot_state_transition_graph(wt_ccm_wl,
                             state_transition_graph %>% igraph::as_data_frame(),
                             genes = c("tbx16"),
                             color_nodes_by = "cell_type_broad", group_nodes_by="cell_type_broad")
 
+# plot 2+ genes
 # debug(plot_state_transition_graph)
 plot_state_transition_graph(wt_ccm_wl,
                             state_transition_graph %>% igraph::as_data_frame(),
@@ -428,6 +591,38 @@ plot_state_transition_graph(wt_ccm_wl,
 
 
 
+
+# DEGs
+
+
+cell_type_graph = contract_state_graph(wt_ccm_wl, state_transition_graph, "cell_type_broad")
+
+gene_patterns_over_cell_type_graph = classify_genes_over_graph(wt_ccm_wl,
+                                                               cell_type_graph,
+                                                               group_nodes_by="cell_type_broad",
+                                                               log_fc_thresh = 1,
+                                                               abs_expr_thresh=1e-3,
+                                                               cores=1)
+
+sel_activated = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation == "Selectively activated") %>%
+  dplyr::sample_n(6) %>% pull(gene_short_name)
+plot_cells(wt_ccm_wl@ccs@cds, genes=sel_activated)
+
+spec_activated = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation == "Specifically activated") %>%
+  dplyr::sample_n(6) %>% pull(gene_short_name)
+plot_cells(wt_ccm_wl@ccs@cds, genes=spec_activated)
+
+mlp = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation == "Selectively maintained") %>%
+  dplyr::sample_n(6) %>% pull(gene_short_name)
+plot_cells(wt_ccm_wl@ccs@cds, genes=mlp)
+
+sel_activated = gene_patterns_over_cell_type_graph %>%
+  filter(interpretation == "Selectively deactivated") %>%
+  dplyr::sample_n(6) %>% pull(gene_short_name)
+plot_cells(wt_ccm_wl@ccs@cds, genes=sel_activated)
 
 
 
