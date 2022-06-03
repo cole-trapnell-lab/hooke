@@ -712,7 +712,8 @@ classify_genes_over_graph <- function(ccm,
     pb_cds = pb_cds[gene_ids,]
   }
 
-  expr_over_thresh = threshold_expression_matrix(normalized_counts(pb_cds, "size_only", pseudocount = 0), ...)
+  # expr_over_thresh = threshold_expression_matrix(normalized_counts(pb_cds, "size_only", pseudocount = 0), ...)
+  expr_over_thresh = normalized_counts(pb_cds, "size_only", pseudocount = 0)
   genes_to_test = which(Matrix::rowSums(expr_over_thresh) >= min_samples_detected)
   pb_cds = pb_cds[genes_to_test,]
 
@@ -731,7 +732,7 @@ classify_genes_over_graph <- function(ccm,
     mutate(term = stringr::str_replace_all(term, state_term, ""))
   estimate_matrix = pb_group_models %>% dplyr::select(id, term, estimate)
   estimate_matrix = estimate_matrix %>% mutate(term = factor(term, levels=unique(colData(pb_cds)[,state_term])))
-  estimate_matrix = estimate_matrix %>% pivot_wider(names_from=term, values_from=estimate, values_fill=0)
+  estimate_matrix = estimate_matrix %>% tidyr::pivot_wider(names_from=term, values_from=estimate, values_fill=0)
 
   gene_ids = estimate_matrix$id
   estimate_matrix$id = NULL
@@ -741,7 +742,7 @@ classify_genes_over_graph <- function(ccm,
 
   stderr_matrix = pb_group_models %>% dplyr::select(id, term, std_err)
   stderr_matrix = stderr_matrix %>% mutate(term = factor(term, levels=unique(colData(pb_cds)[,state_term])))
-  stderr_matrix = stderr_matrix %>% pivot_wider(names_from=term, values_from=std_err, values_fill=0)
+  stderr_matrix = stderr_matrix %>% tidyr::pivot_wider(names_from=term, values_from=std_err, values_fill=0)
 
   gene_ids = stderr_matrix$id
   stderr_matrix$id = NULL
