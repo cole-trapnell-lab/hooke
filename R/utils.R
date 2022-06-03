@@ -352,3 +352,30 @@ collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
   knockout_abund = estimate_abundances(ccm, tibble(knockout=TRUE, timepoint=timepoint, expt=expt))
   genotype_comparison_tbl = compare_abundances(ccm, control_abund, knockout_abund)
 }
+
+
+contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
+
+  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+
+  cell_group_metadata = colData(ccm@ccs@cds) %>%
+    as.data.frame %>% select(!!sym(group_nodes_by))
+
+  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+
+  group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
+    as.data.frame %>%
+    dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
+    dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+  colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+
+  new_cell_groups = unique(group_by_metadata$group_nodes_by)
+
+  ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]] %>%
+    left_join(group_by_metadata, by = "cell_group") %>%
+    select(-cell_group) %>%
+    dplyr::rename("cell_group" = group_nodes_by)
+
+  return(ccm)
+
+}

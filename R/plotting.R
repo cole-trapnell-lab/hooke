@@ -816,6 +816,7 @@ is_discordant <- function(cond_b_v_a_tbl, state_transition_graph) {
 #' @export
 plot_state_transition_graph <- function(ccm,
                                         edges,
+                                        # contract_nodes_by=NULL,
                                         color_nodes_by=NULL,
                                         label_nodes_by=NULL,
                                         group_nodes_by=NULL,
@@ -842,6 +843,15 @@ plot_state_transition_graph <- function(ccm,
                                         label_conn_linetype="dotted",
                                         legend_position = "none",
                                         group_outline=FALSE){
+
+
+  # if (is.null(contract_nodes_by) == FALSE) {
+  #   state_graph = edges %>% igraph::graph_from_data_frame()
+  #   edges = contract_state_graph(ccm, state_graph, group_nodes_by = contract_nodes_by) %>%
+  #     igraph::as_data_frame()
+  #   ccm = contract_ccm(ccm, group_nodes_by = contract_nodes_by)
+  #
+  # }
 
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
