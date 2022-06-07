@@ -695,10 +695,10 @@ classify_genes_over_graph <- function(ccm,
                                       cores=1,
                                       ...){
   if (is.null(group_nodes_by)){
-    pb_cds = pseudobulk_cds_for_states(wt_ccm_wl)
+    pb_cds = pseudobulk_cds_for_states(ccm)
     state_term = "cell_group"
   }else{
-    pb_cds = pseudobulk_cds_for_states(wt_ccm_wl, state_col = group_nodes_by)
+    pb_cds = pseudobulk_cds_for_states(ccm, state_col = group_nodes_by)
     state_term = group_nodes_by
   }
 
@@ -824,7 +824,7 @@ pseudobulk_cds_for_states <- function(ccm, state_col=NULL, collapse_samples=FALS
       as.data.frame
   }
 
-  agg_expr_mat = monocle3::aggregate_gene_expression(wt_ccs@cds,
+  agg_expr_mat = monocle3::aggregate_gene_expression(ccm@ccs@cds,
                                                      cell_group_df=cell_group_df,
                                                      norm_method="size_only",
                                                      scale_agg_values = FALSE,
