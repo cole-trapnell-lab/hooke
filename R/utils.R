@@ -95,6 +95,8 @@ find_edges <- function(states, gene_model_ccm) {
 aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 
   cds = cds[, !is.na(colData(cds)$timepoint)]
+  cds = cds[, !is.na(colData(cds)[[group_cells_by]])]
+  cds = cds[, colData(cds)[[group_cells_by]] != ""]
 
   cell_group_df <- data.frame(row.names = row.names(colData(cds)),
                               cell_id = row.names(colData(cds)))
@@ -287,6 +289,7 @@ fit_genotype_ccm = function(genotype,
                             num_time_breaks = 3,
                             sparsity_factor = 0.2,
                             main_model_formula_string = NULL,
+                            nuisance_model_formula_string = NULL,
                             whitelist = NULL,
                             multiply = F){
 
@@ -334,6 +337,10 @@ fit_genotype_ccm = function(genotype,
     main_model_formula_str = main_model_formula_string
   }
 
+  if (!is.null(nuisance_model_formula_string)) {
+    nuisance_model_formula_str = nuisance_model_formula_string
+  }
+
   # print(main_model_formula_str)
   # print(nuisance_model_formula_str)
 
@@ -379,3 +386,36 @@ contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
   return(ccm)
 
 }
+
+
+subset_gap <- function(cds, major_group) {
+
+  sub_cds = cds[, colData(cds)$major_group == major_group]
+
+  reducedDims(sub_cds)[["UMAP"]] = sub_cds@colData %>% as.data.frame %>%
+    select(subumap3d_1, subumap3d_2, subumap3d_3) %>%
+    as.matrix
+
+  return(sub_cds)
+}
+
+subset_ccs = function(ccs, col_name, col_value) {
+
+  ccs = ccs[, colData(ccs)[[col_name]] == col_value]
+  ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] == col_value]
+
+  ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
+  return(ccs)
+}
+
+subset_ccm = function(ccm, col_name, col_values) {
+
+  ccs = ccm@ccs
+  ccs = ccs[, colData(ccs)[[col_name]] %in% col_values]
+  ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] %in% col_values]
+
+  ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
+  ccm@ccs = ccs
+  return(ccm)
+}
+
