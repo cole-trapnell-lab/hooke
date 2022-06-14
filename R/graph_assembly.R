@@ -137,6 +137,12 @@ get_paga_graph <- function(cds, reduction_method = "UMAP") {
 #' @export
 initial_pcor_graph = function(ccs) {
   paga_edges = get_paga_graph(ccs@cds) %>% igraph::as_data_frame() %>% as_tibble()
+
+  # filter out values that aren't in the cds anymore
+  cell_groups = unique(colData(ccs@cds)[[ccs@info$cell_group]])
+
+  paga_edges = paga_edges %>% filter(from %in% cell_groups, to %in% cell_groups)
+
   return(paga_edges)
 }
 
