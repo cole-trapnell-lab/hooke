@@ -419,3 +419,22 @@ subset_ccm = function(ccm, col_name, col_values) {
   return(ccm)
 }
 
+
+threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.25, abs_expr_thresh = 1e-3, scale_tpc=1e6){
+  norm_expr_mat = norm_expr_mat %>% as.matrix
+  norm_expr_mat = norm_expr_mat #* scale_tpc
+  expression_max_values = norm_expr_mat %>% matrixStats::rowMaxs()
+  names(expression_max_values) = row.names(norm_expr_mat)
+  dynamic_range = expression_max_values # size of dynamic range of expression for each gene, in logs (assuming min is zero)
+
+  dynamic_range_thresh = relative_expr_thresh * dynamic_range
+  #abs_thresh = rep(abs_expr_thresh, nrow(norm_expr_mat))
+
+  expression_thresh_vec = dynamic_range_thresh
+  expression_thresh_vec[expression_thresh_vec < abs_expr_thresh] = Inf
+
+  names(expression_thresh_vec) = row.names(norm_expr_mat)
+  expr_over_thresh = norm_expr_mat > expression_thresh_vec
+  return(expr_over_thresh)
+}
+
