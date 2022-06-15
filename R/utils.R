@@ -94,9 +94,13 @@ find_edges <- function(states, gene_model_ccm) {
 #'
 aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 
+<<<<<<< HEAD
   cds = cds[, !is.na(colData(cds)$timepoint)]
   cds = cds[, !is.na(colData(cds)[[group_cells_by]])]
   cds = cds[, colData(cds)[[group_cells_by]] != ""]
+=======
+  #cds = cds[, !is.na(colData(cds)$timepoint)]
+>>>>>>> 4fcec61b547ec4f253a4df104ca5fee48397df55
 
   cell_group_df <- data.frame(row.names = row.names(colData(cds)),
                               cell_id = row.names(colData(cds)))

@@ -675,7 +675,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
   #debug(interpret_expression_pattern)
   expr_df = expr_df %>% mutate(interpretation = purrr::map(.f = purrr::possibly(
     interpret_expression_pattern, NA_character_), .x = data))
-  message("      completed", cell_state)
+  message("      completed ", cell_state)
   return(expr_df)
 }
 #debug(classify_genes_in_cell_state)
@@ -726,7 +726,7 @@ classify_genes_over_graph <- function(ccm,
                                weights=colData(pb_cds)$num_cells_in_group,
                                cores=cores) %>% dplyr::select(gene_short_name, id, model, model_summary)
 
-  message("      collecting coeffficients")
+  message("      collecting coefficients")
   pb_group_models = coefficient_table(pb_group_models) %>%
     dplyr::select(gene_short_name, id, term, estimate, std_err) %>%
     mutate(term = stringr::str_replace_all(term, state_term, ""))
