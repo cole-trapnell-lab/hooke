@@ -1028,6 +1028,208 @@ plot_state_graph_annotations <- function(ccm,
   return(p)
 }
 
+num_extract <- function(string, as_char = TRUE){
+
+  if (as_char)
+    stringr::str_trim(
+      format(stringr::str_extract(string, "\\-*\\d+\\.*\\d*"),
+             scientific = FALSE,
+             trim = TRUE)
+    )
+
+  else
+    as.numeric(
+      stringr::str_trim(
+        format(stringr::str_extract(string, "\\-*\\d+\\.*\\d*"),
+               scientific = FALSE,
+               trim = TRUE)
+      )
+    )
+
+}
+
+calc_sig_ind <- function(p_value, html = TRUE) {
+
+  #p_value <- suppressWarnings(
+  #  num_extract(p_value, as_char = FALSE)
+  #)
+
+  if (html) {
+    dplyr::case_when(
+      p_value <= 0 ~ "",
+      p_value <= 0.001 ~ "\\***",
+      p_value <= 0.01 ~ "\\**",
+      p_value <= 0.05 ~ "\\*",
+      p_value <= 0.1 ~ ".",
+      p_value <= 1 ~ "",
+      TRUE ~ ""
+    )
+  } else {
+    dplyr::case_when(
+      p_value <= 0 ~ "",
+      p_value <= 0.001 ~ "***",
+      p_value <= 0.01 ~ "**",
+      p_value <= 0.05 ~ "*",
+      p_value <= 0.1 ~ ".",
+      p_value <= 1 ~ "",
+      TRUE ~ ""
+    )
+  }
+
+}
+
+#' Plot the expression of a single gene on the state transition graph
+#' @export
+plot_state_graph_abundance_changes <- function(ccm,
+                                               state_graph,
+                                             comp_abund_table,
+                                             label_nodes_by=NULL,
+                                             group_nodes_by=NULL,
+                                             edge_labels=NULL,
+                                             fc_limits=c(-3,3),
+                                             arrow.gap=0.03,
+                                             arrow_unit = 2,
+                                             bar_unit = .075,
+                                             node_size = 6,
+                                             num_layers=10,
+                                             edge_size=0.5,
+                                             fract_expr = 0.0,
+                                             mean_expr = 0.0,
+                                             unlabeled_groups = c("Unknown"),
+                                             hide_unlinked_nodes=TRUE,
+                                             label_font_size=6,
+                                             label_conn_linetype="dotted",
+                                             legend_position = "none",
+                                             group_outline=FALSE)
+{
+
+  if (is(state_graph, "igraph")){
+    edges = state_graph %>% igraph::as_data_frame()
+  }else{
+    edges = state_graph
+  }
+
+  #edges = hooke:::distance_to_root(edges)
+  edges = edges %>% dplyr::ungroup()
+
+  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by=label_nodes_by, group_nodes_by=group_nodes_by)
+
+  if (hide_unlinked_nodes){
+    node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
+  }
+
+
+  G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  layout_info = layout_state_graph(G, node_metadata, edge_labels)
+  gvizl_coords = layout_info$gvizl_coords
+  bezier_df = layout_info$bezier_df
+
+  g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
+
+
+
+  #gene_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
+
+  #gene_expr = aggregated_expr_data(ccm@ccs@cds[gene_ids,], group_cells_by = ccm@ccs@info$cell_group)
+  #sub_gene_expr = gene_expr %>%
+  #  filter(gene_short_name %in% genes)
+
+  #method = get(method)
+  # sub_gene_expr = sub_gene_expr %>%
+  #   group_by(cell_group) %>%
+  #   dplyr::summarise(fraction_expressing = method(fraction_expressing),
+  #                    mean_expression = method(mean_expression),
+  #                    specificity = method(specificity)) %>%
+  #   mutate(gene_short_name =  paste(genes, collapse = "-"))
+
+
+  #node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
+
+  abund_fc_df = comp_abund_table
+
+  #sub_gene_expr = sub_gene_expr %>%
+  #  group_by(gene_short_name) %>%
+  #  mutate(
+  #    fraction_max = mean_expression / max(mean_expression),
+  #    gene_expr = case_when(
+  #      fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
+  #      TRUE ~ FALSE))
+
+  if (is.null(fc_limits)) {
+    fc_limits = range(abund_fc_df$delta_log_abund)
+  } else {
+    min = fc_limits[1]
+    max = fc_limits[2]
+    abund_fc_df = abund_fc_df %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  }
+
+  abund_fc_df = abund_fc_df %>%
+    mutate(
+      delta_q_value = pmax(0.0001, delta_q_value),
+      q_value_sig_code = calc_sig_ind(delta_q_value, html=FALSE))
+
+  g = left_join(g, abund_fc_df, by=c("name"="cell_group"))
+
+  #g$gene_short_name = factor(g$gene_short_name, levels=genes)
+  color_nodes_by = "delta_log_abund"
+  group_outline = TRUE
+
+  p <- ggplot(aes(x,y), data=g)
+  # draw activator edges
+  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
+  #                     data = bezier_df)
+  if (is.null(group_nodes_by) == FALSE){
+    p = p + ggforce::geom_mark_rect(aes(x, y,
+                                        fill = contrast,
+                                        color = group_nodes_by,
+                                        label = group_nodes_by,
+                                        filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                    size=0.5,
+                                    expand = unit(2.5, "mm"),
+                                    radius = unit(1, "mm"),
+                                    label.fontsize=label_font_size,
+                                    label.buffer = unit(1, "mm"),
+                                    con.linetype=label_conn_linetype)
+    p = p + scale_fill_manual(values=rep("white", length(unique(g$contrast))))
+
+  }
+  p = p + guides(fill = "none")
+  p = p + ggnewscale::new_scale_color() +
+    ggnetwork::geom_nodes(data = g,
+                          aes(x, y,
+                              size = -log10(delta_q_value)*1.2),
+                          color=I("black")) +
+    ggnetwork::geom_nodes(data = g,
+                          aes(x, y,
+                              size = -log10(delta_q_value),
+                              color=delta_log_abund)) +
+    ggnetwork::geom_nodetext_repel(data = g,
+                                    aes(x, y,
+                                        label = q_value_sig_code),
+                                    color=I("black"))
+  #labs(fill = color_nodes_by)
+
+  p = p + scale_color_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+
+  if (is.null(edge_labels) == FALSE) {
+    p = p +  ggnetwork::geom_nodetext(data = label_df,
+                                      aes(x,y, label = label), size=3)
+  }
+
+  p = p +
+    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+
+  p = p + facet_wrap(~contrast)
+
+  p = p + scale_size(range=c(1, node_size)) +
+    monocle3:::monocle_theme_opts() +
+    ggnetwork::theme_blank() +
+    theme(legend.position=legend_position) + guides(fill = "none")
+  return(p)
+}
 
 #' Plot the expression of a single gene on the state transition graph
 #' @export
