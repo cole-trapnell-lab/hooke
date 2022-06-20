@@ -1111,6 +1111,7 @@ plot_state_graph_abundance_changes <- function(ccm,
   }
 
   comp_abund_table[["contrast"]] = comp_abund_table[[contrast]]
+  comp_abund_table$contrast = as.factor(comp_abund_table$contrast)
 
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
