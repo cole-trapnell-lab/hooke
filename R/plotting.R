@@ -1083,6 +1083,7 @@ calc_sig_ind <- function(p_value, html = TRUE) {
 plot_state_graph_abundance_changes <- function(ccm,
                                                state_graph,
                                              comp_abund_table,
+                                             contrast = "contrast",
                                              label_nodes_by=NULL,
                                              group_nodes_by=NULL,
                                              edge_labels=NULL,
@@ -1108,6 +1109,8 @@ plot_state_graph_abundance_changes <- function(ccm,
   }else{
     edges = state_graph
   }
+
+  comp_abund_table[["contrast"]] = comp_abund_table[[contrast]]
 
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
