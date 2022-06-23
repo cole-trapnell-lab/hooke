@@ -25,8 +25,6 @@ load_lineage_tree <- function() {
 
 # lit_tree <- load_lineage_tree()
 
-
-
 # a help function to tidy the vgam model output - used in compare_abundance function
 tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
   co <- as.data.frame(coef(summary(x)))
@@ -42,92 +40,71 @@ tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
   return(co)
 }
 
-# run the beta binomial test
-# to compare the values
-# return output similar to compare_abundances
-run_beta_binomial <- function(ccs,
-                          model_formula = "count_df ~ genotype",
-                          covariates = c("experiment", "gene_target", "timepoint", "knockout"),
-                          ...) {
 
+bb_compare_abundance <- function(ccs,
+                                 ctrl_ids = c("ctrl-inj"),
+                                 comp_col = "gene_target",
+                                 nuisance_cols = NULL,
+                                 model_formula = "count_df ~ knockout",
+                                 ...) {
+
+  # make ccs
+  colData(ccs)$knockout = as.data.frame(colData(ccs)) %>%
+    mutate(knockout = ifelse(!!sym(comp_col) %in% ctrl_ids, "ctrl", !!sym(comp_col))) %>%
+    pull(knockout)
+
+  ccs_coldata = colData(ccs) %>% as.data.frame %>% select(sample, knockout, Size_Factor, nuisance_cols)
 
   count_df = counts(ccs) %>%
     as.matrix() %>%
     as.data.frame() %>%
-    rownames_to_column("cell_group") %>%
-    tidyr::pivot_longer(-"cell_group", names_to = "sample", values_to = "cells")
-
-  coldata = ccs@colData %>%
-    as.data.frame %>%
-    select(all_of(covariates), sample) %>%
-    distinct()
-  rownames(coldata) = NULL
-
-  comb_df = left_join(count_df,
-            coldata,
-            by = "sample") %>%
+    tibble::rownames_to_column("cell_group") %>%
+    tidyr::pivot_longer(-"cell_group", names_to = "sample", values_to = "cells") %>%
     group_by(sample) %>%
-    mutate(total_cells = sum(cells)) %>%
-    ungroup() %>%
-    # i think you have to remove 0s?
-    filter(cells > 0 )
+    left_join(ccs_coldata, by="sample") %>%
+    mutate(cells = round(cells/Size_Factor)) %>%
+    mutate(total_cells = sum(cells))
 
-  wt_df = comb_df %>% filter(knockout == FALSE)
-  comb_df = comb_df %>%
-    mutate(genotype = forcats::fct_relevel(comb_df$gene_target, c(unique(wt_df$gene_target))))
-
-  cell.groups = unique(comb_df$cell_group)
-
-  test_res = sapply(cell.groups,
-                    FUN = function(x) {
-                      type_df = comb_df %>% filter(cell_group == x)
-                      count_df = cbind(type_df$cells, type_df$total_cells - type_df$cells)
-                      fit =  VGAM::vglm(as.formula(model_formula), "betabinomial", data = type_df, trace = TRUE, ...)
-                      fit_df = tidy.vglm(fit)}, USE.NAMES = T, simplify = F)
-
-  test_res = do.call(rbind, test_res)
-  test_res = test_res %>% tibble::rownames_to_column(var = "cell_group")
-  test_res %>% arrange(desc(estimate))
-
-  return(test_res)
-}
+  fc_df = count_df %>%
+    group_by_at(vars(knockout, cell_group, nuisance_cols)) %>%
+    summarize(cell_mean = mean(cells)) %>%
+    tidyr::pivot_wider(names_from = "knockout", values_from = "cell_mean") %>%
+    tidyr::pivot_longer(-c(cell_group, ctrl, nuisance_cols), names_to = "genotype", values_to = "cells") %>%
+    mutate(abund_log2fc = log2((cells + 1)/(ctrl+1))) %>%
+    arrange(genotype)
 
 
-fit_beta_binomial = function(ccs,
-                             genotype,
-                             timepoint,
-                             ctrl_ids = c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
-                             ...) {
+  # to fix new col name
+  count_df$knockout = forcats::fct_relevel(count_df$knockout, "ctrl")
 
-  # subset the ccs to gene target and timepoint
-  subset_ccs = ccs[,colData(ccs)$gene_target == genotype | colData(ccs)$gene_target %in% ctrl_ids]
-  subset_ccs = subset_ccs[,colData(subset_ccs)$timepoint == timepoint]
-  colData(subset_ccs)$knockout = (colData(subset_ccs)$gene_target == genotype)
+  cell.groups = unique(count_df$cell_group)
 
-  test_res = run_beta_binomial(subset_ccs)
-  test_res = test_res %>%
-    filter(!(grepl("intercept", term, ignore.case = T))) %>%
-    dplyr::mutate(qval = p.adjust(p.value, method = "BH")) %>%
-    mutate(geno.v.wt = stringr::str_sub(term, 9)) %>%
-    tidyr::separate(cell_group, into = c("cell_group", NULL), sep = "\\.") %>%
-    select(geno.v.wt, everything(), -term) %>%
-    arrange(geno.v.wt) %>%
-    mutate(timepoint = timepoint)
+  fit_beta_binomial = function(cg, count_df, model_formula, ...) {
+    type_df = count_df %>% filter(cell_group == cg)
+    count_df = cbind(type_df$cells, type_df$total_cells - type_df$cells)
+    fit =  vglm(as.formula(model_formula), betabinomial, data = type_df, trace = TRUE, ...)
+    fit_df = tidy.vglm(fit)
 
-  # make it match column names for ease of plotting
-  test_res %>% select(cell_group, "delta_log_abund" = estimate, "delta_q_value" = qval)
+  }
+
+  bb_res = data.frame("cell_group" = cell.groups) %>%
+    mutate("beta_binomial" = purrr::map(.f  = purrr::possibly(fit_beta_binomial, NA_character_),
+                                        .x = cell_group,
+                                        count_df = count_df,
+                                        model_formula = model_formula)) %>%
+    filter(!is.na(beta_binomial)) %>%
+    tidyr::unnest(c(beta_binomial)) %>%
+    arrange(desc(estimate)) %>%
+    filter(!grepl("Intercept", term))
+
+  bb_res = left_join(bb_res,
+                     fc_df %>% select(cell_group, abund_log2fc, "ctrl_mean" = "ctrl"),
+                     by = "cell_group") %>%
+    mutate(term = stringr::str_replace(term, pattern = "knockout", replacement = ""))
+
+  return(bb_res)
 
 }
-
-# want to run this
-
-# genotype_df %>% mutate(timepoint = 18) %>%
-#   dplyr::mutate(bb_res = purrr::map2(.f = purrr::possibly(fit_beta_binomial, NA_real_),
-#                                     .x = gene_target,
-#                                     .y = timepoint,
-#                                     ccs = ccs,
-#                                     ctrl_ids=c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa")))
-
 
 # it's lost because its parent is lost
 # it's lost because some other cell type it depends on is lost (i.e. signaling)
