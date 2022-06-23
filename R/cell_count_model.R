@@ -140,8 +140,6 @@ new_cell_count_set <- function(cds,
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
   }
 
-
-
   # remove from cds
   removed_cell_states = setdiff(cell_states, rownames(cell_counts_wide))
 
@@ -263,12 +261,24 @@ new_cell_count_model <- function(ccs,
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
+                                 size_factors = NULL,
                                  ...) {
 
+  if (!is.null(size_factors)) {
 
-  pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                      covariates = colData(ccs) %>% as.data.frame,
-                                      offset = size_factors(ccs))
+    assertthat::assert_that(
+      tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
+               error = function(e) FALSE),
+      msg = "size factors don't match")
+
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = size_factors)
+  } else {
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = size_factors(ccs))
+  }
 
   main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
   nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
