@@ -463,14 +463,13 @@ build_transition_dag <- function(ccm,
 
 
   paths_for_relevant_edges = edge_union %>%
-    #head (5) %>%
-    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
                               .x = from, .y = to,
                               timeseries_pathfinding_graph))
 
-
   paths_for_relevant_edges = paths_for_relevant_edges %>%
-    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(cells_along_path, NULL),
+    filter(!is.na(path)) %>%
+    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(cells_along_path, NA_character_),
                                                      .x = path,
                                                      ccs=ccm@ccs,
                                                      interval_col=interval_col)) %>%
