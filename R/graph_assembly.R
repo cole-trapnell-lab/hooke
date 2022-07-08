@@ -753,6 +753,7 @@ find_edge_to_each <- function(ccm, sparsity, not_in_paga_and_emerge) {
 #' @param n the number of values to try
 determine_sparsity <- function(ccm,
                                extant_cell_type_df,
+                               start_time,
                                step_size = 0.01,
                                n = 10) {
 
@@ -829,7 +830,15 @@ augment_pathfinding_graph = function(ccm,
   timeseries_pathfinding_graph = init_pathfinding_graph(ccm, extant_cell_type_df)
 
   # choose a good sparsity
-  ccm = determine_sparsity(ccm, extant_cell_type_df)
+  ccm = determine_sparsity(ccm, extant_cell_type_df, start_time)
+
+  not_in_paga = not_in_paga_graph(ccm)
+  initial_sparsity = ccm@sparsity
+
+  not_in_paga_and_emerge = extant_cell_type_df %>%
+    filter(cell_group %in% not_in_paga) %>%
+    filter(longest_contig_start > start_time) %>%
+    pull(cell_group) %>% unique()
 
   not_in_paga_cov_edges =  hooke:::return_igraph(model(ccm, "reduced")) %>%
     igraph::as_data_frame(what="edges") %>%
