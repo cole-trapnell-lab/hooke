@@ -691,6 +691,8 @@ assemble_timeseries_transitions <- function(ccm,
 
   covered_G = compute_min_path_cover(ccm, G)
 
+  igraph::V(covered_G)$cell_group = ccm@ccs@info$cell_group
+
   return(covered_G)
 }
 
@@ -721,6 +723,7 @@ contract_state_graph <- function(ccm, state_graph, group_nodes_by){
   contracted_state_graph = igraph::contract(state_graph, mapping=contraction_mapping, vertex.attr.comb="ignore")
   igraph::V(contracted_state_graph)$name = unlist(contraction_mapping_names[as.numeric(igraph::V(contracted_state_graph))])
   contracted_state_graph = igraph::simplify(contracted_state_graph)
+  igraph::V(contracted_state_graph)$cell_group = group_nodes_by
   return(contracted_state_graph)
 }
 
