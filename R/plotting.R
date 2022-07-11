@@ -607,7 +607,7 @@ my_plot_cells <- function(data,
 #' @param residuals
 #' @param cond_b_vs_a_tbl
 plot_path <- function(data,
-                      path_df = path_df,
+                      state_graph,
                       edge_size = 1,
                       path_color = "black",
                       color_path_by = NULL,
@@ -615,14 +615,25 @@ plot_path <- function(data,
                       directed = TRUE,
                       x = 1,
                       y = 2,
+                      switch_label = NULL,
                       ...) {
 
-  gp = my_plot_cells(data,  x=x, y=y, ...)
+  if (is.null(switch_label)) {
+    switch_label = unique(igraph::V(state_graph)$cell_group)
+  }
+
+  gp = my_plot_cells(data,  x=x, y=y, color_cells_by = switch_label, ...)
 
   if (class(data) == "cell_count_set") {
-    umap_centers = centroids(data)
+    umap_centers = centroids(data, switch_group = switch_label)
   } else if (class(data) == "cell_count_model") {
-    umap_centers = centroids(data@ccs)
+    umap_centers = centroids(data@ccs, switch_group = switch_label)
+  }
+
+  if (is(state_graph, "igraph")){
+    path_df = state_graph %>% igraph::as_data_frame()
+  }else{
+    path_df = state_graph
   }
 
   path_df = add_umap_coords(path_df, umap_centers)
@@ -635,8 +646,8 @@ plot_path <- function(data,
         geom_segment(data = path_df,
                      aes(x = get(paste0("umap_to_", x)),
                          y = get(paste0("umap_to_", y)),
-                         xend=get(paste0("from_to_", x)),
-                         yend = get(paste0("from_to_", y)),
+                         xend=get(paste0("umap_from_", x)),
+                         yend = get(paste0("umap_from_", y)),
                          color = get(color_path_by)),
                      size=edge_size ) +
         geom_segment(data = path_df,
@@ -681,8 +692,8 @@ plot_path <- function(data,
         geom_segment(data = path_df,
                      aes(x = get(paste0("umap_to_", x)),
                          y = get(paste0("umap_to_", y)),
-                         xend=get(paste0("from_to_", x)),
-                         yend = get(paste0("from_to_", y)),
+                         xend=get(paste0("umap_from_", x)),
+                         yend = get(paste0("umap_from_", y)),
                          color = get(color_path_by)),
                      size=edge_size) +
         scale_color_gradient2(
@@ -913,23 +924,23 @@ layout_state_graph <- function(G, node_metadata, edge_labels)
 plot_state_graph_annotations <- function(ccm,
                                          state_graph,
                                          color_nodes_by=NULL,
-                                        label_nodes_by=NULL,
-                             group_nodes_by=NULL,
-                             edge_labels=NULL,
-                             arrow.gap=0.03,
-                             arrow_unit = 2,
-                             bar_unit = .075,
-                             node_size = 2,
-                             num_layers=10,
-                             edge_size=0.5,
-                             fract_expr = 0.0,
-                             mean_expr = 0.0,
-                             unlabeled_groups = c("Unknown"),
-                             hide_unlinked_nodes=TRUE,
-                             label_font_size=6,
-                             label_conn_linetype="dotted",
-                             legend_position = "none",
-                             group_outline=FALSE)
+                                         label_nodes_by=NULL,
+                                         group_nodes_by=NULL,
+                                         edge_labels=NULL,
+                                         arrow.gap=0.03,
+                                         arrow_unit = 2,
+                                         bar_unit = .075,
+                                         node_size = 2,
+                                         num_layers=10,
+                                         edge_size=0.5,
+                                         fract_expr = 0.0,
+                                         mean_expr = 0.0,
+                                         unlabeled_groups = c("Unknown"),
+                                         hide_unlinked_nodes=TRUE,
+                                         label_font_size=6,
+                                         label_conn_linetype="dotted",
+                                         legend_position = "none",
+                                         group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1877,20 +1888,62 @@ plot_origins <- function(data,
 #
 # }
 
+# '
+#' @param ccs
+#' @param x_col
+#' @param normalize
+#' @param plot_zeroes
+#' @param plot_points
+#' @param log_scale
+#' @param nrow
+#' @param legend_position
+plot_cells_per_sample = function(ccs,
+                                 x_col,
+                                 normalize = F,
+                                 plot_zeroes = F,
+                                 plot_points = F,
+                                 log_scale = F,
+                                 nrow = 1,
+                                 legend_position = "none") {
+
+  ccs_coldata = colData(ccs) %>% as.data.frame
+  ccs_coldata$SF = size_factors(ccs)
+  count_df = counts(ccs) %>%
+    as.matrix %>%
+    as.data.frame() %>%
+    rownames_to_column("cell_group") %>%
+    tidyr::pivot_longer(-cell_group, names_to = "sample", values_to = "count") %>%
+    left_join(ccs_coldata, by = "sample")
+
+  if (normalize) {
+    count_df = count_df %>% mutate(count = round(count/SF))
+  }
+
+  if (plot_zeroes) {
+    count_df = count_df %>% mutate(count = count + 0.001)
+  }
+
+  count_df[[x_col]] = as.factor(count_df[[x_col]])
+
+  p = count_df %>%
+    ggplot(aes( x = !!sym(x_col), y = count, fill=cell_group)) +
+    geom_boxplot() +
+    facet_wrap(~cell_group, nrow=nrow) +
+    theme(legend.position = legend_position) +
+    monocle3:::monocle_theme_opts()
+
+  if (plot_points) {
+    p = p + geom_jitter(aes( x = !!sym(x_col), y = count), size=1)
+  }
+
+  if (log_scale) {
+    p = p + scale_y_log10()
+  }
+
+  return(p)
+
+}
 
 
-# To add:
-#' #' plot a similar heatmap to lauren's BB testing
-#' #'
-#' plot_heatmap <- function(ccm) {
-#'
-#' }
-#'
-#' plot_heatmap_2 <- function() {
-#'
-#' }
-#'
-#' #' plot normalized counts as boxplots
-#' plot_boxplots <- function() {
-#'
-#' }
+
+
