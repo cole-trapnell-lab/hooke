@@ -180,7 +180,6 @@ plot_sub_contrast <- function (ccm,
                                cell_size=1,
                                q_value_thresh = 1.0,
                                group_label_size=2,
-                               label_cell_groups = list(),
                                plot_labels = c("significant", "all", "none"),
                                plot_edges = c("all", "directed", "undirected", "none"),
                                fc_limits=c(-3,3),
@@ -218,7 +217,6 @@ plot_sub_contrast <- function (ccm,
                 group_label_size=group_label_size,
                 plot_labels = plot_labels,
                 fc_limits=fc_limits,
-                label_cell_groups = label_cell_groups,
                 plot_edges = plot_edges,
                 ...) +
     facet_wrap(~facet_group)
@@ -361,31 +359,66 @@ collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
 }
 
 
-contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
+# contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
+#
+#   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+#
+#   cell_group_metadata = colData(ccm@ccs@cds) %>%
+#     as.data.frame %>% select(!!sym(group_nodes_by))
+#
+#   cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+#
+#   group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
+#     as.data.frame %>%
+#     dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
+#     dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+#   colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+#
+#   new_cell_groups = unique(group_by_metadata$group_nodes_by)
+#
+#   ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]] %>%
+#     left_join(group_by_metadata, by = "cell_group") %>%
+#     select(-cell_group) %>%
+#     dplyr::rename("cell_group" = group_nodes_by)
+#
+#   return(ccm)
+#
+# }
 
-  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
-
-  cell_group_metadata = colData(ccm@ccs@cds) %>%
-    as.data.frame %>% select(!!sym(group_nodes_by))
-
-  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
-
-  group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
-    as.data.frame %>%
-    dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
-    dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-  colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
-
-  new_cell_groups = unique(group_by_metadata$group_nodes_by)
-
-  ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]] %>%
-    left_join(group_by_metadata, by = "cell_group") %>%
-    select(-cell_group) %>%
-    dplyr::rename("cell_group" = group_nodes_by)
-
-  return(ccm)
-
+#' filters a cds
+#' @param cds
+filter_cds <- function(cds, ...) {
+  cell_names = as.data.frame(cds@colData) %>% filter(...) %>% rownames()
+  return(cds[, cell_names])
 }
+
+#'
+#' @param ccs
+filter_ccs <- function(ccs, ...) {
+  ccs@cds = filter_cds(ccs@cds, ...)
+  cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  ccm@ccs@metadata = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+  return(ccs)
+}
+
+#'
+#' @param ccm
+filter_ccm <- function(ccm, ...) {
+  ccm@ccs = filter_ccs(ccm@ccs, ...)
+  return(ccm )
+}
+
+#' change cell group
+#' @param ccm
+#' @param cell_group
+contract_ccm <- function(ccm, cell_group) {
+  suppressWarnings(ccm@ccs = new_cell_count_set(ccm@ccs@cds,
+                                                sample_group = ccm@ccs@info$sample_group,
+                                                cell_group = cell_group))
+  return(ccm)
+}
+
+
 
 
 subset_gap <- function(cds, major_group) {
@@ -399,25 +432,25 @@ subset_gap <- function(cds, major_group) {
   return(sub_cds)
 }
 
-subset_ccs = function(ccs, col_name, col_value) {
-
-  ccs = ccs[, colData(ccs)[[col_name]] == col_value]
-  ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] == col_value]
-
-  ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
-  return(ccs)
-}
-
-subset_ccm = function(ccm, col_name, col_values) {
-
-  ccs = ccm@ccs
-  ccs = ccs[, colData(ccs)[[col_name]] %in% col_values]
-  ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] %in% col_values]
-
-  ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
-  ccm@ccs = ccs
-  return(ccm)
-}
+# subset_ccs = function(ccs, col_name, col_value) {
+#
+#   ccs = ccs[, colData(ccs)[[col_name]] == col_value]
+#   ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] == col_value]
+#
+#   ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
+#   return(ccs)
+# }
+#
+# subset_ccm = function(ccm, col_name, col_values) {
+#
+#   ccs = ccm@ccs
+#   ccs = ccs[, colData(ccs)[[col_name]] %in% col_values]
+#   ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] %in% col_values]
+#
+#   ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
+#   ccm@ccs = ccs
+#   return(ccm)
+# }
 
 
 threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.25, abs_expr_thresh = 1e-3, scale_tpc=1e6){
@@ -438,3 +471,66 @@ threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.
   return(expr_over_thresh)
 }
 
+
+#' score DEGs on specificity
+#' @param gene_patterns_over_cell_graph
+#' @param pattern
+#' @param cell_group
+#'
+top_gene_pattern <- function(ccm,
+                             gene_patterns_over_cell_graph,
+                             pattern = NULL,
+                             grep_pattern = NULL,
+                             cell_group = "cell_type_sub",
+                             n = 5) {
+
+  if (is.null(pattern) == FALSE) {
+    # use 1 type of pattern
+    all_genes = gene_patterns_over_cell_graph %>%
+      filter(interpretation == pattern) %>%
+      pull(gene_short_name) %>%
+      unique
+
+  }
+  else if (is.null(grep_pattern) == FALSE) {
+    all_genes = gene_patterns_over_cell_graph %>%
+      filter(grepl(grep_pattern, interpretation, ignore.case = T)) %>%
+      pull(gene_short_name) %>%
+      unique
+  }
+  else {
+    # use all genes
+    all_genes = gene_patterns_over_cell_graph %>%
+      pull(gene_short_name) %>%
+      unique
+  }
+
+  if (length(all_genes) <= 5) {
+    return(all_genes)
+  }
+
+  all_genes_marker_scores = top_markers(ccm@ccs@cds[rowData(ccm@ccs@cds)$gene_short_name %in% all_genes,],
+                                        group_cells_by = cell_group)
+
+  top_genes = all_genes_marker_scores %>%
+    as_tibble() %>% filter(marker_test_q_value < 0.01) %>%
+    group_by(cell_group) %>% slice_max(marker_score, n=5) %>% pull(gene_short_name)
+
+  return(unique(top_genes))
+}
+
+
+plot_single_gene <- function(cds, gene, file_path = "./", x=1, y=3) {
+
+  plot_cells(cds, x = x, y = y,  genes = c(gene), label_cell_groups = F, show_trajectory_graph = F,
+             cell_size = 0.5, cell_stroke = 0, alpha = 0.8) +
+    scale_color_viridis_c() +
+    theme_void() +
+    theme(legend.position = "none")
+
+  ggsave(paste0(file_path, gene, ".png"),
+         dpi = 750,
+         height = 2,
+         width = 2.2,
+         bg = "transparent")
+}
