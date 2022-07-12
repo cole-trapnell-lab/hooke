@@ -397,7 +397,7 @@ filter_cds <- function(cds, ...) {
 filter_ccs <- function(ccs, ...) {
   ccs@cds = filter_cds(ccs@cds, ...)
   cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
-  ccs@metadata = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+  ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
   return(ccs)
 }
 
