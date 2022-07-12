@@ -618,9 +618,34 @@ plot_path <- function(data,
                       switch_label = NULL,
                       ...) {
 
-  if (is.null(switch_label)) {
-    switch_label = unique(igraph::V(state_graph)$cell_group)
+  # if (is.null(switch_label) & !is.null(unique(igraph::V(state_graph)$cell_group)) & is(state_graph, "igraph")) {
+  #   switch_label = unique(igraph::V(state_graph)$cell_group)
+  # } else {
+  #   print("define a switch label grouping that matches the ccm")
+  # }
+
+  if (is(state_graph, "igraph")){
+    path_df = state_graph %>% igraph::as_data_frame()
+  }else{
+    path_df = state_graph
   }
+
+  if (is.null(switch_label)) {
+    node_intersection = intersect(rownames(ccm@ccs), unique(path_df$from, path_df$to))
+  } else {
+    node_intersection = intersect(ccm@ccs@colData[[switch_label]], unique(path_df$from, path_df$to))
+  }
+
+  assertthat::assert_that(
+
+    tryCatch(length(node_intersection) > 0,
+             error = function(e) FALSE),
+    msg = "specify a label switch, path nodes and ccm cell group do not match"
+
+  )
+
+
+  # ccm@ccs@info$cell_group
 
   gp = my_plot_cells(data,  x=x, y=y, color_cells_by = switch_label, ...)
 
@@ -630,11 +655,7 @@ plot_path <- function(data,
     umap_centers = centroids(data@ccs, switch_group = switch_label)
   }
 
-  if (is(state_graph, "igraph")){
-    path_df = state_graph %>% igraph::as_data_frame()
-  }else{
-    path_df = state_graph
-  }
+
 
   path_df = add_umap_coords(path_df, umap_centers)
 
@@ -1264,6 +1285,7 @@ plot_state_graph_gene_expression <- function(ccm,
                                          fract_expr = 0.0,
                                          mean_expr = 0.0,
                                          unlabeled_groups = c("Unknown"),
+                                         scale_to_range = FALSE,
                                          hide_unlinked_nodes=TRUE,
                                          label_font_size=6,
                                          label_conn_linetype="dotted",
@@ -1322,10 +1344,24 @@ plot_state_graph_gene_expression <- function(ccm,
         fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
         TRUE ~ FALSE))
 
+    color_nodes_by = "mean_expression"
+    expression_legend_label = "mean expression"
+
+    if (scale_to_range) {
+      sub_gene_expr = sub_gene_expr %>%
+        mutate(value = mean_expression) %>%
+        group_by(gene_short_name) %>%
+        dplyr::mutate(max_val_for_feature = max(value),
+                   min_val_for_feature = min(value)) %>%
+        dplyr::mutate(value = 100 * (value - min_val_for_feature) / (max_val_for_feature - min_val_for_feature))
+      expression_legend_label = "% Max"
+      color_nodes_by = "value"
+    }
+
     g = left_join(g, sub_gene_expr, by=c("name"="cell_group"))
 
     g$gene_short_name = factor(g$gene_short_name, levels=genes)
-    color_nodes_by = "mean_expression"
+
     group_outline = TRUE
 
   p <- ggplot(aes(x,y), data=g)
@@ -1352,8 +1388,8 @@ plot_state_graph_gene_expression <- function(ccm,
     ggnetwork::geom_nodes(data = g %>% filter(gene_expr),
                               aes(x, y,
                                   size = fraction_max,
-                                  color=mean_expression))
-    #labs(fill = color_nodes_by)
+                                  color = get(color_nodes_by))) +
+    labs(color = expression_legend_label)
 
   p = p + viridis::scale_color_viridis(option = "viridis")
 
