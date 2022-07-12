@@ -412,9 +412,9 @@ filter_ccm <- function(ccm, ...) {
 #' @param ccm
 #' @param cell_group
 contract_ccm <- function(ccm, cell_group) {
-  suppressWarnings(ccm@ccs = new_cell_count_set(ccm@ccs@cds,
+  ccm@ccs = new_cell_count_set(ccm@ccs@cds,
                                                 sample_group = ccm@ccs@info$sample_group,
-                                                cell_group = cell_group))
+                                                cell_group = cell_group)
   return(ccm)
 }
 
