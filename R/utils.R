@@ -284,6 +284,7 @@ fit_genotype_ccm = function(genotype,
                             ccs,
                             # ctrl_ids=c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
                             ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
+                            colname = "gene_target",
                             num_time_breaks = 3,
                             sparsity_factor = 0.2,
                             main_model_formula_string = NULL,
@@ -325,9 +326,10 @@ fit_genotype_ccm = function(genotype,
   }
 
   if (multiply) {
-    main_model_formula_str = paste0(main_model_formula_str, "*knockout")
+    main_model_formula_str = paste0(main_model_formula_str, " * knockout")
+  } else {
+    main_model_formula_str = paste0(main_model_formula_str, " + knockout")
   }
-  main_model_formula_str = paste0(main_model_formula_str, " + knockout")
 
 
   # if predefined overwrite
@@ -396,8 +398,11 @@ filter_cds <- function(cds, ...) {
 #' @param ccs
 filter_ccs <- function(ccs, ...) {
   ccs@cds = filter_cds(ccs@cds, ...)
-  cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
-  ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+
+  cds_version = ccs@metadata$cds_version
+  cell_group_assignments = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+  ccs@metadata = list(cds_version = cds_version,
+                          cell_group_assignments = cell_group_assignments)
   return(ccs)
 }
 
