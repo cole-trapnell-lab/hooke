@@ -164,6 +164,9 @@ switch_umap_space <- function(cds, sub_space = TRUE) {
   return(cds)
 }
 
+
+
+
 #' wrapper for plot contrast that allows you to facet the plot
 #' you can also switch between sub + full umap space
 #' @param ccm
@@ -280,21 +283,24 @@ convert_to_col = function(ccs, df, colname) {
 }
 
 
-fit_genotype_ccm = function(genotype,
-                            ccs,
-                            # ctrl_ids=c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
-                            ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
-                            colname = "gene_target",
-                            num_time_breaks = 3,
-                            sparsity_factor = 0.2,
-                            main_model_formula_string = NULL,
-                            nuisance_model_formula_string = NULL,
-                            whitelist = NULL,
-                            multiply = F){
+fit_perturb_ccm = function(perturbation,
+                                ccs,
+                                ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
+                                col_name = "gene_target",
+                                num_time_breaks = 3,
+                                sparsity_factor = 0.2,
+                                main_model_formula_string = NULL,
+                                nuisance_model_formula_string = NULL,
+                                whitelist = NULL,
+                                multiply = F){
 
-  subset_ccs = ccs[,colData(ccs)$gene_target == genotype | colData(ccs)$gene_target %in% ctrl_ids]
+  subset_ccs = ccs[, !is.na(colData(ccs)[[col_name]]) ]
+  subset_ccs = subset_ccs[,colData(subset_ccs)[[col_name]] == perturbation | colData(subset_ccs)[[col_name]] %in% ctrl_ids]
+  colData(subset_ccs)$knockout = colData(subset_ccs)[[col_name]] == perturbation
 
-  colData(subset_ccs)$knockout = colData(subset_ccs)$gene_target == genotype
+  # subset_ccs = ccs[,colData(ccs)$gene_target == genotype | colData(ccs)$gene_target %in% ctrl_ids]
+  # colData(subset_ccs)$knockout = colData(subset_ccs)$gene_target == genotype
+
   knockout_time_start = min(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
   knockout_time_stop = max(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
   subset_ccs = subset_ccs[,colData(subset_ccs)$timepoint >= knockout_time_start & colData(subset_ccs)$timepoint <= knockout_time_stop]
@@ -312,18 +318,10 @@ fit_genotype_ccm = function(genotype,
     main_model_formula_str = ""
   }
 
-  if (multiply) {
-    nuisance_model_formula_str = main_model_formula_str
-
-    if (length(unique(colData(subset_ccs)$expt)) > 1) {
-      nuisance_model_formula_str = paste0(nuisance_model_formula_str, "+ expt")
-    }
-  } else {
-    if (length(unique(colData(subset_ccs)$expt)) > 1)
+  if (length(unique(colData(subset_ccs)$expt)) > 1)
       nuisance_model_formula_str = "~ expt"
-    else
+  else
       nuisance_model_formula_str = "~ 1"
-  }
 
   if (multiply) {
     main_model_formula_str = paste0(main_model_formula_str, " * knockout")
@@ -344,14 +342,14 @@ fit_genotype_ccm = function(genotype,
   # print(main_model_formula_str)
   # print(nuisance_model_formula_str)
 
-  genotype_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
+  perturb_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
                                                        main_model_formula_str = main_model_formula_str,
                                                        nuisance_model_formula_str = nuisance_model_formula_str,
                                                        whitelist = whitelist
   ))
 
-  genotype_ccm = select_model(genotype_ccm, sparsity_factor = sparsity_factor)
-  return(genotype_ccm)
+  perturb_ccm = select_model(perturb_ccm, sparsity_factor = sparsity_factor)
+  return(perturb_ccm)
 }
 
 collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
