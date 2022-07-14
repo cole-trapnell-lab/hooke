@@ -399,7 +399,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
 
   expr_df = tibble(gene_id=row.names(estimate_matrix))
 
-  message("      examining coeffficients", cell_state)
+  message("      examining coeffficients ", cell_state)
 
   expr_df$expr_self = pnorm(estimate_matrix[,cell_state] - log(abs_expr_thresh), sd = stderr_matrix[,cell_state], lower.tail=FALSE)
   expr_df$expr_self = p.adjust(expr_df$expr_self, method="BH") < sig_thresh
