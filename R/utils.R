@@ -283,6 +283,13 @@ convert_to_col = function(ccs, df, colname) {
 }
 
 
+#'
+#' @param perturbation of interest
+#' @param ccs a cell count set object
+#' @param ctrl_ids
+#' @param col_name column name to select for perturbations
+#' @param interaction boolean whether to include an additive model or interaction term
+#'
 fit_perturb_ccm = function(perturbation,
                                 ccs,
                                 ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
@@ -292,7 +299,7 @@ fit_perturb_ccm = function(perturbation,
                                 main_model_formula_string = NULL,
                                 nuisance_model_formula_string = NULL,
                                 whitelist = NULL,
-                                multiply = F){
+                                interaction = F){
 
   subset_ccs = ccs[, !is.na(colData(ccs)[[col_name]]) ]
   subset_ccs = subset_ccs[,colData(subset_ccs)[[col_name]] == perturbation | colData(subset_ccs)[[col_name]] %in% ctrl_ids]
@@ -323,7 +330,7 @@ fit_perturb_ccm = function(perturbation,
   else
       nuisance_model_formula_str = "~ 1"
 
-  if (multiply) {
+  if (interaction) {
     main_model_formula_str = paste0(main_model_formula_str, " * knockout")
   } else {
     main_model_formula_str = paste0(main_model_formula_str, " + knockout")
@@ -387,43 +394,73 @@ collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
 
 #' filters a cds
 #' @param cds
+#' @param ... expressions that return a logical value
+#' @return a cell data set object
 filter_cds <- function(cds, ...) {
   cell_names = as.data.frame(cds@colData) %>% filter(...) %>% rownames()
+  new_cds = cds[, cell_names] %>%
+            estimate_size_factors() %>%
+            detect_genes()
   return(cds[, cell_names])
 }
 
 #'
 #' @param ccs
-filter_ccs <- function(ccs, ...) {
+#' @param ... expressions that return a logical value
+#' @return a cell count set object
+filter_ccs <- function(ccs, recompute_sf = TRUE, ...) {
+
   ccs@cds = filter_cds(ccs@cds, ...)
 
-  cds_version = ccs@metadata$cds_version
-  cell_group_assignments = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
-  ccs@metadata = list(cds_version = cds_version,
-                          cell_group_assignments = cell_group_assignments)
+  if (recompute_sf) {
+    ccs = new_cell_count_set(ccs@cds,
+                             sample_group = ccs@info$sample_group,
+                             cell_group = ccs@info$cell_group)
+  } else {
+    cds_version = ccs@metadata$cds_version
+    cell_group_assignments = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+    ccs@metadata = list(cds_version = cds_version,
+                        cell_group_assignments = cell_group_assignments)
+
+    ccs = estimate_size_factors(ccs) %>% detect_genes()
+  }
+
+
+
   return(ccs)
 }
 
 #'
 #' @param ccm
+#' @param ... expressions that return a logical value
+#' @return a cell count model object
 filter_ccm <- function(ccm, ...) {
   ccm@ccs = filter_ccs(ccm@ccs, ...)
   return(ccm )
 }
 
-#' change cell group
-#' @param ccm
-#' @param cell_group
-contract_ccm <- function(ccm, cell_group) {
+#' change cell count set grouping
+#' @param ccm a cell count model
+#' @param cell_group string specifying how to aggregate the cell counts
+contract_ccm <- function(ccm, cell_group = NULL, sample_group = NULL) {
+
+  if (is.null(sample_group)) {
+    sample_group = ccm@ccs@info$sample_group
+  }
+
+  if (is.null(cell_group)) {
+    cell_group = ccm@ccs@info$cell_group
+  }
+
   ccm@ccs = new_cell_count_set(ccm@ccs@cds,
-                                                sample_group = ccm@ccs@info$sample_group,
-                                                cell_group = cell_group)
+                               sample_group = sample_group,
+                               cell_group = cell_group)
   return(ccm)
 }
 
 
 
-
+#' filters the gap data by major group
 subset_gap <- function(cds, major_group) {
 
   sub_cds = cds[, colData(cds)$major_group == major_group]
@@ -485,7 +522,8 @@ top_gene_pattern <- function(ccm,
                              pattern = NULL,
                              grep_pattern = NULL,
                              cell_group = "cell_type_sub",
-                             n = 5) {
+                             n = 5,
+                             return_genes = T) {
 
   if (is.null(pattern) == FALSE) {
     # use 1 type of pattern
@@ -517,13 +555,29 @@ top_gene_pattern <- function(ccm,
 
   top_genes = all_genes_marker_scores %>%
     as_tibble() %>% filter(marker_test_q_value < 0.01) %>%
-    group_by(cell_group) %>% slice_max(marker_score, n=5) %>% pull(gene_short_name)
+    group_by(cell_group) %>% slice_max(marker_score, n=5)
 
-  return(unique(top_genes))
+  if (return_genes) {
+    top_genes = top_genes %>% pull(gene_short_name)
+    return(unique(top_genes))
+  } else {
+    # top_genes = top_genes %>% select(cell_group, gene_short_name)
+    return(top_genes %>% distinct)
+  }
+
 }
 
-
-plot_single_gene <- function(cds, gene, file_path = "./", x=1, y=3) {
+#' code to plot a single gene nicely and save w a transparent background
+#' @param cds
+#' @param gene
+#' @param save_file
+#' @param file_path
+#'
+plot_single_gene <- function(cds,
+                             gene,
+                             save_file = F,
+                             file_path = NULL,
+                             x=1, y=2) {
 
   plot_cells(cds, x = x, y = y,  genes = c(gene), label_cell_groups = F, show_trajectory_graph = F,
              cell_size = 0.5, cell_stroke = 0, alpha = 0.8) +
@@ -531,9 +585,85 @@ plot_single_gene <- function(cds, gene, file_path = "./", x=1, y=3) {
     theme_void() +
     theme(legend.position = "none")
 
-  ggsave(paste0(file_path, gene, ".png"),
-         dpi = 750,
-         height = 2,
-         width = 2.2,
-         bg = "transparent")
+  if (is.null(file_path) == FALSE) {
+    ggsave(paste0(file_path, gene, ".png"),
+           dpi = 750,
+           height = 2,
+           width = 2.2,
+           bg = "transparent")
+  }
+
 }
+
+
+# edit_state_graph = function(state_graph,
+#                             nodes_to_add = list(),
+#                             nodes_to_delete = list(),
+#                             edges_to_add = list(),
+#                             edges_to_delete = list()) {
+#
+#   # make sure it is an igraph object
+#   if (is(state_graph, "igraph")){
+#     state_graph = state_graph
+#   }else{
+#     state_graph = state_graph %>% igraph::graph_from_data_frame()
+#   }
+#
+#
+#   if (length(nodes_to_add) > 0 ) {
+#
+#   }
+#
+#
+#   if (length(nodes_to_delete) > 0 ) {
+#
+#   }
+#
+#
+#   if (length(edges_to_add) > 0 ) {
+#
+#   }
+#
+#
+#   if (length(edges_to_delete) > 0 ) {
+#
+#   }
+#
+#
+# }
+#
+#
+# add_edges = function(state_graph) {
+#
+#   state_graph = igraph::add_edges(state_graph,
+#                     edge_list)
+#
+#   return(state_graph)
+#
+# }
+#
+# delete_edges = function(state_graph, edge_list) {
+#   chunk <- function(x,n) split(x, cut(seq_along(x), n, labels = FALSE))
+#   edges_to_del = sapply(chunk(edge_list, length(edge_list)/2), function(e) {
+#     paste0(e, collapse = "|")
+#   })
+#   state_graph = state_graph %>% igraph::delete_edges(edges_to_del)
+#   return(state_graph)
+# }
+#
+# edge_list = c(5,6,7,8,9,10)
+#
+#
+#
+#
+# g <- igraph::make_ring(10) #%>%
+# g %>% igraph::delete_edges(edge_list) %>% plot()
+# plot(g)
+# # g %>% igraph::delete_edges(seq(1, 9, by = 2)) %>% plot()
+#  %>% plot()
+# g
+
+
+
+
+
