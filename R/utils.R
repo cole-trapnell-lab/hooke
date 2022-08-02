@@ -336,6 +336,7 @@ fit_perturb_ccm = function(perturbation,
     main_model_formula_str = paste0(main_model_formula_str, " + knockout")
   }
 
+  # print(main_model_formula_str)
 
   # if predefined overwrite
   if (!is.null(main_model_formula_string)) {
@@ -408,24 +409,26 @@ filter_cds <- function(cds, ...) {
 #' @param ccs
 #' @param ... expressions that return a logical value
 #' @return a cell count set object
-filter_ccs <- function(ccs, recompute_sf = TRUE, ...) {
+filter_ccs <- function(ccs,
+                       # recompute_sf = TRUE,
+                       ...) {
 
   ccs@cds = filter_cds(ccs@cds, ...)
 
-  if (recompute_sf) {
-    ccs = new_cell_count_set(ccs@cds,
-                             sample_group = ccs@info$sample_group,
-                             cell_group = ccs@info$cell_group)
-  } else {
-    cds_version = ccs@metadata$cds_version
-    cell_group_assignments = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
-    ccs@metadata = list(cds_version = cds_version,
-                        cell_group_assignments = cell_group_assignments)
+  ccs = new_cell_count_set(ccs@cds,
+                           sample_group = ccs@info$sample_group,
+                           cell_group = ccs@info$cell_group)
 
-    ccs = estimate_size_factors(ccs) %>% detect_genes()
-  }
-
-
+  # if (recompute_sf) {
+  #   ccs = new_cell_count_set(ccs@cds,
+  #                            sample_group = ccs@info$sample_group,
+  #                            cell_group = ccs@info$cell_group)
+  # } else {
+  #   cds_version = ccs@metadata$cds_version
+  #   cell_group_assignments = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+  #   ccs@metadata = list(cds_version = cds_version,
+  #                       cell_group_assignments = cell_group_assignments)
+  # }
 
   return(ccs)
 }
@@ -579,8 +582,8 @@ plot_single_gene <- function(cds,
                              file_path = NULL,
                              x=1, y=2) {
 
-  plot_cells(cds, x = x, y = y,  genes = c(gene), label_cell_groups = F, show_trajectory_graph = F,
-             cell_size = 0.5, cell_stroke = 0, alpha = 0.8) +
+  monocle3::plot_cells(cds, x = x, y = y,  genes = c(gene), label_cell_groups = F, show_trajectory_graph = F,
+             cell_size = 0.5, cell_stroke = 0, alpha = 0.8, scale_to_range = F) +
     scale_color_viridis_c() +
     theme_void() +
     theme(legend.position = "none")
@@ -663,7 +666,14 @@ plot_single_gene <- function(cds,
 #  %>% plot()
 # g
 
+# these are because i can't remember the right arguments to pass through these
 
+my_fread <- function(filename) {
+ data.table::fread(file = filename, sep = ",", stringsAsFactors = F, data.table = F)
+}
 
+my_fwrite <- function(data, filename) {
+  data %>% data.table::fwrite(file = filename, sep = ",", na = "NA")
+}
 
 
