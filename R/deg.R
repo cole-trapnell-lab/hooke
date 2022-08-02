@@ -717,7 +717,7 @@ classify_genes_over_graph <- function(ccm,
   genes_to_test = which(Matrix::rowSums(expr_over_thresh) >= min_samples_detected)
   pb_cds = pb_cds[genes_to_test,]
 
-  pseudobulks_to_test = which(colData(pb_cds)$num_cells_in_group > min_cells_per_pseudobulk)
+  pseudobulks_to_test = which(colData(pb_cds)$num_cells_in_group >= min_cells_per_pseudobulk)
 
   message("fitting regression models")
   pb_cds = pb_cds[,pseudobulks_to_test]
