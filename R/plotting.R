@@ -2056,3 +2056,115 @@ plot_cells_per_sample = function(ccs,
   return(p)
 
 }
+
+
+plot_cells_highlight = function(ccs, group_to_highlight, colname) {
+
+  plot_df = as.data.frame(colData(cds))
+  plot_df$cell_group = colData(cds)[[colname]]
+
+  plot_df$cell = row.names(plot_df)
+  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
+
+  gp = ggplot() +
+    geom_point(
+      data = plot_df,
+      aes(umap2D_1, umap2D_2),
+      color = "black",
+      size = 1.5 * cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>% filter(!cell_group %in% c(group_to_highlight)),
+      aes(umap2D_1, umap2D_2),
+      color = "white",
+      size = cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>% filter(cell_group %in% c(group_to_highlight)),
+      aes(umap2D_1, umap2D_2),
+      color = "red",
+      size = cell_size,
+      stroke = 0
+    ) +
+    theme(legend.position = legend_position) +
+    monocle3:::monocle_theme_opts()
+
+  return(gp)
+
+}
+
+
+plot_contrast_3d <- function(ccm,
+                             cond_b_vs_a_tbl,
+                             log_abundance_thresh = -5,
+                             scale_shifts_by=c("receiver", "sender", "none"),
+                             edge_size=2,
+                             cell_size=25,
+                             q_value_thresh = 1.0,
+                             group_label_size=2,
+                             plot_labels = c("significant", "all", "none"),
+                             fc_limits=c(-3,3),
+                             sender_cell_groups=NULL,
+                             receiver_cell_groups=NULL,
+                             plot_edges = c("all", "directed", "undirected", "none"),
+                             label_cell_groups = list(),
+                             repel_labels = TRUE,
+                             model_for_pcors="reduced",
+                             switch_label = NULL,
+                             sub_cds = NULL,
+                             alpha = 1.0,
+                             x=1,
+                             y=2) {
+
+
+  plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
+  plot_df$cell = row.names(plot_df)
+
+  plot_df$umap3D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,1]
+  plot_df$umap3D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
+  plot_df$umap3D_3 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,3]
+
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+
+
+  plot_df = dplyr::left_join(plot_df,
+                             cond_b_vs_a_tbl,
+                             by=c("cell_group"="cell_group"))
+
+  if (is.null(fc_limits)) {
+    fc_limits = range(plot_df$delta_log_abund)
+  } else {
+    min = fc_limits[1]
+    max = fc_limits[2]
+    plot_df = plot_df %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  }
+
+  color_palette = c('#3A5FCD', '#FAFAFA','#CD3700')
+  # color_palette = c('#3A5FCD', '#FFFFFF','#CD3700')
+  # color_palette = c('#FFFFFF','#CD3700')
+
+  p = plotly::plot_ly(plot_df,
+                  x = ~umap3D_1,
+                  y = ~umap3D_2,
+                  z = ~umap3D_3,
+                  type = 'scatter3d',
+                  mode="markers",
+                  alpha = I(alpha),
+                  color = ~delta_log_abund,
+                  colors = color_palette,
+                  size = I(cell_size),
+                  range_color = fc_limits)
+
+  return(p)
+
+
+
+}
+
+
+
