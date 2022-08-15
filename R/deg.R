@@ -84,8 +84,8 @@ pseudobulk <- function(ccs,
   pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccs@cds) %>% as.data.frame)
   pseudobulk_cds = pseudobulk_cds[,Matrix::colSums(exprs(pseudobulk_cds)) != 0]
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
-  pseudobulk_cds = preprocess_cds(pseudobulk_cds)
-  pseudobulk_cds = reduce_dimension(pseudobulk_cds)
+  # pseudobulk_cds = preprocess_cds(pseudobulk_cds)
+  # pseudobulk_cds = reduce_dimension(pseudobulk_cds)
 
   # not sure the best place to put this yet
   colData(pseudobulk_cds)$cell_group = as.character(colData(pseudobulk_cds)$cell_group)
