@@ -4,7 +4,12 @@
 \alias{select_model}
 \title{Select the model a cell_count_model should use}
 \usage{
-select_model(ccm, criterion = "EBIC", sparsity_factor = 1)
+select_model(
+  ccm,
+  criterion = "EBIC",
+  sparsity_factor = 1,
+  models_to_update = c("both", "full", "reduced")
+)
 }
 \arguments{
 \item{ccm}{A cell_count_model object.}

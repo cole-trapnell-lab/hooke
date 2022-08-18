@@ -4,12 +4,10 @@
 \alias{calc_shortest_path}
 \title{Calculate the shortest path between two points}
 \usage{
-calc_shortest_path(edges, from, to)
+calc_shortest_path(G, from, to)
 }
 \arguments{
 \item{edges}{data frame of edges with edge weights}
-
-\item{to}{}
 }
 \value{
 data frame containing the shortest path

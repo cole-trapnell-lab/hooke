@@ -4,7 +4,7 @@
 \alias{compare_abundances}
 \title{Compare two estimates of cell abundances from a Hooke model}
 \usage{
-compare_abundances(ccm, cond_x, cond_y)
+compare_abundances(ccm, cond_x, cond_y, method = "BH")
 }
 \arguments{
 \item{ccm}{A cell_count_model}
