@@ -463,14 +463,13 @@ build_transition_dag <- function(ccm,
 
 
   paths_for_relevant_edges = edge_union %>%
-    #head (5) %>%
-    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
                               .x = from, .y = to,
                               timeseries_pathfinding_graph))
 
-
   paths_for_relevant_edges = paths_for_relevant_edges %>%
-    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(cells_along_path, NULL),
+    filter(!is.na(path)) %>%
+    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(cells_along_path, NA_character_),
                                                      .x = path,
                                                      ccs=ccm@ccs,
                                                      interval_col=interval_col)) %>%
@@ -692,6 +691,8 @@ assemble_timeseries_transitions <- function(ccm,
 
   covered_G = compute_min_path_cover(ccm, G)
 
+  igraph::V(covered_G)$cell_group = ccm@ccs@info$cell_group
+
   return(covered_G)
 }
 
@@ -722,6 +723,7 @@ contract_state_graph <- function(ccm, state_graph, group_nodes_by){
   contracted_state_graph = igraph::contract(state_graph, mapping=contraction_mapping, vertex.attr.comb="ignore")
   igraph::V(contracted_state_graph)$name = unlist(contraction_mapping_names[as.numeric(igraph::V(contracted_state_graph))])
   contracted_state_graph = igraph::simplify(contracted_state_graph)
+  igraph::V(contracted_state_graph)$cell_group = group_nodes_by
   return(contracted_state_graph)
 }
 

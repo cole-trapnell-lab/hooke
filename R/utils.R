@@ -164,6 +164,9 @@ switch_umap_space <- function(cds, sub_space = TRUE) {
   return(cds)
 }
 
+
+
+
 #' wrapper for plot contrast that allows you to facet the plot
 #' you can also switch between sub + full umap space
 #' @param ccm
@@ -180,7 +183,6 @@ plot_sub_contrast <- function (ccm,
                                cell_size=1,
                                q_value_thresh = 1.0,
                                group_label_size=2,
-                               label_cell_groups = list(),
                                plot_labels = c("significant", "all", "none"),
                                plot_edges = c("all", "directed", "undirected", "none"),
                                fc_limits=c(-3,3),
@@ -218,7 +220,6 @@ plot_sub_contrast <- function (ccm,
                 group_label_size=group_label_size,
                 plot_labels = plot_labels,
                 fc_limits=fc_limits,
-                label_cell_groups = label_cell_groups,
                 plot_edges = plot_edges,
                 ...) +
     facet_wrap(~facet_group)
@@ -282,20 +283,31 @@ convert_to_col = function(ccs, df, colname) {
 }
 
 
-fit_genotype_ccm = function(genotype,
-                            ccs,
-                            # ctrl_ids=c("wt", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
-                            ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
-                            num_time_breaks = 3,
-                            sparsity_factor = 0.2,
-                            main_model_formula_string = NULL,
-                            nuisance_model_formula_string = NULL,
-                            whitelist = NULL,
-                            multiply = F){
+#'
+#' @param perturbation of interest
+#' @param ccs a cell count set object
+#' @param ctrl_ids
+#' @param col_name column name to select for perturbations
+#' @param interaction boolean whether to include an additive model or interaction term
+#'
+fit_perturb_ccm = function(perturbation,
+                                ccs,
+                                ctrl_ids = c("ctrl-uninj", "ctrl-inj", "ctrl-noto", "ctrl-mafba", "ctrl-hgfa", "ctrl-tbx16", "ctrl-met"),
+                                col_name = "gene_target",
+                                num_time_breaks = 3,
+                                sparsity_factor = 0.2,
+                                main_model_formula_string = NULL,
+                                nuisance_model_formula_string = NULL,
+                                whitelist = NULL,
+                                interaction = F){
 
-  subset_ccs = ccs[,colData(ccs)$gene_target == genotype | colData(ccs)$gene_target %in% ctrl_ids]
+  subset_ccs = ccs[, !is.na(colData(ccs)[[col_name]]) ]
+  subset_ccs = subset_ccs[,colData(subset_ccs)[[col_name]] == perturbation | colData(subset_ccs)[[col_name]] %in% ctrl_ids]
+  colData(subset_ccs)$knockout = colData(subset_ccs)[[col_name]] == perturbation
 
-  colData(subset_ccs)$knockout = colData(subset_ccs)$gene_target == genotype
+  # subset_ccs = ccs[,colData(ccs)$gene_target == genotype | colData(ccs)$gene_target %in% ctrl_ids]
+  # colData(subset_ccs)$knockout = colData(subset_ccs)$gene_target == genotype
+
   knockout_time_start = min(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
   knockout_time_stop = max(colData(subset_ccs)$timepoint[colData(subset_ccs)$knockout])
   subset_ccs = subset_ccs[,colData(subset_ccs)$timepoint >= knockout_time_start & colData(subset_ccs)$timepoint <= knockout_time_stop]
@@ -313,24 +325,18 @@ fit_genotype_ccm = function(genotype,
     main_model_formula_str = ""
   }
 
-  if (multiply) {
-    nuisance_model_formula_str = main_model_formula_str
-
-    if (length(unique(colData(subset_ccs)$expt)) > 1) {
-      nuisance_model_formula_str = paste0(nuisance_model_formula_str, "+ expt")
-    }
-  } else {
-    if (length(unique(colData(subset_ccs)$expt)) > 1)
+  if (length(unique(colData(subset_ccs)$expt)) > 1)
       nuisance_model_formula_str = "~ expt"
-    else
+  else
       nuisance_model_formula_str = "~ 1"
+
+  if (interaction) {
+    main_model_formula_str = paste0(main_model_formula_str, " * knockout")
+  } else {
+    main_model_formula_str = paste0(main_model_formula_str, " + knockout")
   }
 
-  if (multiply) {
-    main_model_formula_str = paste0(main_model_formula_str, "*knockout")
-  }
-  main_model_formula_str = paste0(main_model_formula_str, " + knockout")
-
+  # print(main_model_formula_str)
 
   # if predefined overwrite
   if (!is.null(main_model_formula_string)) {
@@ -344,14 +350,14 @@ fit_genotype_ccm = function(genotype,
   # print(main_model_formula_str)
   # print(nuisance_model_formula_str)
 
-  genotype_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
+  perturb_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
                                                        main_model_formula_str = main_model_formula_str,
                                                        nuisance_model_formula_str = nuisance_model_formula_str,
                                                        whitelist = whitelist
   ))
 
-  genotype_ccm = select_model(genotype_ccm, sparsity_factor = sparsity_factor)
-  return(genotype_ccm)
+  perturb_ccm = select_model(perturb_ccm, sparsity_factor = sparsity_factor)
+  return(perturb_ccm)
 }
 
 collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
@@ -361,33 +367,103 @@ collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
 }
 
 
-contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
+# contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
+#
+#   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+#
+#   cell_group_metadata = colData(ccm@ccs@cds) %>%
+#     as.data.frame %>% select(!!sym(group_nodes_by))
+#
+#   cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+#
+#   group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
+#     as.data.frame %>%
+#     dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
+#     dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+#   colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+#
+#   new_cell_groups = unique(group_by_metadata$group_nodes_by)
+#
+#   ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]] %>%
+#     left_join(group_by_metadata, by = "cell_group") %>%
+#     select(-cell_group) %>%
+#     dplyr::rename("cell_group" = group_nodes_by)
+#
+#   return(ccm)
+#
+# }
 
-  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+#' filters a cds
+#' @param cds
+#' @param ... expressions that return a logical value
+#' @return a cell data set object
+filter_cds <- function(cds, ...) {
+  cell_names = as.data.frame(cds@colData) %>% filter(...) %>% rownames()
+  new_cds = cds[, cell_names] %>%
+            estimate_size_factors() %>%
+            detect_genes()
+  return(cds[, cell_names])
+}
 
-  cell_group_metadata = colData(ccm@ccs@cds) %>%
-    as.data.frame %>% select(!!sym(group_nodes_by))
+#'
+#' @param ccs
+#' @param ... expressions that return a logical value
+#' @return a cell count set object
+filter_ccs <- function(ccs,
+                       # recompute_sf = TRUE,
+                       ...) {
 
-  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+  ccs@cds = filter_cds(ccs@cds, ...)
 
-  group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
-    as.data.frame %>%
-    dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
-    dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-  colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
+  ccs = new_cell_count_set(ccs@cds,
+                           sample_group = ccs@info$sample_group,
+                           cell_group = ccs@info$cell_group)
 
-  new_cell_groups = unique(group_by_metadata$group_nodes_by)
+  # if (recompute_sf) {
+  #   ccs = new_cell_count_set(ccs@cds,
+  #                            sample_group = ccs@info$sample_group,
+  #                            cell_group = ccs@info$cell_group)
+  # } else {
+  #   cds_version = ccs@metadata$cds_version
+  #   cell_group_assignments = ccs@metadata[["cell_group_assignments"]][colnames(ccs@cds),]
+  #   ccs@metadata = list(cds_version = cds_version,
+  #                       cell_group_assignments = cell_group_assignments)
+  # }
 
-  ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]] %>%
-    left_join(group_by_metadata, by = "cell_group") %>%
-    select(-cell_group) %>%
-    dplyr::rename("cell_group" = group_nodes_by)
+  return(ccs)
+}
 
+#'
+#' @param ccm
+#' @param ... expressions that return a logical value
+#' @return a cell count model object
+filter_ccm <- function(ccm, ...) {
+  ccm@ccs = filter_ccs(ccm@ccs, ...)
+  return(ccm )
+}
+
+#' change cell count set grouping
+#' @param ccm a cell count model
+#' @param cell_group string specifying how to aggregate the cell counts
+contract_ccm <- function(ccm, cell_group = NULL, sample_group = NULL) {
+
+  if (is.null(sample_group)) {
+    sample_group = ccm@ccs@info$sample_group
+  }
+
+  if (is.null(cell_group)) {
+    cell_group = ccm@ccs@info$cell_group
+  }
+
+  ccm@ccs = new_cell_count_set(ccm@ccs@cds,
+                               sample_group = sample_group,
+                               cell_group = cell_group)
   return(ccm)
-
 }
 
 
+
+#' filters the gap data by major group
 subset_gap <- function(cds, major_group) {
 
   sub_cds = cds[, colData(cds)$major_group == major_group]
@@ -399,25 +475,25 @@ subset_gap <- function(cds, major_group) {
   return(sub_cds)
 }
 
-subset_ccs = function(ccs, col_name, col_value) {
-
-  ccs = ccs[, colData(ccs)[[col_name]] == col_value]
-  ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] == col_value]
-
-  ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
-  return(ccs)
-}
-
-subset_ccm = function(ccm, col_name, col_values) {
-
-  ccs = ccm@ccs
-  ccs = ccs[, colData(ccs)[[col_name]] %in% col_values]
-  ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] %in% col_values]
-
-  ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
-  ccm@ccs = ccs
-  return(ccm)
-}
+# subset_ccs = function(ccs, col_name, col_value) {
+#
+#   ccs = ccs[, colData(ccs)[[col_name]] == col_value]
+#   ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] == col_value]
+#
+#   ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
+#   return(ccs)
+# }
+#
+# subset_ccm = function(ccm, col_name, col_values) {
+#
+#   ccs = ccm@ccs
+#   ccs = ccs[, colData(ccs)[[col_name]] %in% col_values]
+#   ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] %in% col_values]
+#
+#   ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
+#   ccm@ccs = ccs
+#   return(ccm)
+# }
 
 
 threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.25, abs_expr_thresh = 1e-3, scale_tpc=1e6){
@@ -437,4 +513,167 @@ threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.
   expr_over_thresh = norm_expr_mat > expression_thresh_vec
   return(expr_over_thresh)
 }
+
+
+#' score DEGs on specificity
+#' @param gene_patterns_over_cell_graph
+#' @param pattern
+#' @param cell_group
+#'
+top_gene_pattern <- function(ccm,
+                             gene_patterns_over_cell_graph,
+                             pattern = NULL,
+                             grep_pattern = NULL,
+                             cell_group = "cell_type_sub",
+                             n = 5,
+                             return_genes = T) {
+
+  if (is.null(pattern) == FALSE) {
+    # use 1 type of pattern
+    all_genes = gene_patterns_over_cell_graph %>%
+      filter(interpretation == pattern) %>%
+      pull(gene_short_name) %>%
+      unique
+
+  }
+  else if (is.null(grep_pattern) == FALSE) {
+    all_genes = gene_patterns_over_cell_graph %>%
+      filter(grepl(grep_pattern, interpretation, ignore.case = T)) %>%
+      pull(gene_short_name) %>%
+      unique
+  }
+  else {
+    # use all genes
+    all_genes = gene_patterns_over_cell_graph %>%
+      pull(gene_short_name) %>%
+      unique
+  }
+
+  if (length(all_genes) <= 5) {
+    return(all_genes)
+  }
+
+  all_genes_marker_scores = top_markers(ccm@ccs@cds[rowData(ccm@ccs@cds)$gene_short_name %in% all_genes,],
+                                        group_cells_by = cell_group)
+
+  top_genes = all_genes_marker_scores %>%
+    as_tibble() %>% filter(marker_test_q_value < 0.01) %>%
+    group_by(cell_group) %>% slice_max(marker_score, n=5)
+
+  if (return_genes) {
+    top_genes = top_genes %>% pull(gene_short_name)
+    return(unique(top_genes))
+  } else {
+    # top_genes = top_genes %>% select(cell_group, gene_short_name)
+    return(top_genes %>% distinct)
+  }
+
+}
+
+#' code to plot a single gene nicely and save w a transparent background
+#' @param cds
+#' @param gene
+#' @param save_file
+#' @param file_path
+#'
+plot_single_gene <- function(cds,
+                             gene,
+                             save_file = F,
+                             file_path = NULL,
+                             x=1, y=2) {
+
+  monocle3::plot_cells(cds, x = x, y = y,  genes = c(gene), label_cell_groups = F, show_trajectory_graph = F,
+             cell_size = 0.5, cell_stroke = 0, alpha = 0.8, scale_to_range = F) +
+    scale_color_viridis_c() +
+    theme_void() +
+    theme(legend.position = "none")
+
+  if (is.null(file_path) == FALSE) {
+    ggsave(paste0(file_path, gene, ".png"),
+           dpi = 750,
+           height = 2,
+           width = 2.2,
+           bg = "transparent")
+  }
+
+}
+
+
+# edit_state_graph = function(state_graph,
+#                             nodes_to_add = list(),
+#                             nodes_to_delete = list(),
+#                             edges_to_add = list(),
+#                             edges_to_delete = list()) {
+#
+#   # make sure it is an igraph object
+#   if (is(state_graph, "igraph")){
+#     state_graph = state_graph
+#   }else{
+#     state_graph = state_graph %>% igraph::graph_from_data_frame()
+#   }
+#
+#
+#   if (length(nodes_to_add) > 0 ) {
+#
+#   }
+#
+#
+#   if (length(nodes_to_delete) > 0 ) {
+#
+#   }
+#
+#
+#   if (length(edges_to_add) > 0 ) {
+#
+#   }
+#
+#
+#   if (length(edges_to_delete) > 0 ) {
+#
+#   }
+#
+#
+# }
+#
+#
+# add_edges = function(state_graph) {
+#
+#   state_graph = igraph::add_edges(state_graph,
+#                     edge_list)
+#
+#   return(state_graph)
+#
+# }
+#
+# delete_edges = function(state_graph, edge_list) {
+#   chunk <- function(x,n) split(x, cut(seq_along(x), n, labels = FALSE))
+#   edges_to_del = sapply(chunk(edge_list, length(edge_list)/2), function(e) {
+#     paste0(e, collapse = "|")
+#   })
+#   state_graph = state_graph %>% igraph::delete_edges(edges_to_del)
+#   return(state_graph)
+# }
+#
+# edge_list = c(5,6,7,8,9,10)
+#
+#
+#
+#
+# g <- igraph::make_ring(10) #%>%
+# g %>% igraph::delete_edges(edge_list) %>% plot()
+# plot(g)
+# # g %>% igraph::delete_edges(seq(1, 9, by = 2)) %>% plot()
+#  %>% plot()
+# g
+
+# these are because i can't remember the right arguments to pass through these
+
+my_fread <- function(filename) {
+ data.table::fread(file = filename, sep = ",", stringsAsFactors = F, data.table = F)
+}
+
+my_fwrite <- function(data, filename) {
+  data %>% data.table::fwrite(file = filename, sep = ",", na = "NA")
+}
+
 

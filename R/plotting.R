@@ -607,7 +607,7 @@ my_plot_cells <- function(data,
 #' @param residuals
 #' @param cond_b_vs_a_tbl
 plot_path <- function(data,
-                      path_df = path_df,
+                      state_graph,
                       edge_size = 1,
                       path_color = "black",
                       color_path_by = NULL,
@@ -615,15 +615,51 @@ plot_path <- function(data,
                       directed = TRUE,
                       x = 1,
                       y = 2,
+                      switch_label = NULL,
                       ...) {
 
-  gp = my_plot_cells(data,  x=x, y=y, ...)
+  if (class(data) == "cell_count_set") {
+    ccs = data
+  } else if (class(data) == "cell_count_model") {
+    ccs = data@ccs
+  }
+
+  # if (is.null(switch_label) & !is.null(unique(igraph::V(state_graph)$cell_group)) & is(state_graph, "igraph")) {
+  #   switch_label = unique(igraph::V(state_graph)$cell_group)
+  # } else {
+  #   print("define a switch label grouping that matches the ccm")
+  # }
+
+  if (is(state_graph, "igraph")){
+    path_df = state_graph %>% igraph::as_data_frame()
+  }else{
+    path_df = state_graph
+  }
+
+  if (is.null(switch_label)) {
+    node_intersection = intersect(rownames(ccs), unique(path_df$from, path_df$to))
+  } else {
+    node_intersection = intersect(ccs@colData[[switch_label]], unique(path_df$from, path_df$to))
+  }
+
+  assertthat::assert_that(
+
+    tryCatch(length(node_intersection) > 0,
+             error = function(e) FALSE),
+    msg = "specify a label switch, path nodes and ccm cell group do not match"
+
+  )
+
+
+  gp = my_plot_cells(data,  x=x, y=y, color_cells_by = switch_label, ...)
 
   if (class(data) == "cell_count_set") {
-    umap_centers = centroids(data)
+    umap_centers = centroids(data, switch_group = switch_label)
   } else if (class(data) == "cell_count_model") {
-    umap_centers = centroids(data@ccs)
+    umap_centers = centroids(data@ccs, switch_group = switch_label)
   }
+
+
 
   path_df = add_umap_coords(path_df, umap_centers)
 
@@ -635,8 +671,8 @@ plot_path <- function(data,
         geom_segment(data = path_df,
                      aes(x = get(paste0("umap_to_", x)),
                          y = get(paste0("umap_to_", y)),
-                         xend=get(paste0("from_to_", x)),
-                         yend = get(paste0("from_to_", y)),
+                         xend=get(paste0("umap_from_", x)),
+                         yend = get(paste0("umap_from_", y)),
                          color = get(color_path_by)),
                      size=edge_size ) +
         geom_segment(data = path_df,
@@ -681,8 +717,8 @@ plot_path <- function(data,
         geom_segment(data = path_df,
                      aes(x = get(paste0("umap_to_", x)),
                          y = get(paste0("umap_to_", y)),
-                         xend=get(paste0("from_to_", x)),
-                         yend = get(paste0("from_to_", y)),
+                         xend=get(paste0("umap_from_", x)),
+                         yend = get(paste0("umap_from_", y)),
                          color = get(color_path_by)),
                      size=edge_size) +
         scale_color_gradient2(
@@ -711,7 +747,7 @@ plot_path <- function(data,
 }
 
 
-add_edge <- function(gp,
+add_path_edge <- function(gp,
                      path_df,
                      umap_centers,
                      size = 1,
@@ -913,23 +949,23 @@ layout_state_graph <- function(G, node_metadata, edge_labels)
 plot_state_graph_annotations <- function(ccm,
                                          state_graph,
                                          color_nodes_by=NULL,
-                                        label_nodes_by=NULL,
-                             group_nodes_by=NULL,
-                             edge_labels=NULL,
-                             arrow.gap=0.03,
-                             arrow_unit = 2,
-                             bar_unit = .075,
-                             node_size = 2,
-                             num_layers=10,
-                             edge_size=0.5,
-                             fract_expr = 0.0,
-                             mean_expr = 0.0,
-                             unlabeled_groups = c("Unknown"),
-                             hide_unlinked_nodes=TRUE,
-                             label_font_size=6,
-                             label_conn_linetype="dotted",
-                             legend_position = "none",
-                             group_outline=FALSE)
+                                         label_nodes_by=NULL,
+                                         group_nodes_by=NULL,
+                                         edge_labels=NULL,
+                                         arrow.gap=0.03,
+                                         arrow_unit = 2,
+                                         bar_unit = .075,
+                                         node_size = 2,
+                                         num_layers=10,
+                                         edge_size=0.5,
+                                         fract_expr = 0.0,
+                                         mean_expr = 0.0,
+                                         unlabeled_groups = c("Unknown"),
+                                         hide_unlinked_nodes=TRUE,
+                                         label_font_size=6,
+                                         label_conn_linetype="dotted",
+                                         legend_position = "none",
+                                         group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -956,12 +992,15 @@ plot_state_graph_annotations <- function(ccm,
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
   p <- ggplot() +
-      ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
 
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
+
+
+
 
     if (group_outline) {
       p = p + ggforce::geom_mark_rect(aes(x, y,
@@ -989,14 +1028,14 @@ plot_state_graph_annotations <- function(ccm,
 
     # if numerical
     if (is.numeric(g[[color_nodes_by]])) {
-        p = p + ggnewscale::new_scale_fill() +
-          ggnetwork::geom_nodelabel(data = g,
-                                    aes(x, y,
-                                        fill = !!sym(color_nodes_by),
-                                        label = label_nodes_by),
-                                    size = node_size) +
-          labs(fill = color_nodes_by)
-        p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+      p = p + ggnewscale::new_scale_fill() +
+        ggnetwork::geom_nodelabel(data = g,
+                                  aes(x, y,
+                                      fill = !!sym(color_nodes_by),
+                                      label = label_nodes_by),
+                                  size = node_size) +
+        labs(fill = color_nodes_by)
+      p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
     }
     else {
       # if categorical
@@ -1082,26 +1121,27 @@ calc_sig_ind <- function(p_value, html = TRUE) {
 #' @export
 plot_state_graph_abundance_changes <- function(ccm,
                                                state_graph,
-                                             comp_abund_table,
-                                             contrast = "contrast",
-                                             label_nodes_by=NULL,
-                                             group_nodes_by=NULL,
-                                             edge_labels=NULL,
-                                             fc_limits=c(-3,3),
-                                             arrow.gap=0.03,
-                                             arrow_unit = 2,
-                                             bar_unit = .075,
-                                             node_size = 6,
-                                             num_layers=10,
-                                             edge_size=0.5,
-                                             fract_expr = 0.0,
-                                             mean_expr = 0.0,
-                                             unlabeled_groups = c("Unknown"),
-                                             hide_unlinked_nodes=TRUE,
-                                             label_font_size=6,
-                                             label_conn_linetype="dotted",
-                                             legend_position = "none",
-                                             group_outline=FALSE)
+                                               comp_abund_table,
+                                               contrast = "contrast",
+                                               label_nodes_by=NULL,
+                                               group_nodes_by=NULL,
+                                               edge_labels=NULL,
+                                               fc_limits=c(-3,3),
+                                               arrow.gap=0.03,
+                                               arrow_unit = 2,
+                                               bar_unit = .075,
+                                               node_size = 6,
+                                               num_layers=10,
+                                               edge_size=0.5,
+                                               fract_expr = 0.0,
+                                               mean_expr = 0.0,
+                                               unlabeled_groups = c("Unknown"),
+                                               label_subset=NULL,
+                                               hide_unlinked_nodes=TRUE,
+                                               label_font_size=6,
+                                               label_conn_linetype="dotted",
+                                               legend_position = "none",
+                                               group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1179,24 +1219,71 @@ plot_state_graph_abundance_changes <- function(ccm,
 
   #g$gene_short_name = factor(g$gene_short_name, levels=genes)
   color_nodes_by = "delta_log_abund"
-  group_outline = TRUE
+  # group_outline = TRUE
 
   p <- ggplot(aes(x,y), data=g)
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
+
+  if (is.null(label_subset)) {
+    label_subset = unique(node_metadata$group_nodes_by)
+  }
+
+  label_subset = label_subset[label_subset != unlabeled_groups]
+
   if (is.null(group_nodes_by) == FALSE){
-    p = p + ggforce::geom_mark_rect(aes(x, y,
-                                        fill = contrast,
-                                        color = group_nodes_by,
-                                        label = group_nodes_by,
-                                        filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                    size=0.5,
-                                    expand = unit(2.5, "mm"),
-                                    radius = unit(1, "mm"),
-                                    label.fontsize=label_font_size,
-                                    label.buffer = unit(1, "mm"),
-                                    con.linetype=label_conn_linetype)
+
+    if (group_outline) {
+      p = p + ggforce::geom_mark_rect(aes(x, y,
+                                          fill = contrast,
+                                          color = group_nodes_by,
+                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                      size=0.5,
+                                      expand = unit(2.5, "mm"),
+                                      radius = unit(1, "mm"),
+                                      label.fontsize=label_font_size,
+                                      label.buffer = unit(1, "mm"),
+                                      con.linetype=label_conn_linetype,
+                                      show.legend = F) +
+        ggforce::geom_mark_rect(aes(x, y,
+                                    fill = contrast,
+                                    color = group_nodes_by,
+                                    label = group_nodes_by,
+                                    filter = group_nodes_by %in% label_subset),
+                                size=0.5,
+                                expand = unit(2.5, "mm"),
+                                radius = unit(1, "mm"),
+                                label.fontsize=label_font_size,
+                                label.buffer = unit(1, "mm"),
+                                con.linetype=label_conn_linetype,
+                                show.legend = F)
+    } else {
+      # p = p + ggnetwork::geom_nodetext_repel(data = g %>% filter(group_nodes_by %in% label_subset),
+      #                                       mapping = aes(x, y,
+      #                                           label = group_nodes_by),
+      #                                           color=I("black"),
+      #                                       size=label_font_size/2)
+      values = rep("white",length(label_subset))
+      names(values) = label_subset
+
+      p = p +
+        ggforce::geom_mark_rect(aes(x, y,
+                                    fill = contrast,
+                                    color = group_nodes_by,
+                                    label = group_nodes_by,
+                                    filter = group_nodes_by %in% label_subset),
+                                size=0.5,
+                                expand = unit(2.5, "mm"),
+                                radius = unit(1, "mm"),
+                                label.fontsize=label_font_size,
+                                label.buffer = unit(1, "mm"),
+                                con.linetype=label_conn_linetype,
+                                show.legend = F) +
+        scale_color_manual(values = c(values))
+
+    }
+
     p = p + scale_fill_manual(values=rep("white", length(unique(g$contrast))))
 
   }
@@ -1210,10 +1297,14 @@ plot_state_graph_abundance_changes <- function(ccm,
                           aes(x, y,
                               size = -log10(delta_q_value),
                               color=delta_log_abund)) +
-    ggnetwork::geom_nodetext_repel(data = g,
-                                    aes(x, y,
-                                        label = q_value_sig_code),
-                                    color=I("black"))
+    ggnetwork::geom_nodetext(data = g,
+                             aes(x, y,
+                             label = q_value_sig_code),
+                             color=I("black"))
+    # ggnetwork::geom_nodetext_repel(data = g,
+    #                                aes(x, y,
+    #                                    label = q_value_sig_code),
+    #                                color=I("black"))
   #labs(fill = color_nodes_by)
 
   p = p + scale_color_gradient2(low = "royalblue3", mid = "white", high="orangered3")
@@ -1231,7 +1322,7 @@ plot_state_graph_abundance_changes <- function(ccm,
   p = p + scale_size(range=c(1, node_size)) +
     monocle3:::monocle_theme_opts() +
     ggnetwork::theme_blank() +
-    theme(legend.position=legend_position) + guides(fill = "none")
+    theme(legend.position=legend_position) + guides(fill = "none", size="none")
   return(p)
 }
 
@@ -1241,23 +1332,26 @@ plot_state_graph_gene_expression <- function(ccm,
                                              state_graph,
                                              genes,
                                              method = "min",
-                                         label_nodes_by=NULL,
-                                         group_nodes_by=NULL,
-                                         edge_labels=NULL,
-                                         arrow.gap=0.03,
-                                         arrow_unit = 2,
-                                         bar_unit = .075,
-                                         node_size = 6,
-                                         num_layers=10,
-                                         edge_size=0.5,
-                                         fract_expr = 0.0,
-                                         mean_expr = 0.0,
-                                         unlabeled_groups = c("Unknown"),
-                                         hide_unlinked_nodes=TRUE,
-                                         label_font_size=6,
-                                         label_conn_linetype="dotted",
-                                         legend_position = "none",
-                                         group_outline=FALSE)
+                                             gene_expr = NULL,
+                                             label_nodes_by=NULL,
+                                             group_nodes_by=NULL,
+                                             edge_labels=NULL,
+                                             arrow.gap=0.03,
+                                             arrow_unit = 2,
+                                             bar_unit = .075,
+                                             node_size = 6,
+                                             num_layers=10,
+                                             edge_size=0.5,
+                                             fract_expr = 0.0,
+                                             mean_expr = 0.0,
+                                             unlabeled_groups = c("Unknown"),
+                                             scale_to_range = FALSE,
+                                             hide_unlinked_nodes=TRUE,
+                                             switch_label=NULL,
+                                             label_font_size=6,
+                                             label_conn_linetype="dotted",
+                                             legend_position = "none",
+                                             group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1265,6 +1359,21 @@ plot_state_graph_gene_expression <- function(ccm,
   }else{
     edges = state_graph
   }
+
+  # # check that the
+  # if (is.null(switch_label)) {
+  #   node_intersection = intersect(rownames(ccm@ccs), unique(edges$from, edges$to))
+  # } else {
+  #   node_intersection = intersect(ccm@ccs@colData[[switch_label]], unique(edges$from, edges$to))
+  # }
+  # assertthat::assert_that(
+  #
+  #   tryCatch(length(node_intersection) > 0,
+  #            error = function(e) FALSE),
+  #   msg = "specify a label switch, state_graph and ccm cell group do not match"
+  #
+  # )
+
 
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
@@ -1284,65 +1393,80 @@ plot_state_graph_gene_expression <- function(ccm,
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
+  gene_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
 
-
-    gene_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
-
+  if (is.null(gene_expr)) {
     gene_expr = aggregated_expr_data(ccm@ccs@cds[gene_ids,], group_cells_by = ccm@ccs@info$cell_group)
-    sub_gene_expr = gene_expr %>%
-      filter(gene_short_name %in% genes)
+  }
 
-    method = get(method)
-    # sub_gene_expr = sub_gene_expr %>%
-    #   group_by(cell_group) %>%
-    #   dplyr::summarise(fraction_expressing = method(fraction_expressing),
-    #                    mean_expression = method(mean_expression),
-    #                    specificity = method(specificity)) %>%
-    #   mutate(gene_short_name =  paste(genes, collapse = "-"))
+  sub_gene_expr = gene_expr %>%
+    filter(gene_short_name %in% genes)
+
+  method = get(method)
+  # sub_gene_expr = sub_gene_expr %>%
+  #   group_by(cell_group) %>%
+  #   dplyr::summarise(fraction_expressing = method(fraction_expressing),
+  #                    mean_expression = method(mean_expression),
+  #                    specificity = method(specificity)) %>%
+  #   mutate(gene_short_name =  paste(genes, collapse = "-"))
 
 
-    #node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
+  #node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
 
-    sub_gene_expr = sub_gene_expr %>%
-      group_by(gene_short_name) %>%
-      mutate(
-        fraction_max = mean_expression / max(mean_expression),
-        gene_expr = case_when(
+  sub_gene_expr = sub_gene_expr %>%
+    group_by(gene_short_name) %>%
+    mutate(
+      fraction_max = mean_expression / max(mean_expression),
+      gene_expr = case_when(
         fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
         TRUE ~ FALSE))
 
-    g = left_join(g, sub_gene_expr, by=c("name"="cell_group"))
+  color_nodes_by = "mean_expression"
+  expression_legend_label = "mean expression"
 
-    g$gene_short_name = factor(g$gene_short_name, levels=genes)
-    color_nodes_by = "mean_expression"
-    group_outline = TRUE
+  if (scale_to_range) {
+    sub_gene_expr = sub_gene_expr %>%
+      mutate(value = mean_expression) %>%
+      group_by(gene_short_name) %>%
+      dplyr::mutate(max_val_for_feature = max(value),
+                    min_val_for_feature = min(value)) %>%
+      dplyr::mutate(value = 100 * (value - min_val_for_feature) / (max_val_for_feature - min_val_for_feature))
+    expression_legend_label = "% Max"
+    color_nodes_by = "value"
+  }
+
+  g = left_join(g, sub_gene_expr, by=c("name"="cell_group"))
+
+  g$gene_short_name = factor(g$gene_short_name, levels=genes)
+
+  # group_outline = TRUE
 
   p <- ggplot(aes(x,y), data=g)
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
-      p = p + ggforce::geom_mark_rect(aes(x, y,
-                                          fill = gene_short_name,
-                                          color = group_nodes_by,
-                                          label = group_nodes_by,
-                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                      size=0.5,
-                                      expand = unit(2.5, "mm"),
-                                      radius = unit(1, "mm"),
-                                      label.fontsize=label_font_size,
-                                      label.buffer = unit(1, "mm"),
-                                      con.linetype=label_conn_linetype)
-      p = p + scale_fill_manual(values=rep("white", length(unique(g$gene_short_name))))
+    p = p + ggforce::geom_mark_rect(aes(x, y,
+                                        fill = gene_short_name,
+                                        color = group_nodes_by,
+                                        label = group_nodes_by,
+                                        filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                    size=0.5,
+                                    expand = unit(2.5, "mm"),
+                                    radius = unit(1, "mm"),
+                                    label.fontsize=label_font_size,
+                                    label.buffer = unit(1, "mm"),
+                                    con.linetype=label_conn_linetype)
+    p = p + scale_fill_manual(values=rep("white", length(unique(g$gene_short_name))))
 
   }
   p = p + guides(fill = "none")
   p = p + ggnewscale::new_scale_color() +
     ggnetwork::geom_nodes(data = g %>% filter(gene_expr),
-                              aes(x, y,
-                                  size = fraction_max,
-                                  color=mean_expression))
-    #labs(fill = color_nodes_by)
+                          aes(x, y,
+                              size = fraction_max,
+                              color = get(color_nodes_by))) +
+    labs(color = expression_legend_label)
 
   p = p + viridis::scale_color_viridis(option = "viridis")
 
@@ -1499,10 +1623,10 @@ plot_state_transition_graph <- function(ccm,
 
     method = get(method)
     sub_gene_expr = sub_gene_expr %>%
-                    group_by(cell_group) %>%
-                    dplyr::summarise(fraction_expressing = method(fraction_expressing),
-                                     mean_expression = method(mean_expression),
-                                      specificity = method(specificity)) %>%
+      group_by(cell_group) %>%
+      dplyr::summarise(fraction_expressing = method(fraction_expressing),
+                       mean_expression = method(mean_expression),
+                       specificity = method(specificity)) %>%
       mutate(gene_short_name =  paste(genes, collapse = "-"))
 
     node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
@@ -1584,16 +1708,16 @@ plot_state_transition_graph <- function(ccm,
     state_transition_graph = edges %>% igraph::graph_from_data_frame()
     if (concordant) {
       edge_count = genotype_models_tbl %>%
-      mutate("concordant" = purrr::map(.f = is_concordant,
-                                       .x = genotype_eff,
-                                       state_transition_graph)) %>%
-      select(gene_target, concordant) %>%
-      tidyr::unnest(c(concordant)) %>%
-      select(gene_target, parent, child, concordant) %>%
-      group_by(parent, child, concordant) %>%
-      tally() %>% ungroup() %>%
-      filter(concordant) %>%
-      mutate(edge_name = paste(parent,child, sep="~"))
+        mutate("concordant" = purrr::map(.f = is_concordant,
+                                         .x = genotype_eff,
+                                         state_transition_graph)) %>%
+        select(gene_target, concordant) %>%
+        tidyr::unnest(c(concordant)) %>%
+        select(gene_target, parent, child, concordant) %>%
+        group_by(parent, child, concordant) %>%
+        tally() %>% ungroup() %>%
+        filter(concordant) %>%
+        mutate(edge_name = paste(parent,child, sep="~"))
     } else {
       edge_count = genotype_models_tbl %>%
         mutate("discordant" = purrr::map(.f = is_discordant,
@@ -1605,7 +1729,7 @@ plot_state_transition_graph <- function(ccm,
         group_by(parent, child, discordant) %>%
         tally() %>% ungroup() %>%
         filter(discordant) %>%
-      mutate(edge_name = paste(parent,child, sep="~"))
+        mutate(edge_name = paste(parent,child, sep="~"))
     }
 
 
@@ -1750,8 +1874,8 @@ plot_state_transition_graph <- function(ccm,
   }
 
   if (is.null(labels) == FALSE) {
-   p = p +  ggnetwork::geom_nodetext(data = label_df,
-                             aes(x,y, label = label), size=3)
+    p = p +  ggnetwork::geom_nodetext(data = label_df,
+                                      aes(x,y, label = label), size=3)
   }
 
   p = p + scale_size_identity() +
@@ -1877,20 +2001,170 @@ plot_origins <- function(data,
 #
 # }
 
+# '
+#' @param ccs
+#' @param x_col
+#' @param normalize
+#' @param plot_zeroes
+#' @param plot_points
+#' @param log_scale
+#' @param nrow
+#' @param legend_position
+plot_cells_per_sample = function(ccs,
+                                 x_col,
+                                 normalize = F,
+                                 plot_zeroes = F,
+                                 plot_points = F,
+                                 log_scale = F,
+                                 nrow = 1,
+                                 legend_position = "none") {
+
+  ccs_coldata = colData(ccs) %>% as.data.frame
+  ccs_coldata$SF = size_factors(ccs)
+  count_df = counts(ccs) %>%
+    as.matrix %>%
+    as.data.frame() %>%
+    rownames_to_column("cell_group") %>%
+    tidyr::pivot_longer(-cell_group, names_to = "sample", values_to = "count") %>%
+    left_join(ccs_coldata, by = "sample")
+
+  if (normalize) {
+    count_df = count_df %>% mutate(count = round(count/SF))
+  }
+
+  if (plot_zeroes) {
+    count_df = count_df %>% mutate(count = count + 0.001)
+  }
+
+  count_df[[x_col]] = as.factor(count_df[[x_col]])
+
+  p = count_df %>%
+    ggplot(aes( x = !!sym(x_col), y = count, fill=cell_group)) +
+    geom_boxplot() +
+    facet_wrap(~cell_group, nrow=nrow) +
+    theme(legend.position = legend_position) +
+    monocle3:::monocle_theme_opts()
+
+  if (plot_points) {
+    p = p + geom_jitter(aes( x = !!sym(x_col), y = count), size=1)
+  }
+
+  if (log_scale) {
+    p = p + scale_y_log10()
+  }
+
+  return(p)
+
+}
 
 
-# To add:
-#' #' plot a similar heatmap to lauren's BB testing
-#' #'
-#' plot_heatmap <- function(ccm) {
-#'
-#' }
-#'
-#' plot_heatmap_2 <- function() {
-#'
-#' }
-#'
-#' #' plot normalized counts as boxplots
-#' plot_boxplots <- function() {
-#'
-#' }
+plot_cells_highlight = function(ccs, group_to_highlight, colname) {
+
+  plot_df = as.data.frame(colData(cds))
+  plot_df$cell_group = colData(cds)[[colname]]
+
+  plot_df$cell = row.names(plot_df)
+  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
+
+  gp = ggplot() +
+    geom_point(
+      data = plot_df,
+      aes(umap2D_1, umap2D_2),
+      color = "black",
+      size = 1.5 * cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>% filter(!cell_group %in% c(group_to_highlight)),
+      aes(umap2D_1, umap2D_2),
+      color = "white",
+      size = cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>% filter(cell_group %in% c(group_to_highlight)),
+      aes(umap2D_1, umap2D_2),
+      color = "red",
+      size = cell_size,
+      stroke = 0
+    ) +
+    theme(legend.position = legend_position) +
+    monocle3:::monocle_theme_opts()
+
+  return(gp)
+
+}
+
+
+plot_contrast_3d <- function(ccm,
+                             cond_b_vs_a_tbl,
+                             log_abundance_thresh = -5,
+                             scale_shifts_by=c("receiver", "sender", "none"),
+                             edge_size=2,
+                             cell_size=25,
+                             q_value_thresh = 1.0,
+                             group_label_size=2,
+                             plot_labels = c("significant", "all", "none"),
+                             fc_limits=c(-3,3),
+                             sender_cell_groups=NULL,
+                             receiver_cell_groups=NULL,
+                             plot_edges = c("all", "directed", "undirected", "none"),
+                             label_cell_groups = list(),
+                             repel_labels = TRUE,
+                             model_for_pcors="reduced",
+                             switch_label = NULL,
+                             sub_cds = NULL,
+                             alpha = 1.0,
+                             x=1,
+                             y=2) {
+
+
+  plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
+  plot_df$cell = row.names(plot_df)
+
+  plot_df$umap3D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,1]
+  plot_df$umap3D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
+  plot_df$umap3D_3 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,3]
+
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+
+
+  plot_df = dplyr::left_join(plot_df,
+                             cond_b_vs_a_tbl,
+                             by=c("cell_group"="cell_group"))
+
+  if (is.null(fc_limits)) {
+    fc_limits = range(plot_df$delta_log_abund)
+  } else {
+    min = fc_limits[1]
+    max = fc_limits[2]
+    plot_df = plot_df %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  }
+
+  color_palette = c('#3A5FCD', '#FAFAFA','#CD3700')
+  # color_palette = c('#3A5FCD', '#FFFFFF','#CD3700')
+  # color_palette = c('#FFFFFF','#CD3700')
+
+  p = plotly::plot_ly(plot_df,
+                  x = ~umap3D_1,
+                  y = ~umap3D_2,
+                  z = ~umap3D_3,
+                  type = 'scatter3d',
+                  mode="markers",
+                  alpha = I(alpha),
+                  color = ~delta_log_abund,
+                  colors = color_palette,
+                  size = I(cell_size),
+                  range_color = fc_limits)
+
+  return(p)
+
+
+
+}
+
+
+

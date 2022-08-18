@@ -84,8 +84,8 @@ pseudobulk <- function(ccs,
   pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccs@cds) %>% as.data.frame)
   pseudobulk_cds = pseudobulk_cds[,Matrix::colSums(exprs(pseudobulk_cds)) != 0]
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
-  pseudobulk_cds = preprocess_cds(pseudobulk_cds)
-  pseudobulk_cds = reduce_dimension(pseudobulk_cds)
+  # pseudobulk_cds = preprocess_cds(pseudobulk_cds)
+  # pseudobulk_cds = reduce_dimension(pseudobulk_cds)
 
   # not sure the best place to put this yet
   colData(pseudobulk_cds)$cell_group = as.character(colData(pseudobulk_cds)$cell_group)
@@ -399,7 +399,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
 
   expr_df = tibble(gene_id=row.names(estimate_matrix))
 
-  message("      examining coeffficients", cell_state)
+  message("      examining coeffficients ", cell_state)
 
   expr_df$expr_self = pnorm(estimate_matrix[,cell_state] - log(abs_expr_thresh), sd = stderr_matrix[,cell_state], lower.tail=FALSE)
   expr_df$expr_self = p.adjust(expr_df$expr_self, method="BH") < sig_thresh
@@ -717,7 +717,7 @@ classify_genes_over_graph <- function(ccm,
   genes_to_test = which(Matrix::rowSums(expr_over_thresh) >= min_samples_detected)
   pb_cds = pb_cds[genes_to_test,]
 
-  pseudobulks_to_test = which(colData(pb_cds)$num_cells_in_group > min_cells_per_pseudobulk)
+  pseudobulks_to_test = which(colData(pb_cds)$num_cells_in_group >= min_cells_per_pseudobulk)
 
   message("fitting regression models")
   pb_cds = pb_cds[,pseudobulks_to_test]

@@ -42,18 +42,20 @@ tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
 
 
 bb_compare_abundance <- function(ccs,
-                                 ctrl_ids = c("ctrl-inj"),
-                                 comp_col = "gene_target",
+                                 comp_col,
+                                 model_formula,
+                                 ctrl_ids,
                                  nuisance_cols = NULL,
-                                 model_formula = "count_df ~ knockout",
+                                 nuisance_formula = NULL,
                                  ...) {
 
   # make ccs
-  colData(ccs)$knockout = as.data.frame(colData(ccs)) %>%
+  colData(ccs)[[comp_col]] = as.data.frame(colData(ccs)) %>%
     mutate(knockout = ifelse(!!sym(comp_col) %in% ctrl_ids, "ctrl", !!sym(comp_col))) %>%
     pull(knockout)
 
-  ccs_coldata = colData(ccs) %>% as.data.frame %>% select(sample, knockout, Size_Factor, nuisance_cols)
+  ccs_coldata = colData(ccs) %>% as.data.frame %>% select(sample, !!sym(comp_col),
+                                                          Size_Factor, nuisance_cols)
 
   count_df = counts(ccs) %>%
     as.matrix() %>%
@@ -66,32 +68,55 @@ bb_compare_abundance <- function(ccs,
     mutate(total_cells = sum(cells))
 
   fc_df = count_df %>%
-    group_by_at(vars(knockout, cell_group, nuisance_cols)) %>%
+    group_by_at(vars(comp_col, cell_group, nuisance_cols)) %>%
     summarize(cell_mean = mean(cells)) %>%
-    tidyr::pivot_wider(names_from = "knockout", values_from = "cell_mean") %>%
-    tidyr::pivot_longer(-c(cell_group, ctrl, nuisance_cols), names_to = "genotype", values_to = "cells") %>%
+    tidyr::pivot_wider(names_from = comp_col, values_from = "cell_mean") %>%
+    tidyr::pivot_longer(-c(cell_group, ctrl, nuisance_cols), names_to = comp_col, values_to = "cells") %>%
     mutate(abund_log2fc = log2((cells + 1)/(ctrl+1))) %>%
-    arrange(genotype)
+    arrange(!!sym(comp_col))
 
 
   # to fix new col name
-  count_df$knockout = forcats::fct_relevel(count_df$knockout, "ctrl")
+  count_df[[comp_col]] = forcats::fct_relevel(count_df[[comp_col]], "ctrl")
 
   cell.groups = unique(count_df$cell_group)
 
-  fit_beta_binomial = function(cg, count_df, model_formula, ...) {
+  # a help function to tidy the vgam model output - used in compare_abundance function
+  tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
+    co <- as.data.frame(coef(summary(x)))
+    names(co) <- c("estimate","std.error","statistic","p.value")
+    if (conf.int) {
+      qq <- qnorm((1+conf.level)/2)
+      co <- transform(co,
+                      conf.low=estimate-qq*std.error,
+                      conf.high=estimate+qq*std.error)
+    }
+    co <- data.frame(term=rownames(co),co)
+    rownames(co) <- NULL
+    return(co)
+  }
+
+  fit_beta_binomial = function(cg, count_df, model_formula, trace = TRUE, ...) {
     type_df = count_df %>% filter(cell_group == cg)
     count_df = cbind(type_df$cells, type_df$total_cells - type_df$cells)
-    fit =  vglm(as.formula(model_formula), betabinomial, data = type_df, trace = TRUE, ...)
+    fit =  VGAM::vglm(as.formula(model_formula), betabinomial, data = type_df, trace = trace, ...)
     fit_df = tidy.vglm(fit)
 
+  }
+
+  model_formula = stringr::str_replace_all(model_formula, "~", "")
+  model_formula_str = paste0("count_df ~", model_formula)
+
+  if (is.null(nuisance_formula) == FALSE) {
+    nuisance_formula = stringr::str_replace_all(nuisance_formula, "~", "")
+    model_formula_str = paste0(model_formula_str, "+", nuisance_formula)
   }
 
   bb_res = data.frame("cell_group" = cell.groups) %>%
     mutate("beta_binomial" = purrr::map(.f  = purrr::possibly(fit_beta_binomial, NA_character_),
                                         .x = cell_group,
                                         count_df = count_df,
-                                        model_formula = model_formula)) %>%
+                                        model_formula = model_formula_str)) %>%
     filter(!is.na(beta_binomial)) %>%
     tidyr::unnest(c(beta_binomial)) %>%
     arrange(desc(estimate)) %>%
@@ -99,12 +124,11 @@ bb_compare_abundance <- function(ccs,
 
   bb_res = left_join(bb_res,
                      fc_df %>% select(cell_group, abund_log2fc, "ctrl_mean" = "ctrl"),
-                     by = "cell_group") %>%
-    mutate(term = stringr::str_replace(term, pattern = "knockout", replacement = ""))
+                     by = "cell_group")
 
   return(bb_res)
-
 }
+
 
 # it's lost because its parent is lost
 # it's lost because some other cell type it depends on is lost (i.e. signaling)
@@ -154,9 +178,6 @@ parent_child_foldchanges <- function(state_graph, cond_b_v_a_tbl, genes = list()
     tally()
 
 }
-
-
-
 
 
 

@@ -56,6 +56,21 @@ compute_vhat = function(ccm) {
 #' @importFrom tibble tibble
 #' @export
 estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
+
+  # check that all terms in new data have been specified
+  missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
+
+  if (length(missing_terms) > 1) {
+    missing_terms = paste(missing_terms,collapse = ", ")
+  }
+
+  assertthat::assert_that(
+    tryCatch(expr = length(missing_terms) == 0,
+             error = function(e) FALSE),
+    msg = paste0(missing_terms, " missing from newdata columns"))
+
+
+
   #stopifnot(nrow(newdata) == 1)
   newdata$Offset = 1
 
