@@ -28,6 +28,9 @@ plot_contrast <- function(ccm,
                           x=1,
                           y=2){
 
+  scale_shifts_by = match.arg(scale_shifts_by)
+  plot_labels = match.arg(plot_labels)
+  plot_edges = match.arg(plot_edges)
 
   if (!is.null(sub_cds)) {
 
@@ -914,13 +917,13 @@ layout_state_graph <- function(G, node_metadata, edge_labels)
                                     node_metadata))
 
   if (is.null(edge_labels)== FALSE) {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=edge_labels))
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=edge_labels), recipEdges="distinct")
     label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
       rownames_to_column("edge_name") %>%
       left_join(data.frame("label" = labels) %>% rownames_to_column("edge_name"), by = "edge_name")
 
   } else {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, , recipEdges="distinct")
   }
 
   gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
@@ -941,6 +944,7 @@ layout_state_graph <- function(G, node_metadata, edge_labels)
   #bezier_df = bezier_df %>% mutate(x = ggnetwork:::scale_safely(x),
   #                                 y = ggnetwork:::scale_safely(y))
 
+  bezier_df = left_join(bezier_df, tibble(edge_name=names(gvizl@renderInfo@edges$direction), edge_direction=gvizl@renderInfo@edges$direction))
   return(list(gvizl_coords=gvizl_coords, bezier_df=bezier_df))
 }
 
