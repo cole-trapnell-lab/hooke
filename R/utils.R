@@ -319,7 +319,8 @@ fit_perturb_ccm = function(perturbation,
     main_model_formula_str = paste("~ splines::ns(timepoint, knots=", paste("c(",paste(time_breakpoints, collapse=","), ")", sep=""), ")")
   }
   else if (num_time_breaks == 2){
-    main_model_formula_str = "~ as.factor(timepoint)"
+    colData(subset_ccs)$timepoint = as.factor(colData(subset_ccs)$timepoint )
+    main_model_formula_str = "~ timepoint"
   }
   else{
     main_model_formula_str = ""
