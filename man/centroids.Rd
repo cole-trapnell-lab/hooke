@@ -4,7 +4,7 @@
 \alias{centroids}
 \title{Get the centroids of cell groups in UMAP/PCA space.}
 \usage{
-centroids(ccs, reduction_method = "UMAP")
+centroids(ccs, reduction_method = "UMAP", switch_group = NULL)
 }
 \arguments{
 \item{ccs}{A cell_count_set object.}

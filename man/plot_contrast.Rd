@@ -17,7 +17,15 @@ plot_contrast(
   fc_limits = c(-3, 3),
   sender_cell_groups = NULL,
   receiver_cell_groups = NULL,
-  plot_edges = TRUE
+  plot_edges = c("all", "directed", "undirected", "none"),
+  label_cell_groups = list(),
+  repel_labels = TRUE,
+  model_for_pcors = "reduced",
+  switch_label = NULL,
+  sub_cds = NULL,
+  alpha = 1,
+  x = 1,
+  y = 2
 )
 }
 \arguments{

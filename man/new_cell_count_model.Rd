@@ -6,7 +6,8 @@
 \usage{
 new_cell_count_model(
   ccs,
-  model_formula_str,
+  main_model_formula_str,
+  nuisance_model_formula_str = "1",
   penalty_matrix = NULL,
   whitelist = NULL,
   blacklist = NULL,
@@ -18,14 +19,17 @@ new_cell_count_model(
   pseudocount = 0,
   pln_min_ratio = 0.001,
   pln_num_penalties = 30,
+  size_factors = NULL,
   ...
 )
 }
 \arguments{
 \item{ccs}{A Hooke cell_count_set object.}
 
-\item{model_formula_str}{A character string specifying the model of cell abundances across samples.
-where terms refer to columns in\code{colData(ccs)}}
+\item{main_model_formula_str}{A character string specifying the model of cell abundances across samples,
+where terms refer to columns in\code{colData(ccs)}. Put main effects here.}
+
+\item{nuisance_model_formula_str}{A character string specifying the model of cell abundances across samples. Put nuisance effects here.}
 
 \item{penalty_matrix}{A numeric NxN symmetric matrix specifying penalties for
 the PLN model, where N is the number of cell types. Entries must be

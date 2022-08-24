@@ -757,6 +757,7 @@ find_edge_to_each <- function(ccm, sparsity, not_in_paga_and_emerge) {
 determine_sparsity <- function(ccm,
                                extant_cell_type_df,
                                start_time,
+                               stop_time,
                                step_size = 0.01,
                                n = 10) {
 
@@ -802,9 +803,10 @@ determine_sparsity <- function(ccm,
   }
 }
 
-#'@param ccm
-#'@param curr_graph
-#'
+#' This function takes a state transition graph and adds links between disjoint groups of cells
+#' @param ccm
+#' @param curr_graph
+#' @export
 augment_pathfinding_graph = function(ccm,
                                  curr_graph,
                                  q_val = 0.01,
@@ -833,8 +835,9 @@ augment_pathfinding_graph = function(ccm,
   timeseries_pathfinding_graph = init_pathfinding_graph(ccm, extant_cell_type_df)
 
   # choose a good sparsity
-  ccm = determine_sparsity(ccm, extant_cell_type_df, start_time)
+  ccm = determine_sparsity(ccm, extant_cell_type_df, start_time, stop_time)
 
+  # find ones not in paga that emerge after the start
   not_in_paga = not_in_paga_graph(ccm)
   initial_sparsity = ccm@sparsity
 

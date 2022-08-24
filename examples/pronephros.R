@@ -566,7 +566,7 @@ gene_patterns_over_cell_type_graph = classify_genes_over_graph(wt_ccm_wl,
                                                                #gene_id_sample,
                                                                #marker_ids,
                                                                group_nodes_by="cell_type",
-                                                               log_fc_thresh = 1,
+                                                               log_fc_thresh = 2,
                                                                abs_expr_thresh=1e-3,
                                                                cores=4)
 gene_patterns_over_cell_type_graph = gene_patterns_over_cell_type_graph %>% tidyr::unnest(gene_classes)  %>% tidyr::unnest(interpretation)
@@ -671,13 +671,18 @@ signaling_genes = gene_set_mf %>%
   pull(gene_symbol) %>% unique %>% sort
 
 specific_tfs = gene_patterns_over_cell_type_graph %>%
-  filter(interpretation %in%  c("Specifically activated",
+  filter(interpretation %in%  c("Selectively activated",
+                                "Selectively upregulated",
+                                "Specifically activated",
                                 "Specifically upregulated",
                                 "Specifically maintained"
                                 )
          & gene_short_name %in% transcription_regulators) %>%
   pull(gene_short_name) %>% unique
-plot_genes_by_group(wt_ccm_wl@ccs@cds, markers =specific_tfs, group_cells_by = "cell_type",ordering_type="maximal_on_diag", color_by_group=TRUE)
+plot_genes_by_group(wt_ccm_wl@ccs@cds[,colData(wt_ccm_wl@ccs@cds)$cell_type != "Unknown"],
+                    markers =specific_tfs,
+                    group_cells_by = "cell_type",
+                    ordering_type="maximal_on_diag", color_by_group=TRUE)
 
 selective_signals = gene_patterns_over_cell_type_graph %>%
   filter(interpretation %in%  c("Selectively activated", "MLP") & gene_short_name %in% signaling_genes) %>%

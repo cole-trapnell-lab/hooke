@@ -4,7 +4,7 @@
 \alias{calc_mst}
 \title{Calculate a minimum spanning tree}
 \usage{
-calc_mst(edges)
+calc_mst(edges, weight = "pcor")
 }
 \description{
 Calculate a minimum spanning tree

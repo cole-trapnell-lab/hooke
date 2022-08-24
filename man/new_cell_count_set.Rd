@@ -9,7 +9,9 @@ new_cell_count_set(
   sample_group,
   cell_group,
   sample_metadata = NULL,
-  cell_metadata = NULL
+  cell_metadata = NULL,
+  lower_threshold = NULL,
+  upper_threshold = NULL
 )
 }
 \arguments{
