@@ -897,12 +897,19 @@ collect_psg_node_metadata <- function(ccm,
   return(node_metadata)
 }
 
-layout_state_graph <- function(G, node_metadata, edge_labels)
+layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
 {
 
-  G_nel = graph::graphAM(igraph::get.adjacency(G) %>% as.matrix(),
-                         edgemode = 'directed') %>%
-    as("graphNEL")
+  if (weighted){
+    G_nel = graph::graphAM(igraph::get.adjacency(G, attr="weight") %>% as.matrix(),
+                           edgemode = 'directed', values=list(weight=1)) %>% as("graphNEL")
+  } else{
+    G_nel = graph::graphAM(igraph::get.adjacency(G) %>% as.matrix(),
+                           edgemode = 'directed') %>%as("graphNEL")
+  }
+
+  edge_weights = unlist(graph::edgeWeights(G_nel))
+  names(edge_weights) = stringr::str_replace_all(names(edge_weights), "\\.", "~")
 
   make_subgraphs_for_groups <- function(grouping_set, G_nel, node_meta_df){
     nodes = node_meta_df %>% filter(group_nodes_by == grouping_set) %>% pull(id) %>% as.character
@@ -920,10 +927,11 @@ layout_state_graph <- function(G, node_metadata, edge_labels)
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=edge_labels), recipEdges="distinct")
     label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
       rownames_to_column("edge_name") %>%
-      left_join(data.frame("label" = labels) %>% rownames_to_column("edge_name"), by = "edge_name")
+      left_join(tibble("edge_name" = names(edge_labels), label=edge_labels))# %>% rownames_to_column("edge_name"), by = "edge_name")
 
   } else {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, , recipEdges="distinct")
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, recipEdges="distinct")
+    label_df=NULL
   }
 
   gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
@@ -941,11 +949,14 @@ layout_state_graph <- function(G, node_metadata, edge_labels)
   })
   bezier_df = do.call(rbind, beziers)
   bezier_df$edge_name = stringr::str_split_fixed(row.names(bezier_df), "\\.", 2)[,1]
+  bezier_df$from = stringr::str_split_fixed(bezier_df$edge_name, "~", 2)[,1]
+  bezier_df$to = stringr::str_split_fixed(bezier_df$edge_name, "~", 2)[,2]
   #bezier_df = bezier_df %>% mutate(x = ggnetwork:::scale_safely(x),
   #                                 y = ggnetwork:::scale_safely(y))
 
   bezier_df = left_join(bezier_df, tibble(edge_name=names(gvizl@renderInfo@edges$direction), edge_direction=gvizl@renderInfo@edges$direction))
-  return(list(gvizl_coords=gvizl_coords, bezier_df=bezier_df))
+  bezier_df = bezier_df %>% dplyr::distinct()
+  return(list(gvizl_coords=gvizl_coords, bezier_df=bezier_df, label_df=label_df))
 }
 
 #' Plot the state graph with annotations
@@ -956,12 +967,13 @@ plot_state_graph_annotations <- function(ccm,
                                          label_nodes_by=NULL,
                                          group_nodes_by=NULL,
                                          edge_labels=NULL,
+                                         edge_weights=NULL,
                                          arrow.gap=0.03,
                                          arrow_unit = 2,
                                          bar_unit = .075,
                                          node_size = 2,
                                          num_layers=10,
-                                         edge_size=0.5,
+                                         edge_size=2,
                                          fract_expr = 0.0,
                                          mean_expr = 0.0,
                                          unlabeled_groups = c("Unknown"),
@@ -987,16 +999,28 @@ plot_state_graph_annotations <- function(ccm,
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
   }
 
-  G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+  if (is.null(edge_weights)){
+    edges = edges %>% select(from, to)
+  }else{
+    edges = edges %>% select(from, to, weight=!!sym(edge_weights))
+  }
 
-  layout_info = layout_state_graph(G, node_metadata, edge_labels)
+  G = edges %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  layout_info = layout_state_graph(G, node_metadata, edge_labels, weighted=FALSE)
   gvizl_coords = layout_info$gvizl_coords
   bezier_df = layout_info$bezier_df
+  if (is.null(edge_weights) == FALSE){
+    bezier_df = left_join(bezier_df, edges)
+    bezier_df = bezier_df %>% mutate(edge_thickness = edge_size * weight / max(weight))
+  }else{
+    bezier_df$edge_thickness = edge_size
+  }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
   p <- ggplot() +
-    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+    ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness), data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
 
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
@@ -1060,6 +1084,7 @@ plot_state_graph_annotations <- function(ccm,
   }
 
   if (is.null(edge_labels) == FALSE) {
+    label_df = layout_info$label_df
     p = p +  ggnetwork::geom_nodetext(data = label_df,
                                       aes(x,y, label = label), size=3)
   }
