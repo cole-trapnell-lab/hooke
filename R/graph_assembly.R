@@ -1084,7 +1084,7 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
   covered_G = compute_min_path_cover(control_timeseries_ccm, G)
 
   annotated_G = covered_G %>% igraph::as_data_frame()
-  edge_support = selected_paths %>% dplyr::select(from, to, perturb_name, time_dist_effect, time_dist_effect_q_val, perturb_dist_effect, perturb_dist_effect_q_val) %>% distinct()
+  edge_support = selected_paths %>% dplyr::select(from, to, perturb_name, perturb_dist_effect, perturb_dist_effect_q_val) %>% distinct()
   edge_support_summary = edge_support %>% group_by(from, to) %>% summarize(weight=n(),
                                                                            edge_name = stringr::str_c(from, to, sep="~"),
                                                                            label=paste0(perturb_name, collapse = "\n"))
