@@ -1051,7 +1051,8 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
                                                         ...)
 
   paths_between_recip_time_nodes = paths_between_recip_time_nodes %>%
-    filter (time_dist_effect > 0 & time_dist_effect_q_val < q_val) %>%
+    #filter (time_dist_effect > 0 & time_dist_effect_q_val < q_val) %>%
+    filter (time_dist_effect > 0) %>%
     select(from, to, path) %>% distinct()
 
   # Now iterate over the perturbation models, scoring each time path according
@@ -1083,10 +1084,13 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
   covered_G = compute_min_path_cover(control_timeseries_ccm, G)
 
   annotated_G = covered_G %>% igraph::as_data_frame()
-  edge_support = selected_paths %>% dplyr::select(from, to, perturb_name) %>% distinct()
-  edge_support_summary = edge_support %>% group_by(from, to) %>% summarize(weight=n() + 1,
+  edge_support = selected_paths %>% dplyr::select(from, to, perturb_name, perturb_dist_effect, perturb_dist_effect_q_val) %>% distinct()
+  edge_support_summary = edge_support %>% group_by(from, to) %>% summarize(weight=n(),
                                                                            edge_name = stringr::str_c(from, to, sep="~"),
                                                                            label=paste0(perturb_name, collapse = "\n"))
+  edge_support_summary = edge_support_summary %>% mutate(weight = ifelse(is.na(weight), 0, weight),
+                                                         weight = weight + 1)
+
 
   annotated_G = annotated_G %>% left_join(edge_support) %>% tidyr::nest(support=c(perturb_name))
   annotated_G = annotated_G %>% left_join(edge_support_summary)

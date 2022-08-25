@@ -1012,7 +1012,8 @@ plot_state_graph_annotations <- function(ccm,
   bezier_df = layout_info$bezier_df
   if (is.null(edge_weights) == FALSE){
     bezier_df = left_join(bezier_df, edges)
-    bezier_df = bezier_df %>% mutate(edge_thickness = edge_size * weight / max(weight))
+    bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
+                                     edge_thickness = edge_size * edge_score)
   }else{
     bezier_df$edge_thickness = edge_size
   }
