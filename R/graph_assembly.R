@@ -185,9 +185,9 @@ get_extant_cell_types <- function(ccm,
       {
         delta_t = as.numeric(tps_df[2,1] - tps_df[1,1])
         ts_la = ts(tps_df$present_flag,
-                 start=min(tps_df[,1]),
-                 #end=max(tps_df[,1]),
-                 deltat=delta_t)
+                   start=min(tps_df[,1]),
+                   #end=max(tps_df[,1]),
+                   deltat=delta_t)
         longest_contig = na.contiguous(ts_la)
         return(tibble(longest_contig_start = start(longest_contig)[1], longest_contig_end = end(longest_contig)[1]))
       }, error = function(e) {
@@ -380,8 +380,8 @@ measure_time_delta_along_path <- function(path_df, ccs, interval_col="timepoint"
 
   cells_along_path_df = cells_along_path_df %>%
     left_join(colData(ccs) %>% as.data.frame %>%
-              select(sample, !!sym(interval_col)) %>%
-              as_tibble(), by = c("sample" = "sample"))
+                select(sample, !!sym(interval_col)) %>%
+                as_tibble(), by = c("sample" = "sample"))
 
   cells_along_path_df = cells_along_path_df %>%
     left_join(path_df %>% select(-from), by = c("cell_group" = "to"))
@@ -457,17 +457,17 @@ measure_perturbation_freq_along_path <- function(path_df, ccs, perturbation_col=
 #' Identify the possible origins for each destination
 #'
 build_timeseries_transition_dag <- function(ccm,
-                                 extant_cell_type_df,
-                                 pathfinding_graph,
-                                 q_val=0.01,
-                                 start_time = NULL,
-                                 stop_time = NULL,
-                                 interval_col="timepoint",
-                                 interval_step = 2,
-                                 min_interval = 4,
-                                 max_interval = 24,
-                                 min_dist_vs_time_r_sq = 0,
-                                 ...) {
+                                            extant_cell_type_df,
+                                            pathfinding_graph,
+                                            q_val=0.01,
+                                            start_time = NULL,
+                                            stop_time = NULL,
+                                            interval_col="timepoint",
+                                            interval_step = 2,
+                                            min_interval = 4,
+                                            max_interval = 24,
+                                            min_dist_vs_time_r_sq = 0,
+                                            ...) {
 
   # First, let's figure out when each cell type is present and
   # which ones emerge over the course of the caller's time interval
@@ -723,7 +723,7 @@ build_perturbation_transition_dag <- function(ccm,
                                               min_interval = 4,
                                               max_interval = 24,
                                               min_dist_vs_time_r_sq = 0,
-                                            ...) {
+                                              ...) {
 
   paths_between_recip_time_nodes = get_timeseries_paths(ccm,
                                                         extant_cell_type_df,
@@ -748,7 +748,7 @@ build_perturbation_transition_dag <- function(ccm,
   origin_dest_node_pairs = dplyr::inner_join(paths_between_recip_time_nodes, paths_between_perturb_vs_wt_node_pairs)
   print (origin_dest_node_pairs)
   selected_paths = origin_dest_node_pairs %>% filter (perturb_dist_effect < 0 & perturb_dist_effect_q_val < q_val &
-                                                      time_dist_effect > 0 & time_dist_effect_q_val < q_val) %>%
+                                                        time_dist_effect > 0 & time_dist_effect_q_val < q_val) %>%
     group_by(to) %>%
     #slice_max(dist_model_score, n=3) %>%
     ungroup() %>% arrange(desc(perturb_dist_model_score))
@@ -892,18 +892,18 @@ not_in_paga_graph <- function(ccm) {
 #' assemble a state transition graph from a timeseries
 #' @export
 assemble_timeseries_transitions <- function(ccm,
-                                               q_val=0.01,
-                                               start_time = NULL,
-                                               stop_time = NULL,
-                                               interval_col="timepoint",
-                                               interval_step = 2,
-                                               min_interval = 4,
-                                               max_interval = 24,
-                                               log_abund_detection_thresh=-5,
-                                               percent_max_threshold=0,
-                                               min_dist_vs_time_r_sq=0,
-                                               weigh_by_pcor = F,
-                                               ...){
+                                            q_val=0.01,
+                                            start_time = NULL,
+                                            stop_time = NULL,
+                                            interval_col="timepoint",
+                                            interval_step = 2,
+                                            min_interval = 4,
+                                            max_interval = 24,
+                                            log_abund_detection_thresh=-5,
+                                            percent_max_threshold=0,
+                                            min_dist_vs_time_r_sq=0,
+                                            weigh_by_pcor = F,
+                                            ...){
 
   extant_cell_type_df = get_extant_cell_types(ccm,
                                               start_time,
@@ -922,17 +922,17 @@ assemble_timeseries_transitions <- function(ccm,
 
 
   G = build_timeseries_transition_dag(ccm,
-                           extant_cell_type_df,
-                           pathfinding_graph,
-                           q_val,
-                           start_time,
-                           stop_time,
-                           interval_col,
-                           interval_step,
-                           min_interval,
-                           max_interval,
-                           min_dist_vs_time_r_sq,
-                           ...)
+                                      extant_cell_type_df,
+                                      pathfinding_graph,
+                                      q_val,
+                                      start_time,
+                                      stop_time,
+                                      interval_col,
+                                      interval_step,
+                                      min_interval,
+                                      max_interval,
+                                      min_dist_vs_time_r_sq,
+                                      ...)
 
   covered_G = compute_min_path_cover(ccm, G)
 
@@ -980,18 +980,18 @@ assemble_perturbation_transitions <- function(ccm,
 
 
   G = build_perturbation_transition_dag(ccm,
-                           extant_cell_type_df,
-                           pathfinding_graph,
-                           q_val,
-                           start_time,
-                           stop_time,
-                           perturbation_col,
-                           interval_col,
-                           interval_step,
-                           min_interval,
-                           max_interval,
-                           min_dist_vs_time_r_sq,
-                           ...)
+                                        extant_cell_type_df,
+                                        pathfinding_graph,
+                                        q_val,
+                                        start_time,
+                                        stop_time,
+                                        perturbation_col,
+                                        interval_col,
+                                        interval_step,
+                                        min_interval,
+                                        max_interval,
+                                        min_dist_vs_time_r_sq,
+                                        ...)
 
   covered_G = compute_min_path_cover(ccm, G)
 
@@ -1213,18 +1213,18 @@ determine_sparsity <- function(ccm,
 #' @param curr_graph
 #' @export
 augment_pathfinding_graph = function(ccm,
-                                 curr_graph,
-                                 q_val = 0.01,
-                                 start_time = NULL,
-                                 stop_time = NULL,
-                                 interval_col="timepoint",
-                                 interval_step = 2,
-                                 min_interval = 4,
-                                 max_interval = 24,
-                                 log_abund_detection_thresh=-5,
-                                 percent_max_threshold=0,
-                                 min_dist_vs_time_r_sq=0,
-                                 ...) {
+                                     curr_graph,
+                                     q_val = 0.01,
+                                     start_time = NULL,
+                                     stop_time = NULL,
+                                     interval_col="timepoint",
+                                     interval_step = 2,
+                                     min_interval = 4,
+                                     max_interval = 24,
+                                     log_abund_detection_thresh=-5,
+                                     percent_max_threshold=0,
+                                     min_dist_vs_time_r_sq=0,
+                                     ...) {
 
   # start with the same pathfinding graph as before
   # make sure to do this before so it doesnt change the previous sparsity??

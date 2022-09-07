@@ -509,9 +509,9 @@ my_plot_cells <- function(data,
         stroke = 0
       ) +
       scale_color_gradient2(
-        low = "royalblue3",
+        low = "#122985",
         mid = "white",
-        high = "orangered3",
+        high = "red4",
         na.value = "white",
         limits = fc_limits
       )
@@ -751,10 +751,10 @@ plot_path <- function(data,
 
 
 add_path_edge <- function(gp,
-                     path_df,
-                     umap_centers,
-                     size = 1,
-                     color = "black") {
+                          path_df,
+                          umap_centers,
+                          size = 1,
+                          color = "black") {
   path_df = add_umap_coords(path_df, umap_centers)
 
   gp = gp +
@@ -981,7 +981,7 @@ plot_state_graph_annotations <- function(ccm,
                                          label_font_size=6,
                                          label_conn_linetype="dotted",
                                          legend_position = "none",
-                                         group_outline=c("outline", "fill", "none"))
+                                         group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1029,9 +1029,7 @@ plot_state_graph_annotations <- function(ccm,
   if (is.null(group_nodes_by) == FALSE){
 
 
-
-
-    if (group_outline == "outline") {
+    if (group_outline) {
       p = p + ggforce::geom_mark_rect(aes(x, y,
                                           col = group_nodes_by,
                                           label = group_nodes_by,
@@ -1040,20 +1038,7 @@ plot_state_graph_annotations <- function(ccm,
                                       label.fontsize=label_font_size,
                                       con.linetype=label_conn_linetype,
                                       data=g)
-    } else if (group_outline == "none") {
-
-      p = p + ggforce::geom_mark_rect(aes(x, y,
-                                          fill = group_nodes_by,
-                                          # label = group_nodes_by,
-                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                      size=0,
-                                      label.fontsize=label_font_size,
-                                      con.linetype=label_conn_linetype,
-                                      data=g)
-    }
-
-
-    else if (group_outline == "fill") {
+    } else {
       p = p + ggforce::geom_mark_rect(aes(x, y,
                                           fill = group_nodes_by,
                                           label = group_nodes_by,
@@ -1178,14 +1163,13 @@ plot_state_graph_abundance_changes <- function(ccm,
                                                edge_size=0.5,
                                                fract_expr = 0.0,
                                                mean_expr = 0.0,
-                                               nrow = NULL,
                                                unlabeled_groups = c("Unknown"),
                                                label_subset=NULL,
                                                hide_unlinked_nodes=TRUE,
                                                label_font_size=6,
                                                label_conn_linetype="dotted",
                                                legend_position = "none",
-                                               group_outline=TRUE)
+                                               group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1343,12 +1327,12 @@ plot_state_graph_abundance_changes <- function(ccm,
                               color=delta_log_abund)) +
     ggnetwork::geom_nodetext(data = g,
                              aes(x, y,
-                             label = q_value_sig_code),
+                                 label = q_value_sig_code),
                              color=I("black"))
-    # ggnetwork::geom_nodetext_repel(data = g,
-    #                                aes(x, y,
-    #                                    label = q_value_sig_code),
-    #                                color=I("black"))
+  # ggnetwork::geom_nodetext_repel(data = g,
+  #                                aes(x, y,
+  #                                    label = q_value_sig_code),
+  #                                color=I("black"))
   #labs(fill = color_nodes_by)
 
   p = p + scale_color_gradient2(low = "royalblue3", mid = "white", high="orangered3")
@@ -1361,7 +1345,7 @@ plot_state_graph_abundance_changes <- function(ccm,
   p = p +
     ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
 
-  p = p + facet_wrap(~contrast, nrow=nrow)
+  p = p + facet_wrap(~contrast)
 
   p = p + scale_size(range=c(1, node_size)) +
     monocle3:::monocle_theme_opts() +
@@ -1395,8 +1379,7 @@ plot_state_graph_gene_expression <- function(ccm,
                                              label_font_size=6,
                                              label_conn_linetype="dotted",
                                              legend_position = "none",
-                                             group_outline=FALSE,
-                                             nrow=NULL)
+                                             group_outline=FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1523,7 +1506,7 @@ plot_state_graph_gene_expression <- function(ccm,
   p = p +
     ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
 
-  p = p + facet_wrap(~gene_short_name, nrow=nrow)
+  p = p + facet_wrap(~gene_short_name)
 
   p = p + scale_size(labels = scales::percent, range=c(1, node_size)) +
     monocle3:::monocle_theme_opts() +
@@ -1563,7 +1546,7 @@ plot_state_transition_graph <- function(ccm,
                                         label_font_size=6,
                                         label_conn_linetype="dotted",
                                         legend_position = "none",
-                                        group_outline=T){
+                                        group_outline=FALSE){
 
 
   # if (is.null(contract_nodes_by) == FALSE) {
@@ -2103,20 +2086,14 @@ plot_cells_per_sample = function(ccs,
 }
 
 
-plot_cells_highlight = function(ccs,
-                                group_to_highlight,
-                                colname,
-                                legend_position = "none",
-                                cell_size = 1,
-                                x = 1,
-                                y = 2) {
+plot_cells_highlight = function(ccs, group_to_highlight, colname) {
 
-  plot_df = as.data.frame(colData(ccs@cds))
-  plot_df$cell_group = colData(ccs@cds)[[colname]]
+  plot_df = as.data.frame(colData(cds))
+  plot_df$cell_group = colData(cds)[[colname]]
 
   plot_df$cell = row.names(plot_df)
-  plot_df$umap2D_1 <- reducedDim(ccs@cds, type="UMAP")[plot_df$cell,x]
-  plot_df$umap2D_2 <- reducedDim(ccs@cds, type="UMAP")[plot_df$cell,y]
+  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
 
   gp = ggplot() +
     geom_point(
@@ -2135,8 +2112,8 @@ plot_cells_highlight = function(ccs,
     ) +
     geom_point(
       data = plot_df %>% filter(cell_group %in% c(group_to_highlight)),
-      aes(umap2D_1, umap2D_2, color=cell_group),
-      # color = "darkred",
+      aes(umap2D_1, umap2D_2),
+      color = "red",
       size = cell_size,
       stroke = 0
     ) +
@@ -2196,142 +2173,24 @@ plot_contrast_3d <- function(ccm,
   }
 
   color_palette = c('#3A5FCD', '#FAFAFA','#CD3700')
+  # color_palette = c('#3A5FCD', '#FFFFFF','#CD3700')
+  # color_palette = c('#FFFFFF','#CD3700')
 
   p = plotly::plot_ly(plot_df,
-                  x = ~umap3D_1,
-                  y = ~umap3D_2,
-                  z = ~umap3D_3,
-                  type = 'scatter3d',
-                  mode="markers",
-                  alpha = I(alpha),
-                  color = ~delta_log_abund,
-                  colors = color_palette,
-                  size = I(cell_size)) %>%
-    colorbar(limits = fc_limits)
+                      x = ~umap3D_1,
+                      y = ~umap3D_2,
+                      z = ~umap3D_3,
+                      type = 'scatter3d',
+                      mode="markers",
+                      alpha = I(alpha),
+                      color = ~delta_log_abund,
+                      colors = color_palette,
+                      size = I(cell_size),
+                      range_color = fc_limits)
 
   return(p)
 
 
-
-}
-
-
-plot_cells_by_min_expr = function(cds,
-                                  genes,
-                                  min_expr = 0.1,
-                                  x = 1,
-                                  y = 2,
-                                  reduction_method ="UMAP", legend_position="none") {
-  markers = genes
-  markers_rowData <- rowData(cds)[(rowData(cds)$gene_short_name %in% markers) |
-                                    (row.names(rowData(cds)) %in% markers),,drop=FALSE]
-
-  markers_rowData <- as.data.frame(markers_rowData)
-
-  cds_exprs <- SingleCellExperiment::counts(cds)[row.names(markers_rowData), ,drop=FALSE]
-  cds_exprs <- Matrix::t(Matrix::t(cds_exprs)/size_factors(cds))
-
-  cds_exprs@x = round(10000*cds_exprs@x)/10000
-  markers_exprs = matrix(cds_exprs, nrow=nrow(markers_rowData))
-  colnames(markers_exprs) = colnames(SingleCellExperiment::counts(cds))
-  row.names(markers_exprs) = row.names(markers_rowData)
-  markers_exprs <- reshape2::melt(markers_exprs)
-  colnames(markers_exprs)[1:2] <- c('feature_id','cell_id')
-  markers_exprs <- merge(markers_exprs, markers_rowData,
-                         by.x = "feature_id", by.y="row.names")
-
-  S_matrix <- SingleCellExperiment::reducedDims(cds)[[reduction_method]]
-  data_df <- data.frame(S_matrix[,c(x,y)])
-  colnames(data_df) <- c("data_dim_1", "data_dim_2")
-  data_df$sample_name <- row.names(data_df)
-
-  data_df <- merge(data_df, markers_exprs, by.x="sample_name",
-                   by.y="cell_id")
-  data_df$value <- with(data_df, ifelse(value >= min_expr, value, NA))
-
-  data_wide = data_df %>%
-    select(sample_name, value, gene_short_name) %>%
-    tidyr::pivot_wider(names_from = "gene_short_name", values_from = value)
-
-  gene_df = data_wide %>% tidyr::pivot_longer(-sample_name) %>% filter(!is.na(value))
-
-  gp = ggplot() +
-    geom_point(
-      data = plot_df %>% select(-timepoint),
-      aes(umap2D_1, umap2D_2),
-      color = "black",
-      size = 1.5 * cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df%>% select(-timepoint),
-      aes(umap2D_1, umap2D_2),
-      color = "white",
-      size = cell_size,
-      stroke = 0
-    ) +
-    theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts()
-
-  gene_df = left_join(gene_df, plot_df, by=c("sample_name"="cell"))
-  gp = gp + geom_point(data=gene_df, aes(umap2D_1, umap2D_2)) +
-    facet_grid(name~timepoint) + scale_color_viridis_c()
-  gp
-  return(gp)
-}
-
-
-plot_cells_by_time <- function(cds,
-                               facet_by,
-                               x = 1,
-                               y = 2,
-                               cell_size = 1,
-                               legend_position = "none") {
-
-  plot_df = as.data.frame(colData(cds))
-  plot_df$cell = row.names(plot_df)
-
-  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
-  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
-
-  gp = ggplot() +
-    geom_point(
-      data = plot_df %>% select(-c(timepoint, !!sym(facet_by))),
-      aes(umap2D_1, umap2D_2),
-      color = "black",
-      size = 1.5 * cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df%>% select(-c(timepoint, !!sym(facet_by))),
-      aes(umap2D_1, umap2D_2),
-      color = "white",
-      size = cell_size,
-      stroke = 0
-    ) +
-    theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts()
-
-
-  timepoints = c("18", "24", "36", "48", "72", "96")
-  num_colors = unique(timepoints) %>% sort() %>% length()
-  full_spectrum_timepoint = get_colors(num_colors, type="rainbow")
-  names(full_spectrum_timepoint) = unique(timepoints) %>% sort()
-
-  plot_df[["facet_by"]] = plot_df[[facet_by]]
-
-  gp = gp +
-    geom_point(data = plot_df %>%
-                 filter(timepoint %in% timepoints),
-               aes(umap2D_1, umap2D_2,
-                   color = as.character(timepoint)),
-               size = cell_size,
-               stroke = 0) +
-    facet_grid(facet_by ~ timepoint) +
-    scale_color_manual(values = full_spectrum_timepoint) +
-    monocle3:::monocle_theme_opts()
-
-  return(gp)
 
 }
 
