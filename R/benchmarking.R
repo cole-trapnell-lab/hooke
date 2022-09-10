@@ -27,7 +27,7 @@ load_lineage_tree <- function() {
 
 # a help function to tidy the vgam model output - used in compare_abundance function
 tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
-  co <- as.data.frame(coef(summary(x)))
+  co <- as.data.frame(coef(VGAM::summary(x)))
   names(co) <- c("estimate","std.error","statistic","p.value")
   if (conf.int) {
     qq <- qnorm((1+conf.level)/2)
@@ -38,6 +38,13 @@ tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
   co <- data.frame(term=rownames(co),co)
   rownames(co) <- NULL
   return(co)
+}
+
+# this shouldn't change size factors
+subset_ccs = function(ccs, ctrl_ids, gene_target, time) {
+  gene_ids = c(ctrl_ids, gene_target)
+  ccs = ccs[, colData(ccs)$timepoint == time]
+  ccs = ccs[, colData(ccs)$gene_target %in% gene_ids]
 }
 
 
@@ -55,7 +62,7 @@ bb_compare_abundance <- function(ccs,
     pull(knockout)
 
   ccs_coldata = colData(ccs) %>% as.data.frame %>% select(sample, !!sym(comp_col),
-                                                          Size_Factor, nuisance_cols)
+                                                          Size_Factor, all_of(nuisance_cols))
 
   count_df = counts(ccs) %>%
     as.matrix() %>%
@@ -83,7 +90,7 @@ bb_compare_abundance <- function(ccs,
 
   # a help function to tidy the vgam model output - used in compare_abundance function
   tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
-    co <- as.data.frame(coef(summary(x)))
+    co <- as.data.frame(coef(VGAM::summary(x)))
     names(co) <- c("estimate","std.error","statistic","p.value")
     if (conf.int) {
       qq <- qnorm((1+conf.level)/2)
@@ -99,7 +106,7 @@ bb_compare_abundance <- function(ccs,
   fit_beta_binomial = function(cg, count_df, model_formula, trace = TRUE, ...) {
     type_df = count_df %>% filter(cell_group == cg)
     count_df = cbind(type_df$cells, type_df$total_cells - type_df$cells)
-    fit =  VGAM::vglm(as.formula(model_formula), betabinomial, data = type_df, trace = trace, ...)
+    fit =  VGAM::vglm(as.formula(model_formula), "betabinomial", data = type_df, trace = trace, ...)
     fit_df = tidy.vglm(fit)
 
   }

@@ -751,10 +751,10 @@ plot_path <- function(data,
 
 
 add_path_edge <- function(gp,
-                     path_df,
-                     umap_centers,
-                     size = 1,
-                     color = "black") {
+                          path_df,
+                          umap_centers,
+                          size = 1,
+                          color = "black") {
   path_df = add_umap_coords(path_df, umap_centers)
 
   gp = gp +
@@ -1027,8 +1027,6 @@ plot_state_graph_annotations <- function(ccm,
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
-
-
 
 
     if (group_outline) {
@@ -1329,12 +1327,12 @@ plot_state_graph_abundance_changes <- function(ccm,
                               color=delta_log_abund)) +
     ggnetwork::geom_nodetext(data = g,
                              aes(x, y,
-                             label = q_value_sig_code),
+                                 label = q_value_sig_code),
                              color=I("black"))
-    # ggnetwork::geom_nodetext_repel(data = g,
-    #                                aes(x, y,
-    #                                    label = q_value_sig_code),
-    #                                color=I("black"))
+  # ggnetwork::geom_nodetext_repel(data = g,
+  #                                aes(x, y,
+  #                                    label = q_value_sig_code),
+  #                                color=I("black"))
   #labs(fill = color_nodes_by)
 
   p = p + scale_color_gradient2(low = "royalblue3", mid = "white", high="orangered3")
@@ -2179,22 +2177,21 @@ plot_contrast_3d <- function(ccm,
   # color_palette = c('#FFFFFF','#CD3700')
 
   p = plotly::plot_ly(plot_df,
-                  x = ~umap3D_1,
-                  y = ~umap3D_2,
-                  z = ~umap3D_3,
-                  type = 'scatter3d',
-                  mode="markers",
-                  alpha = I(alpha),
-                  color = ~delta_log_abund,
-                  colors = color_palette,
-                  size = I(cell_size),
-                  range_color = fc_limits)
+                      x = ~umap3D_1,
+                      y = ~umap3D_2,
+                      z = ~umap3D_3,
+                      type = 'scatter3d',
+                      mode="markers",
+                      alpha = I(alpha),
+                      color = ~delta_log_abund,
+                      colors = color_palette,
+                      size = I(cell_size),
+                      range_color = fc_limits)
 
   return(p)
 
 
 
 }
-
 
 
