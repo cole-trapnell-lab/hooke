@@ -279,7 +279,9 @@ wt_state_transition_graph = assemble_timeseries_transitions(wt_ccm_wl,
 #wt_origins = select_origins(wt_ccm_wl, wt_possible_origins, selection_policy = "acceptable-origins")
 hooke:::plot_path(wt_ccm_wl, path_df = wt_state_transition_graph %>% igraph::as_data_frame() , edge_size=0.25)
 
-plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
+hooke::plot_state_graph_annotations(wt_ccm_wl, wt_state_transition_graph, group_nodes_by="cell_type")
+
+#plot_state_transition_graph(wt_ccm_wl, wt_state_transition_graph %>% igraph::as_data_frame() , color_nodes_by = "cell_type", group_nodes_by="cell_type", layer_nodes_by="timepoint")
 
 # ----------------------------------------------------------------------------
 # Differential analysis across space and time in WT

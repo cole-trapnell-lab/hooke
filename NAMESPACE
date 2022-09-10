@@ -3,6 +3,7 @@
 export(assemble_perturbation_transitions)
 export(assemble_timeseries_transitions)
 export(assemble_transition_graph_from_perturbations)
+export(assess_support_for_transition_graph)
 export(augment_pathfinding_graph)
 export(build_interval_formula)
 export(calc_shortest_path)
