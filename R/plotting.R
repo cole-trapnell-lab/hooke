@@ -966,7 +966,7 @@ plot_state_graph_annotations <- function(ccm,
                                          color_nodes_by=NULL,
                                          label_nodes_by=NULL,
                                          group_nodes_by=NULL,
-                                         edge_labels=NULL,
+                                         label_edges_by=NULL,
                                          edge_weights=NULL,
                                          arrow.gap=0.03,
                                          arrow_unit = 2,
@@ -1005,7 +1005,31 @@ plot_state_graph_annotations <- function(ccm,
     edges = edges %>% select(from, to, weight=!!sym(edge_weights))
   }
 
+  if (is.null(label_edges_by)){
+    edge_info = edges %>% select(from, to)
+  }else{
+    if (is(state_graph, "igraph")){
+      edge_info = state_graph %>% igraph::as_data_frame() %>% select(from, to, label=!!sym(label_edges_by))
+    }else{
+      edge_info = state_graph %>% select(from, to, label=!!sym(label_edges_by))
+    }
+
+    edges = edges %>% left_join(edge_info)
+    #print(edges)
+  }
+
   G = edges %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  if (is.null(igraph::E(G)$label) == FALSE){
+    G_df = igraph::as_data_frame(G)
+    edge_names =  stringr::str_c(G_df$from, G_df$to, sep="~")
+    edge_labels = igraph::E(G)$label
+    names(edge_labels) = edge_names
+    #print(edge_labels)
+    #edge_labels = NULL
+  }else{
+    edge_labels=NULL
+  }
 
   layout_info = layout_state_graph(G, node_metadata, edge_labels, weighted=FALSE)
   gvizl_coords = layout_info$gvizl_coords

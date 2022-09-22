@@ -369,9 +369,9 @@ get_perturbation_paths <- function(perturbation_ccm,
 
   #print (pln_model)
 
-  cov_graph <- return_igraph(pln_model)
-  cov_edges <- igraph::as_data_frame(cov_graph, what="edges")
-  print (cov_edges)
+  #cov_graph <- return_igraph(pln_model)
+  #cov_edges <- igraph::as_data_frame(cov_graph, what="edges")
+  #print (cov_edges)
   #cov_edges = cov_edges %>%
   #  dplyr::filter(weight > min_pcor_for_edges)
 
@@ -381,6 +381,10 @@ get_perturbation_paths <- function(perturbation_ccm,
   change_corr_tbl = change_corr_tbl %>% select(cell_group) %>% tidyr::expand(cell_group, cell_group)
   colnames(change_corr_tbl) = c("from", "to")
   change_corr_tbl = change_corr_tbl %>% filter(from != to)
+
+  lost_cell_groups = change_corr_tbl %>% pull(from) %>% unique
+
+  lost_cell_group_pathfinding_subgraph = igraph::subgraph(pathfinding_graph, lost_cell_groups)
 
   print ("change corr tbl")
   print (change_corr_tbl)
@@ -402,7 +406,7 @@ get_perturbation_paths <- function(perturbation_ccm,
   change_corr_tbl %>% filter(from == "24") %>% print
   concordant_fwd_loss_pairs = change_corr_tbl %>%
     #dplyr::filter(pcor < 0) %>% # do we just want negative again?
-    dplyr::filter(is.finite(from_peak_loss_time) & is.finite(to_peak_loss_time) & from_peak_loss_time < to_peak_loss_time)
+    dplyr::filter(is.finite(from_peak_loss_time) & is.finite(to_peak_loss_time) & (from_peak_loss_time < to_peak_loss_time) | (from_largest_loss_time < to_largest_loss_time))
 
   print ("loss pairs selected based on ordering")
   print (concordant_fwd_loss_pairs)
@@ -412,7 +416,7 @@ get_perturbation_paths <- function(perturbation_ccm,
   paths_between_concordant_fwd_loss_pairs = concordant_fwd_loss_pairs %>%
     mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
                               .x = from, .y = to,
-                              pathfinding_graph))
+                              lost_cell_group_pathfinding_subgraph))
 
   print ("loss pair paths")
   print (paths_between_concordant_fwd_loss_pairs)
@@ -1070,10 +1074,17 @@ estimate_loss_timing <- function(perturbation_ccm,
   #print (perturb_vs_wt_nodes)
   #print ("subsetting loss tbl")
   #print (q_val)
+  perturb_vs_wt_nodes %>% filter(cell_group == "1")  %>%
+    #filter(is.na(adjusted_timepoint_x) == FALSE) %>% as.data.frame %>%
+    select(cell_group, adjusted_timepoint_x, log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y, delta_log_abund, delta_p_value) %>%
+    print(n=1000)
+
+
   earliest_loss_tbl =  perturb_vs_wt_nodes %>%
     filter(delta_log_abund < 0 & delta_p_value < q_val)
 
-  print (earliest_loss_tbl)
+  #print (earliest_loss_tbl)
+
 
   peak_wt_abundance = perturb_vs_wt_nodes %>% group_by(cell_group) %>% slice_max(log_abund_x, n=1)
   loss_at_peak_wt_abundance = peak_wt_abundance %>% mutate(cell_group,
@@ -1081,6 +1092,8 @@ estimate_loss_timing <- function(perturbation_ccm,
                                                            lost_at_peak = delta_log_abund < 0 & delta_p_value < q_val,
                                                            peak_loss_time = ifelse(lost_at_peak, peak_wt_time, NA))
   loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% select(cell_group, peak_wt_time, lost_at_peak, peak_loss_time)
+
+  loss_at_peak_wt_abundance %>% filter(cell_group == "1") %>% print()
 
   largest_losses = perturb_vs_wt_nodes %>%
     filter(delta_log_abund < 0 & delta_p_value < q_val) %>%
@@ -1733,7 +1746,7 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
   #path_tbl %>% filter(from == "27")
   #path_tbl = path_tbl %>% mutate(path_score = ifelse(perturb_dist_effect > 0 | time_dist_effect < 0 | perturb_dist_effect_q_val > q_val, path_score, 0))
 
-  path_tbl = path_tbl %>% mutate(path_score = ifelse(timeseries_model_path_score > 0 & perturb_model_path_score > 0, perturb_model_path_score, 0))
+  path_tbl = path_tbl %>% mutate(path_score = ifelse(timeseries_model_path_score > 0 & perturb_model_path_score > 0, perturb_model_path_score * timeseries_model_path_score, 0))
 
   path_tbl =  path_tbl %>% filter (path_score > 0)
   #origin_dest_node_pairs = dplyr::intersect(perturb_vs_wt_node_pairs, recip_time_node_pairs)
