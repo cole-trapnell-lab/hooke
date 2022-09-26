@@ -702,6 +702,11 @@ classify_genes_over_graph <- function(ccm,
     state_term = group_nodes_by
   }
 
+  if (!is(state_graph, "igraph")){
+    state_graph = state_graph %>% igraph::graph_from_data_frame()
+  }
+
+
   #cds_to_test = pb_cds[,as.character(colData(pb_cds)[,state_term]) %in% states_in_model]
 
   #colData(cds_to_test)[,state_term] = factor(as.character(colData(cds_to_test)[,state_term]), levels=states_in_model) # set the "self" state as the reference level
