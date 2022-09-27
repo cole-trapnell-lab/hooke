@@ -16,6 +16,47 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   results
 }
 
+
+#  subsamples the ccs and computes a vhat
+#' @param ccm
+#' @param prop
+#' @param bycol
+subsampled_vhat = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
+
+  set.seed(random.seed)
+  counts(ccm@ccs) = scuttle::downsampleMatrix(counts(ccm@ccs), prop=prop)
+
+  nuisance_model_formula = stringr::str_remove(format(ccm@reduced_model_formula), "Abundance ")
+  main_model_formula = stringr::str_remove(format(ccm@full_model_formula), "Abundance ")
+  main_model_formula = substr(main_model_formula, 1, nchar(main_model_formula) - nchar(nuisance_model_formula))
+  nuisance_model_formula = substr(nuisance_model_formula, 1, nchar(nuisance_model_formula) - nchar("+ offset(log(Offset))"))
+
+  sample_ccm = new_cell_count_model(ccm@ccs,
+                       main_model_formula_str = main_model_formula,
+                       nuisance_model_formula_str = nuisance_model_formula)
+
+  sample_vhat = compute_vhat(sample_ccm)
+  return(sample_vhat)
+}
+
+#' computes the avg vhat across n bootstraps
+#' @param ccm
+#' @param num_bootstraps
+bootstrap_vhat = function(ccm, num_bootstraps = 2) {
+  # to do: parallelize
+  bootstraps = lapply(seq(1, num_bootstraps), function(i){
+    subsampled_vhat(ccm, random.seed = i)
+  })
+
+  # take the mean
+  arr <- array( unlist(bootstraps), c(bootstraps[[1]] %>% dim(), length(bootstraps)))
+  bootstrapped_vhat = rowMeans( arr , dims = 2 )
+  colnames(bootstrapped_vhat) = colnames(bootstraps[[1]])
+  rownames(bootstrapped_vhat) = rownames(bootstraps[[1]])
+  return(bootstrapped_vhat)
+}
+
+
 compute_vhat = function(ccm) {
   if (model(ccm)$d > 0) {
     ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
@@ -82,9 +123,13 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #                  xlev = ccm@model_aux[["xlevels"]])
   X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
 
+  if (is.na(ccm@bootstrapped_vhat)) {
+    v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
+  } else {
+    v_hat = ccm@bootstrapped_vhat
+  }
 
 
-  v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
   se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(model(ccm)$n)
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
