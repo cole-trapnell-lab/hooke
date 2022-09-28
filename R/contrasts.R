@@ -21,7 +21,7 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 #' @param ccm
 #' @param prop
 #' @param bycol
-subsampled_vhat = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
+subsampled_ccm = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
 
   set.seed(random.seed)
   counts(ccm@ccs) = scuttle::downsampleMatrix(counts(ccm@ccs), prop=prop)
@@ -32,11 +32,17 @@ subsampled_vhat = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
   nuisance_model_formula = substr(nuisance_model_formula, 1, nchar(nuisance_model_formula) - nchar("+ offset(log(Offset))"))
 
   sample_ccm = new_cell_count_model(ccm@ccs,
-                       main_model_formula_str = main_model_formula,
-                       nuisance_model_formula_str = nuisance_model_formula)
+                                    main_model_formula_str = main_model_formula,
+                                    nuisance_model_formula_str = nuisance_model_formula,
+                                    inception = ccm)
 
-  sample_vhat = compute_vhat(sample_ccm)
-  return(sample_vhat)
+  # take the effect sizes from each bootstrap
+
+  # sigma(model(sample_ccm))
+  #
+  # sample_vhat = compute_vhat(sample_ccm)
+
+  return(sample_ccm)
 }
 
 #' computes the avg vhat across n bootstraps
@@ -45,14 +51,42 @@ subsampled_vhat = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
 bootstrap_vhat = function(ccm, num_bootstraps = 2) {
   # to do: parallelize
   bootstraps = lapply(seq(1, num_bootstraps), function(i){
-    subsampled_vhat(ccm, random.seed = i)
+    # subsampled_vhat(ccm, random.seed = i)
+    sample_ccm = subsampled_ccm(ccm, random.seed = i)
+    # compute_vhat(sample_ccm)
+    coef(model(sample_ccm)) %>%
+      as.data.frame() %>%
+      rownames_to_column("cell_group")
   })
 
+
+  get_cov_mat = function(data, cell_group) {
+
+    cov_matrix = cov(data)
+    rownames(cov_matrix) = paste0(cell_group, "_", rownames(cov_matrix))
+    colnames(cov_matrix) = paste0(cell_group, "_", colnames(cov_matrix))
+    return(cov_matrix)
+
+  }
+
+  bootstrapped_df = do.call(rbind, bootstraps) %>%
+                group_by(cell_group) %>%
+                tidyr::nest() %>%
+                mutate(cov_mat = purrr::map2(.f = get_cov_mat,
+                                             .x = data,
+                                             .y = cell_group))
+
+  bootstrapped_vhat = Matrix::bdiag(bootstrapped_df$cov_mat) %>% as.matrix()
+  names = lapply(bootstrapped_df$cov_mat, function(m){ colnames(m)}) %>% unlist()
+  rownames(bootstrapped_vhat) = names
+  colnames(bootstrapped_vhat) = names
+
   # take the mean
-  arr <- array( unlist(bootstraps), c(bootstraps[[1]] %>% dim(), length(bootstraps)))
-  bootstrapped_vhat = rowMeans( arr , dims = 2 )
-  colnames(bootstrapped_vhat) = colnames(bootstraps[[1]])
-  rownames(bootstrapped_vhat) = rownames(bootstraps[[1]])
+  # arr <- array( unlist(bootstraps), c(bootstraps[[1]] %>% dim(), length(bootstraps)))
+  # bootstrapped_vhat = rowMeans( arr , dims = 2 )
+  # colnames(bootstrapped_vhat) = colnames(bootstraps[[1]])
+  # rownames(bootstrapped_vhat) = rownames(bootstraps[[1]])
+
   return(bootstrapped_vhat)
 }
 
@@ -123,6 +157,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #                  xlev = ccm@model_aux[["xlevels"]])
   X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
 
+  # if it doesn't exist, use orig computation
   if (is.na(ccm@bootstrapped_vhat)) {
     v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
   } else {
