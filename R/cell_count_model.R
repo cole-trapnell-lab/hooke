@@ -356,7 +356,17 @@ new_cell_count_model <- function(ccs,
   if (is.null(num_bootstraps)) {
     bootstrapped_vhat = matrix(, nrow = 1, ncol = 1)
   } else {
-    bootstrapped_vhat = bootstrap_vhat(ccm, num_bootstraps)
+    bootstrapped_vhat = bootstrap_vhat(ccs,
+                                       full_model_formula_str,
+                                       best_full_model,
+                                       best_reduced_model,
+                                       reduced_pln_model,
+                                       pseudocount,
+                                       initial_penalties,
+                                       pln_min_ratio,
+                                       pln_num_penalties,
+                                       verbose,
+                                       num_bootstraps)
   }
 
   ccm <- methods::new("cell_count_model",

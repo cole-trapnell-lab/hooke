@@ -21,40 +21,88 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 #' @param ccm
 #' @param prop
 #' @param bycol
-subsampled_ccm = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
 
+# subsampled_ccm = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
+#
+#   set.seed(random.seed)
+#   counts(ccm@ccs) = scuttle::downsampleMatrix(counts(ccm@ccs), prop=prop)
+#
+#   nuisance_model_formula = stringr::str_remove(format(ccm@reduced_model_formula), "Abundance ")
+#   main_model_formula = stringr::str_remove(format(ccm@full_model_formula), "Abundance ")
+#   main_model_formula = substr(main_model_formula, 1, nchar(main_model_formula) - nchar(nuisance_model_formula))
+#   nuisance_model_formula = substr(nuisance_model_formula, 1, nchar(nuisance_model_formula) - nchar("+ offset(log(Offset))"))
+#
+#   sample_ccm = new_cell_count_model(ccm@ccs,
+#                                     main_model_formula_str = main_model_formula,
+#                                     nuisance_model_formula_str = nuisance_model_formula,
+#                                     inception = ccm)
+#
+#
+#   return(sample_ccm)
+# }
+
+subsample_ccs = function(ccs, prop = 0.8, random.seed = 42) {
   set.seed(random.seed)
-  counts(ccm@ccs) = scuttle::downsampleMatrix(counts(ccm@ccs), prop=prop)
-
-  nuisance_model_formula = stringr::str_remove(format(ccm@reduced_model_formula), "Abundance ")
-  main_model_formula = stringr::str_remove(format(ccm@full_model_formula), "Abundance ")
-  main_model_formula = substr(main_model_formula, 1, nchar(main_model_formula) - nchar(nuisance_model_formula))
-  nuisance_model_formula = substr(nuisance_model_formula, 1, nchar(nuisance_model_formula) - nchar("+ offset(log(Offset))"))
-
-  sample_ccm = new_cell_count_model(ccm@ccs,
-                                    main_model_formula_str = main_model_formula,
-                                    nuisance_model_formula_str = nuisance_model_formula,
-                                    inception = ccm)
-
-  # take the effect sizes from each bootstrap
-
-  # sigma(model(sample_ccm))
-  #
-  # sample_vhat = compute_vhat(sample_ccm)
-
-  return(sample_ccm)
+  counts(ccs) = scuttle::downsampleMatrix(counts(ccs), prop=prop)
+  return(ccs)
 }
+
+bootstrap_model = function(ccs,
+                           full_model_formula_str,
+                           best_full_model,
+                           reduced_pln_model,
+                           pseudocount,
+                           initial_penalties,
+                           pln_min_ratio,
+                           pln_num_penalties,
+                           random.seed) {
+
+  sub_ccs = subsample_ccs(ccs, random.seed = random.seed)
+  sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
+                                      covariates = colData(sub_ccs) %>% as.data.frame,
+                                      offset = size_factors(sub_ccs))
+
+  sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+                                           data = sub_pln_data,
+                                           penalties = reduced_pln_model$penalties,
+                                           control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                           control_main=list(penalty_weights=initial_penalties,
+                                                             trace = ifelse(FALSE, 2, 0),
+                                                             inception = best_full_model)))
+
+  return(sub_full_model)
+
+}
+
 
 #' computes the avg vhat across n bootstraps
 #' @param ccm
 #' @param num_bootstraps
-bootstrap_vhat = function(ccm, num_bootstraps = 2) {
+bootstrap_vhat = function(ccs,
+                          full_model_formula_str,
+                          best_full_model,
+                          best_reduced_model,
+                          reduced_pln_model,
+                          pseudocount,
+                          initial_penalties,
+                          pln_min_ratio,
+                          pln_num_penalties,
+                          verbose,
+                          num_bootstraps = 2) {
   # to do: parallelize
-  bootstraps = lapply(seq(1, num_bootstraps), function(i){
-    # subsampled_vhat(ccm, random.seed = i)
-    sample_ccm = subsampled_ccm(ccm, random.seed = i)
-    # compute_vhat(sample_ccm)
-    coef(model(sample_ccm)) %>%
+  bootstraps = lapply(seq(1, num_bootstraps), function(i) {
+    bootstrapped_model = bootstrap_model(ccs,
+                                         full_model_formula_str,
+                                         best_full_model,
+                                         reduced_pln_model,
+                                         pseudocount,
+                                         initial_penalties,
+                                         pln_min_ratio,
+                                         pln_num_penalties,
+                                         random.seed = i)
+
+    best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
+    coef(best_bootstrapped_model) %>%
       as.data.frame() %>%
       rownames_to_column("cell_group")
   })
@@ -81,11 +129,6 @@ bootstrap_vhat = function(ccm, num_bootstraps = 2) {
   rownames(bootstrapped_vhat) = names
   colnames(bootstrapped_vhat) = names
 
-  # take the mean
-  # arr <- array( unlist(bootstraps), c(bootstraps[[1]] %>% dim(), length(bootstraps)))
-  # bootstrapped_vhat = rowMeans( arr , dims = 2 )
-  # colnames(bootstrapped_vhat) = colnames(bootstraps[[1]])
-  # rownames(bootstrapped_vhat) = rownames(bootstraps[[1]])
 
   return(bootstrapped_vhat)
 }
