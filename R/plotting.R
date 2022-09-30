@@ -973,7 +973,8 @@ plot_state_graph_annotations <- function(ccm,
                                          bar_unit = .075,
                                          node_size = 2,
                                          num_layers=10,
-                                         edge_size=2,
+                                         min_edge_size=0.1,
+                                         max_edge_size=2,
                                          fract_expr = 0.0,
                                          mean_expr = 0.0,
                                          unlabeled_groups = c("Unknown"),
@@ -1037,9 +1038,9 @@ plot_state_graph_annotations <- function(ccm,
   if (is.null(edge_weights) == FALSE){
     bezier_df = left_join(bezier_df, edges)
     bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
-                                     edge_thickness = edge_size * edge_score)
+                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size)
   }else{
-    bezier_df$edge_thickness = edge_size
+    bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
   }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
@@ -1118,6 +1119,175 @@ plot_state_graph_annotations <- function(ccm,
     theme(legend.position=legend_position)
   return(p)
 }
+
+#' This function plots when each cell state is lost following a perturbation
+#'
+#' FIXME: this is really a prototype and needs lots of cleanup and refactoring.
+#' It could plot the earliest time a loss is detected, the latest, etc. But
+#' right now it only plots the loss at the time of peak abundance in the control
+#' see estimate_loss_timing() for more details.
+#'
+#' @export
+plot_state_graph_losses <- function(perturbation_ccm,
+                                    state_graph,
+                                    start_time,
+                                    stop_time,
+                                    interval_step,
+                                    interval_col,
+                                    log_abund_detection_thresh,
+                                    q_val,
+                                    label_nodes_by=NULL,
+                                    group_nodes_by=NULL,
+                                    label_edges_by=NULL,
+                                    edge_weights=NULL,
+                                    arrow.gap=0.03,
+                                    arrow_unit = 2,
+                                    bar_unit = .075,
+                                    node_size = 2,
+                                    num_layers=10,
+                                    edge_size=2,
+                                    fract_expr = 0.0,
+                                    mean_expr = 0.0,
+                                    unlabeled_groups = c("Unknown"),
+                                    hide_unlinked_nodes=TRUE,
+                                    label_font_size=6,
+                                    label_conn_linetype="dotted",
+                                    legend_position = "none",
+                                    group_outline=FALSE,
+                                    ...)
+{
+
+  if (is(state_graph, "igraph")){
+    edges = state_graph %>% igraph::as_data_frame()
+  }else{
+    edges = state_graph
+  }
+
+  #edges = hooke:::distance_to_root(edges)
+  edges = edges %>% dplyr::ungroup()
+
+  node_metadata = hooke:::collect_psg_node_metadata(perturbation_ccm, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
+
+  if (hide_unlinked_nodes){
+    node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
+  }
+
+  if (is.null(edge_weights)){
+    edges = edges %>% select(from, to)
+  }else{
+    edges = edges %>% select(from, to, weight=!!sym(edge_weights))
+  }
+
+  if (is.null(label_edges_by)){
+    edge_info = edges %>% select(from, to)
+  }else{
+    if (is(state_graph, "igraph")){
+      edge_info = state_graph %>% igraph::as_data_frame() %>% select(from, to, label=!!sym(label_edges_by))
+    }else{
+      edge_info = state_graph %>% select(from, to, label=!!sym(label_edges_by))
+    }
+
+    edges = edges %>% left_join(edge_info)
+    #print(edges)
+  }
+
+  earliest_loss_tbl = hooke:::estimate_loss_timing(perturbation_ccm,
+                                                   start_time=start_time,
+                                                   stop_time=stop_time,
+                                                   interval_step = interval_step,
+                                                   interval_col=interval_col,
+                                                   log_abund_detection_thresh=log_abund_detection_thresh,
+                                                   q_val = q_val,
+                                                   ...)
+  #print (earliest_loss_tbl)
+  node_metadata = node_metadata %>% left_join(earliest_loss_tbl, by=c("id" ="cell_group"))
+
+  G = edges %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  if (is.null(igraph::E(G)$label) == FALSE){
+    G_df = igraph::as_data_frame(G)
+    edge_names =  stringr::str_c(G_df$from, G_df$to, sep="~")
+    edge_labels = igraph::E(G)$label
+    names(edge_labels) = edge_names
+    #print(edge_labels)
+    edge_labels = NULL
+  }else{
+    edge_labels=NULL
+  }
+
+  layout_info = hooke:::layout_state_graph(G, node_metadata, edge_labels, weighted=FALSE)
+  gvizl_coords = layout_info$gvizl_coords
+  bezier_df = layout_info$bezier_df
+  if (is.null(edge_weights) == FALSE){
+    bezier_df = left_join(bezier_df, edges)
+    bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
+                                     edge_thickness = edge_size * edge_score)
+  }else{
+    bezier_df$edge_thickness = edge_size
+  }
+
+  g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
+
+  print (g)
+  p <- ggplot() +
+    ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness), data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
+
+  # draw activator edges
+  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
+  #                     data = bezier_df)
+  if (is.null(group_nodes_by) == FALSE){
+
+
+    if (group_outline) {
+      p = p + ggforce::geom_mark_rect(aes(x, y,
+                                          col = group_nodes_by,
+                                          label = group_nodes_by,
+                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                      size=0.5,
+                                      label.fontsize=label_font_size,
+                                      con.linetype=label_conn_linetype,
+                                      data=g)
+    } else {
+      p = p + ggforce::geom_mark_rect(aes(x, y,
+                                          fill = group_nodes_by,
+                                          label = group_nodes_by,
+                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                      size=0,
+                                      label.fontsize=label_font_size,
+                                      con.linetype=label_conn_linetype,
+                                      data=g)
+    }
+
+  }
+
+
+  # if numerical
+
+  p = p + ggnewscale::new_scale_fill() +
+    ggnetwork::geom_nodelabel(data = g,
+                              aes(x, y,
+                                  fill = peak_loss_time,
+                                  label = label_nodes_by),
+                              size = node_size)
+  p = p + scale_fill_stepsn(n.breaks=5, colours = terrain.colors(5)) #+ scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+
+
+
+
+
+  if (is.null(edge_labels) == FALSE) {
+    label_df = layout_info$label_df
+    p = p +  ggnetwork::geom_nodetext(data = label_df,
+                                      aes(x,y, label = label), size=3)
+  }
+
+  p = p + scale_size_identity() +
+    monocle3:::monocle_theme_opts() +
+    ggnetwork::theme_blank() +
+    theme(legend.position=legend_position)
+  return(p)
+}
+
 
 num_extract <- function(string, as_char = TRUE){
 
