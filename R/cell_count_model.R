@@ -51,8 +51,11 @@ setClass("cell_count_model",
                    reduced_model_family = "PLNnetworkfamily",
                    best_reduced_model = "PLNnetworkfit",
                    sparsity = "numeric",
-                   model_aux = "SimpleList")
+                   model_aux = "SimpleList",
+                   bootstrapped_vhat = "matrix")
 )
+
+
 
 
 
@@ -262,6 +265,8 @@ new_cell_count_model <- function(ccs,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
                                  size_factors = NULL,
+                                 num_bootstraps = NULL,
+                                 inception = NULL,
                                  ...) {
 
   if (!is.null(size_factors)) {
@@ -291,7 +296,7 @@ new_cell_count_model <- function(ccs,
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty,...)
+    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
     # TODO: check and validate dimensions of the user-provided penaties
@@ -318,21 +323,24 @@ new_cell_count_model <- function(ccs,
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula
   # created with as.formula (e.g. after pasting).
+
   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                 data=pln_data,
                                                                 control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
                                                                 control_main=list(penalty_weights=initial_penalties,
-                                                                                  trace = ifelse(verbose, 2, 0)),
+                                                                                  trace = ifelse(verbose, 2, 0),
+                                                                                  inception = inception),
                                                                 ...),)
 
 
   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-                                     data=pln_data,
-                                     penalties = reduced_pln_model$penalties,
-                                     control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
-                                     control_main=list(penalty_weights=initial_penalties,
-                                                       trace = ifelse(verbose, 2, 0)),
-                                     ...),)
+                                                               data=pln_data,
+                                                               penalties = reduced_pln_model$penalties,
+                                                               control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                               control_main=list(penalty_weights=initial_penalties,
+                                                                                 trace = ifelse(verbose, 2, 0),
+                                                                                 inception = inception),
+                                                               ...),)
 
   model_frame = model.frame(full_model_formula[-2], pln_data)
   xlevels = .getXlevels(terms(model_frame), model_frame)
@@ -345,6 +353,21 @@ new_cell_count_model <- function(ccs,
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
   best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
+  if (is.null(num_bootstraps)) {
+    bootstrapped_vhat = matrix(, nrow = 1, ncol = 1)
+  } else {
+    bootstrapped_vhat = bootstrap_vhat(ccs,
+                                       full_model_formula_str,
+                                       best_full_model,
+                                       best_reduced_model,
+                                       reduced_pln_model,
+                                       pseudocount,
+                                       initial_penalties,
+                                       pln_min_ratio,
+                                       pln_num_penalties,
+                                       verbose,
+                                       num_bootstraps)
+  }
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
@@ -355,7 +378,8 @@ new_cell_count_model <- function(ccs,
                       best_reduced_model = best_reduced_model,
                       reduced_model_family = reduced_pln_model,
                       sparsity = sparsity_factor,
-                      model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels)
+                      model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels),
+                      bootstrapped_vhat = bootstrapped_vhat
                       )
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
