@@ -17,35 +17,23 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 }
 
 
-#  subsamples the ccs and computes a vhat
-#' @param ccm
-#' @param prop
-#' @param bycol
-
-# subsampled_ccm = function(ccm, prop = 0.8, bycol = TRUE, random.seed = 42) {
-#
-#   set.seed(random.seed)
-#   counts(ccm@ccs) = scuttle::downsampleMatrix(counts(ccm@ccs), prop=prop)
-#
-#   nuisance_model_formula = stringr::str_remove(format(ccm@reduced_model_formula), "Abundance ")
-#   main_model_formula = stringr::str_remove(format(ccm@full_model_formula), "Abundance ")
-#   main_model_formula = substr(main_model_formula, 1, nchar(main_model_formula) - nchar(nuisance_model_formula))
-#   nuisance_model_formula = substr(nuisance_model_formula, 1, nchar(nuisance_model_formula) - nchar("+ offset(log(Offset))"))
-#
-#   sample_ccm = new_cell_count_model(ccm@ccs,
-#                                     main_model_formula_str = main_model_formula,
-#                                     nuisance_model_formula_str = nuisance_model_formula,
-#                                     inception = ccm)
-#
-#
-#   return(sample_ccm)
-# }
-
-subsample_ccs = function(ccs, prop = 0.8, random.seed = 42) {
+bootstrap_ccs = function(ccs, random.seed=NULL) {
+  count_mat = counts(ccs)
+  num_cols = dim(count_mat)[2]
   set.seed(random.seed)
-  counts(ccs) = scuttle::downsampleMatrix(counts(ccs), prop=prop)
+  count_list = lapply(seq(1,num_cols), function(i){
+    counts = count_mat[,i]
+    size = sum(count_mat[,i])
+    prob = counts/size
+    sample_counts = rmultinom(1, size, prob)
+
+  })
+  new_count_mat = do.call(cbind,count_list)
+  colnames(new_count_mat) = colnames(count_mat)
+  counts(ccs) = new_count_mat
   return(ccs)
 }
+
 
 bootstrap_model = function(ccs,
                            full_model_formula_str,
@@ -57,7 +45,7 @@ bootstrap_model = function(ccs,
                            pln_num_penalties,
                            random.seed) {
 
-  sub_ccs = subsample_ccs(ccs, random.seed = random.seed)
+  sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
   sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
                                       covariates = colData(sub_ccs) %>% as.data.frame,
                                       offset = size_factors(sub_ccs))
@@ -106,7 +94,6 @@ bootstrap_vhat = function(ccs,
       as.data.frame() %>%
       rownames_to_column("cell_group")
   })
-
 
   get_cov_mat = function(data, cell_group) {
 
