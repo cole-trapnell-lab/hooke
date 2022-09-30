@@ -16,7 +16,9 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   results
 }
 
-
+#' resamples the ccs counts using a multinomial distribution
+#' @param ccs
+#' @param random.seed
 bootstrap_ccs = function(ccs, random.seed=NULL) {
   count_mat = counts(ccs)
   num_cols = dim(count_mat)[2]
@@ -34,7 +36,16 @@ bootstrap_ccs = function(ccs, random.seed=NULL) {
   return(ccs)
 }
 
-
+#'
+#' @param ccs
+#' @param full_model_formula_str
+#' @param best_full_model
+#' @param reduced_pln_model
+#' @param pseudocount
+#' @param initial_penalties
+#' @param pln_min_ratio
+#' @param pln_num_penalties
+#' @param random.seed
 bootstrap_model = function(ccs,
                            full_model_formula_str,
                            best_full_model,
@@ -45,11 +56,15 @@ bootstrap_model = function(ccs,
                            pln_num_penalties,
                            random.seed) {
 
+  # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
+
+  # remake data from new ccs
   sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
                                       covariates = colData(sub_ccs) %>% as.data.frame,
                                       offset = size_factors(sub_ccs))
-
+  # rerun the model using the same initial parameters
+  # as the original, non bootstrapped model
   sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                            data = sub_pln_data,
                                            penalties = reduced_pln_model$penalties,
@@ -92,9 +107,10 @@ bootstrap_vhat = function(ccs,
     best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
     coef(best_bootstrapped_model) %>%
       as.data.frame() %>%
-      rownames_to_column("cell_group")
+      tibble::rownames_to_column("cell_group")
   })
 
+  # compute the covariance of the parameters
   get_cov_mat = function(data, cell_group) {
 
     cov_matrix = cov(data)
@@ -105,11 +121,11 @@ bootstrap_vhat = function(ccs,
   }
 
   bootstrapped_df = do.call(rbind, bootstraps) %>%
-                group_by(cell_group) %>%
-                tidyr::nest() %>%
-                mutate(cov_mat = purrr::map2(.f = get_cov_mat,
-                                             .x = data,
-                                             .y = cell_group))
+                    group_by(cell_group) %>%
+                    tidyr::nest() %>%
+                    mutate(cov_mat = purrr::map2(.f = get_cov_mat,
+                                                 .x = data,
+                                                 .y = cell_group))
 
   bootstrapped_vhat = Matrix::bdiag(bootstrapped_df$cov_mat) %>% as.matrix()
   names = lapply(bootstrapped_df$cov_mat, function(m){ colnames(m)}) %>% unlist()
@@ -188,8 +204,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
 
   # if it doesn't exist, use orig computation
-  if (is.na(ccm@bootstrapped_vhat)) {
-    v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
+  if (is.na(ccm@bootstrapped_vhat)[[1]]) {
+    v_hat = compute_vhat(ccm)
   } else {
     v_hat = ccm@bootstrapped_vhat
   }
