@@ -229,6 +229,127 @@ new_cell_count_set <- function(cds,
   return (ccs)
 }
 
+#' resamples the ccs counts using a multinomial distribution
+#' @param ccs
+#' @param random.seed
+bootstrap_ccs = function(ccs, random.seed=NULL) {
+  count_mat = counts(ccs)
+  num_cols = dim(count_mat)[2]
+  set.seed(random.seed)
+  count_list = lapply(seq(1,num_cols), function(i){
+    counts = count_mat[,i]
+    size = sum(count_mat[,i])
+    prob = counts/size
+    sample_counts = rmultinom(1, size, prob)
+
+  })
+  new_count_mat = do.call(cbind,count_list)
+  colnames(new_count_mat) = colnames(count_mat)
+  counts(ccs) = new_count_mat
+  return(ccs)
+}
+
+#'
+#' @param ccs
+#' @param full_model_formula_str
+#' @param best_full_model
+#' @param reduced_pln_model
+#' @param pseudocount
+#' @param initial_penalties
+#' @param pln_min_ratio
+#' @param pln_num_penalties
+#' @param random.seed
+bootstrap_model = function(ccs,
+                           full_model_formula_str,
+                           best_full_model,
+                           reduced_pln_model,
+                           pseudocount,
+                           initial_penalties,
+                           pln_min_ratio,
+                           pln_num_penalties,
+                           random.seed) {
+
+  # resample the counts
+  sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
+
+  # remake data from new ccs
+  sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
+                                          covariates = colData(sub_ccs) %>% as.data.frame,
+                                          offset = size_factors(sub_ccs))
+  # rerun the model using the same initial parameters
+  # as the original, non bootstrapped model
+  sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+                                                            data = sub_pln_data,
+                                                            penalties = reduced_pln_model$penalties,
+                                                            control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                            control_main=list(penalty_weights=initial_penalties,
+                                                                              trace = ifelse(FALSE, 2, 0),
+                                                                              inception = best_full_model)))
+
+  return(sub_full_model)
+
+}
+
+
+
+#' computes the avg vhat across n bootstraps
+#' @param ccm
+#' @param num_bootstraps
+bootstrap_vhat = function(ccs,
+                          full_model_formula_str,
+                          best_full_model,
+                          best_reduced_model,
+                          reduced_pln_model,
+                          pseudocount,
+                          initial_penalties,
+                          pln_min_ratio,
+                          pln_num_penalties,
+                          verbose,
+                          num_bootstraps = 2) {
+  # to do: parallelize
+  bootstraps = lapply(seq(1, num_bootstraps), function(i) {
+    bootstrapped_model = bootstrap_model(ccs,
+                                         full_model_formula_str,
+                                         best_full_model,
+                                         reduced_pln_model,
+                                         pseudocount,
+                                         initial_penalties,
+                                         pln_min_ratio,
+                                         pln_num_penalties,
+                                         random.seed = i)
+
+    best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
+    coef(best_bootstrapped_model) %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column("cell_group")
+  })
+
+  # compute the covariance of the parameters
+  get_cov_mat = function(data, cell_group) {
+
+    cov_matrix = cov(data)
+    rownames(cov_matrix) = paste0(cell_group, "_", rownames(cov_matrix))
+    colnames(cov_matrix) = paste0(cell_group, "_", colnames(cov_matrix))
+    return(cov_matrix)
+
+  }
+
+  bootstrapped_df = do.call(rbind, bootstraps) %>%
+    group_by(cell_group) %>%
+    tidyr::nest() %>%
+    mutate(cov_mat = purrr::map2(.f = get_cov_mat,
+                                 .x = data,
+                                 .y = cell_group))
+
+  bootstrapped_vhat = Matrix::bdiag(bootstrapped_df$cov_mat) %>% as.matrix()
+  names = lapply(bootstrapped_df$cov_mat, function(m){ colnames(m)}) %>% unlist()
+  rownames(bootstrapped_vhat) = names
+  colnames(bootstrapped_vhat) = names
+
+
+  return(bootstrapped_vhat)
+}
+
 
 #' Create a new cell_count_model object.
 #'
