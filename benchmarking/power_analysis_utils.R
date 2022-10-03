@@ -234,7 +234,7 @@ simulate <- function(cell_group_wide,
 #'@param cell_type
 #'@param effect_size
 mutate_ccs = function(sim_ccs,
-                      cell_type,
+                      cell_types,
                       effect_size=0) {
 
   sim_count_wide = get_cell_wide(sim_ccs)
@@ -245,7 +245,7 @@ mutate_ccs = function(sim_ccs,
                               values_to = "cells")
 
   sim_count_df = sim_count_df %>%
-                 mutate(cells = ifelse(cell_group == cell_type,
+                 mutate(cells = ifelse(cell_group %in% cell_types,
                                        round(cells * (1-effect_size)),
                                        cells))
 
@@ -367,20 +367,24 @@ combine_simulation <- function(wt_ccs,
 fit_combine_ccm = function(wt_ccs,
                            mt_ccs,
                            ctrl_penalty_matrix = NULL,
-                           model_formula_str = "~ genotype") {
+                           model_formula_str = "~ genotype",
+                           nuisance_model_formula_str = NULL,
+                           num_bootstraps = NULL) {
 
 
   comb_ccs = combine_simulation(wt_ccs, mt_ccs)
 
   comb_ccm = new_cell_count_model(comb_ccs,
                                   main_model_formula_str = model_formula_str,
-                                  penalty_matrix = ctrl_penalty_matrix)
+                                  nuisance_model_formula_str = nuisance_model_formula_str,
+                                  penalty_matrix = ctrl_penalty_matrix,
+                                  num_bootstraps = num_bootstraps)
 
   return(comb_ccm)
 
 }
 
-#'
+#' runs compare abundance between the wt sim and mt sim
 #' @param comb_ccm
 #' @param cell_type
 #' @param q_value_threshold
@@ -395,21 +399,82 @@ sim_comb_abund <- function(ccm,
 
   comp_abund = compare_abundances(ccm, wt_abund, mt_abund)
 
-  comp_abund = comp_abund %>%
-    mutate(delta_log_needed = qnorm(1-q_value_threshold, sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2))) %>%
-    mutate(log_diff = abs(delta_log_abund) - delta_log_needed)
+  # comp_abund = comp_abund %>%
+    # mutate(delta_log_needed = qnorm(1-q_value_threshold, sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2))) %>%
+    # mutate(log_diff = abs(delta_log_abund) - delta_log_needed)
 
-  return(comp_abund %>% filter(cell_group == cell_type))
+  return(comp_abund)
+
+}
+
+#' @param num_groups_perturbed
+#' @param effect_size
+perturb_multiple_cell_types = function(num_groups_perturbed, effect_size, random.seed = 42) {
+
+  set.seed(random.seed)
+
+  cell_types = rownames(ccs)
+
+  cell_types_to_perturb = sample(cell_types, num_groups_perturbed, replace = F)
+
+  ccs = mutate_ccs(ccs, cell_types_to_perturb, effect_size = effect_size)
+
+  return(ccs)
+}
+
+#' @param wt_ccs
+#' @param mt_ccs
+#' @param group_col
+fit_propeller = function(wt_ccs,
+                         mt_ccs,
+                         group_col = "genotype"){
+
+  comb_ccs = combine_simulation(wt_sim_ccs, mut_sim_ccs)
+
+  sample_to_group = colData(comb_ccs) %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("sample") %>%
+    select(sample, !!sym(group_col))
+
+  prop_coldata = counts(comb_ccs) %>%
+    as.data.frame()  %>%
+    tibble::rownames_to_column("cell_group") %>%
+    pivot_longer(-cell_group) %>%
+    uncount(value) %>%
+    dplyr::rename(sample = name, cluster = cell_group) %>%
+    left_join(sample_to_group, by = "sample") %>%
+    dplyr::rename(group = genotype)
+
+  prop_res = propeller(clusters = prop_coldata$cluster,
+                       sample = prop_coldata$sample,
+                       group = prop_coldata$group)
+
+  return(prop_res)
+
+}
+
+
+fit_betabinomial <- function(wt_df,
+                             mt_df) {
+
 
 }
 
 #' @param which_sim
 #' @param wt_sim
 #' @param mt_sim
+#' @param all_cell_types
+#' @param num_bootstraps
 run_simulation = function(which_sim,
                           wt_sim,
                           mut_sim,
-                          effects = c(0.01, 0.1, 0.25, 0.5, 0.75)) {
+                          cell_types_to_perturb = NULL,
+                          num_bootstraps = NULL,
+                          method = c("hooke", "bb", "propeller"),
+                          effects = c(0.01, 0.1, 0.25, 0.5, 0.75),
+                          random.seed = 42) {
+
+  set.seed(random.seed)
 
   wt_df = wt_sim %>% dplyr::filter(sim == which_sim)
   mut_df = mut_sim %>% dplyr::filter(sim == which_sim)
@@ -417,25 +482,315 @@ run_simulation = function(which_sim,
   wt_sim_ccs = sim_df_to_ccs(wt_df)
   mut_sim_ccs = sim_df_to_ccs(mut_df)
 
-  df = expand.grid("cell_type" = unique(wt_df$cell_type),
-                   "effect_size" = effects) %>%
-    mutate(mutated_sim_ccs = purrr::map2(.f = purrr::possibly(mutate_ccs, NA_character_),
-                                         .x = cell_type,
-                                         .y = effect_size,
-                                         sim_ccs = mut_sim_ccs)) %>%
-    mutate(comb_ccm_sim = purrr::map(.f = purrr::possibly(fit_combine_ccm, NA_character_),
-                                     .x = mutated_sim_ccs,
-                                     wt_ccs = wt_sim_ccs,
-                                     ctrl_penalty_matrix = ctrl_penalty_matrix)) %>%
-    mutate(comb_abund_sim = purrr::map2(.f = purrr::possibly(sim_comb_abund, NA_character_),
-                                        .x = comb_ccm_sim,
-                                        .y = cell_type))
-  df_unnest = df %>%
-    as.data.frame %>%
-    select(-comb_ccm_sim) %>%
-    tidyr::unnest(c(comb_abund_sim))
+  if (is.null(cell_types_to_perturb)) {
+    cell_types_to_perturb =  unique(wt_df$cell_type)
+  }
+
+  df = expand.grid("cell_type" = cell_types_to_perturb,
+                   "effect_size" = effects)
+
+
+  if (method == "hooke") {
+
+    df = df %>%
+      mutate(mutated_sim_ccs = purrr::map2(.f = purrr::possibly(mutate_ccs, NA_character_),
+                                           .x = cell_type,
+                                           .y = effect_size,
+                                           sim_ccs = mut_sim_ccs))
+
+    df = df %>%
+      mutate(comb_ccm_sim = purrr::map(.f = fit_combine_ccm,
+                                      # .f = purrr::possibly(fit_combine_ccm, NA_character_),
+                                       .x = mutated_sim_ccs,
+                                       wt_ccs = wt_sim_ccs,
+                                       model_formula_str = "~ genotype",
+                                       ctrl_penalty_matrix = ctrl_penalty_matrix,
+                                       num_bootstraps = num_bootstraps))
+
+    df = df %>% mutate(comb_abund_sim = purrr::map2(.f = purrr::possibly(sim_comb_abund, NA_character_),
+                                                    .x = comb_ccm_sim,
+                                                    .y = cell_type))
+    df_unnest = df %>%
+      as.data.frame %>%
+      select(-c(comb_ccm_sim, mutated_sim_ccs)) %>%
+      tidyr::unnest(c(comb_abund_sim)) %>%
+      mutate(method = method)
+
+  } else if (method == "bb") {
+
+
+    df = df %>% mutate(fit_bb = purrr::map2(.f = beta_binom_test,
+                                            .x = cell_type,
+                                            .y = effect_size,
+                                            wt_df = wt_df,
+                                            mut_df = mut_df))
+
+    df_unnest  = df %>%
+      as.data.frame %>%
+      select(-cell_type) %>%
+      tidyr::unnest(c(fit_bb)) %>%
+      mutate(method = method)
+
+  } else if (method == "propeller") {
+
+    df = df %>%
+      mutate(mutated_sim_ccs = purrr::map2(.f = purrr::possibly(mutate_ccs, NA_character_),
+                                           .x = cell_type,
+                                           .y = effect_size,
+                                           sim_ccs = mut_sim_ccs))
+
+    df = df %>%
+      mutate(prop_res = purrr::map(.f = purrr::possibly(fit_propeller, NA_character_),
+                                   .x = mutated_sim_ccs,
+                                   wt_ccs = wt_sim_ccs,
+                                   group_col = "genotype"))
+
+    df_unnest = df %>%
+      as.data.frame() %>%
+      select(-mutated_sim_ccs) %>%
+      tidyr::unnest(c(prop_res)) %>%
+      mutate(cell_group = BaselineProp.clusters) %>%
+      mutate(method = method)
+
+  }
+
+
+  # where cell type is the cell that was mutated
+  # cell group is the effect size of that cell group
 
   return(df_unnest)
 
 }
 
+
+
+beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
+
+  # only edit the 1 cell type
+  adj_df = mut_df %>% mutate(cells = ifelse(cell_type == which_type,
+                                            round(cells * (1-effect_size)),
+                                            cells))
+
+  comb_df = rbind(wt_df, adj_df) %>%
+    mutate(genotype = forcats::fct_relevel(genotype, c(unique(wt_df$genotype))))
+
+  all_cell_types = unique(comb_df$cell_type)
+
+  run_bb = function(df, x) {
+    df = df %>% filter(cell_type == x)
+    df$cells = as.integer(df$cells)
+    df$total_cells = as.integer(df$total_cells)
+    count_df = cbind(df$cells, df$total_cells - df$cells)
+    fit = vglm(count_df ~ genotype, data = df, family = betabinomial, trace = F)
+    fit_df = tidy.vglm(fit)[3,]
+    fit_df
+  }
+
+  # cell type is the cell that is perturbed
+  test_res =  data.frame("cell_type" = which_type,
+                         "cell_group" = all_cell_types) %>%
+    mutate(bb.fit = purrr::map(.f = purrr::possibly(run_bb, NA_character_),
+                               .x = cell_group,
+                               df = comb_df))
+
+
+  test_res %>% tidyr::unnest(c(bb.fit))
+
+}
+
+# BB
+
+binom_effect = function(wt_df, mut_df, which_type = 1, effect_vec = c(0.01, 0.1, 0.25, 0.5, 0.75)){
+  test_res = lapply(effect_vec,
+                    FUN = function(x) {
+
+                      # filter for cell type
+                      wt_df = wt_df %>% filter(cell_type == which_type)
+                      head(wt_df)
+                      mut_df = mut_df %>% filter(cell_type == which_type)
+                      head(mut_df)
+
+                      # adjust mutant data
+                      adj_df = mut_df %>% mutate(cells = round(cells * (1-x)))
+
+                      # combine and run test
+
+                      comb_df = rbind(wt_df, adj_df) %>%
+                        mutate(genotype = forcats::fct_relevel(genotype, c(unique(wt_df$genotype))))
+
+                      comb_df$cells = as.integer(comb_df$cells)
+                      comb_df$total_cells = as.integer(comb_df$total_cells)
+
+                      count_df = cbind(comb_df$cells, comb_df$total_cells - comb_df$cells)
+                      fit = vglm(count_df ~ genotype, data = comb_df, family = betabinomial, trace = F)
+                      fit_df = tidy.vglm(fit)[3,]})
+  test_res
+}
+
+
+
+
+binom_type = function(wt_df,
+                      mut_df,
+                      type_vec = type_vec,
+                      effect_vec = effect_vec,
+                      which_sim = 1) {
+
+  wt_df = wt_df %>% dplyr::filter(sim == which_sim)
+  mut_df = mut_df %>% dplyr::filter(sim == which_sim)
+  celltype_res = lapply(type_vec, function(x){
+    print(x)
+    res = binom_effect(wt_df = wt_df, mut_df = mut_df, which_type = x, effect_vec = effect_vec)
+    names(res) = effect_vec
+    res.bind = do.call(rbind, res)
+    res.bind$effect_size = row.names(res.bind)
+    res.bind$cell_type = x
+    res.bind
+  })
+  celltype_res
+}
+
+tidy.vglm = function(x, conf.int=FALSE, conf.level=0.95) {
+  co <- as.data.frame(coef(summary(x)))
+  names(co) <- c("estimate","std.error","statistic","p.value")
+  if (conf.int) {
+    qq <- qnorm((1+conf.level)/2)
+    co <- transform(co,
+                    conf.low=estimate-qq*std.error,
+                    conf.high=estimate+qq*std.error)
+  }
+  co <- data.frame(term=rownames(co),co)
+  rownames(co) <- NULL
+  return(co)
+}
+
+compare_abundance = function(cell_df, wt_df){
+  comb_df = rbind(as.data.frame(cell_df), as.data.frame(wt_df)) %>%
+    mutate(genotype = fct_relevel(genotype, c(unique(wt_df$genotype))))
+
+  cell.types = unique(comb_df$cell_type)
+
+  test_res = sapply(cell.types,
+                    FUN = function(x) {
+                      type_df = comb_df %>% filter(cell_type == x)
+                      count_df = cbind(type_df$cells, type_df$total_cells - type_df$cells)
+                      fit =  VGAM::vglm(count_df ~ genotype, data = type_df, family = "betabinomial", trace = F)
+                      fit_df = tidy.vglm(fit)[3,]}, USE.NAMES = T, simplify = F)
+
+  test_res = do.call(rbind, test_res)
+  test_res = test_res %>% tibble::rownames_to_column(var = "cell_group")
+  test_res %>% arrange(desc(estimate))
+}
+
+
+downsample_umis = function(cds, prop, bycol = FALSE) {
+  counts(cds) = downsampleMatrix(counts(cds), prop = prop, bycol=bycol)
+  cds = estimate_size_factors(cds)
+  return(cds)
+}
+
+total_umi = function(cds) {
+  colData(cds)$totalUMI <- Matrix::colSums(exprs(cds))
+  return(cds)
+}
+
+downsample_cell_types = function(cds, prop, colname = "cell_type_broad", random.seed = 42) {
+  set.seed(random.seed)
+  cell_types = colData(cds)[[colname]] %>% unique()
+  num_cell_types = cell_types %>% length()
+  sampled_cell_types = sample(cell_types, size = round(num_cell_types*prop), replace = F)
+  cds = cds[,colData(cds)[[colname]] %in% sampled_cell_types]
+  return(cds)
+}
+
+downsample_counts <- function(ccs, prop=0.8) {
+  counts(ccs) = scuttle::downsampleMatrix(counts(ccs), prop=prop)
+  return(ccs)
+}
+
+read_result_files <- function(result_files, result_dir) {
+
+  res_df = lapply(result_files, function(f){
+
+    f = gsub(f, pattern = ".csv", replacement = "")
+    string_split = stringr::str_split(f, pattern = "_|-") %>% unlist()
+    which_sim = string_split[4]
+    embryo_size = string_split[7]
+    cell_grouping = paste0("cell_type_", string_split[10])
+    prop_ct = string_split[13]
+
+    data.table::fread(paste0(result_dir, f, ".csv"), sep = ",", stringsAsFactors = F, data.table = F, na.strings = "") %>%
+      mutate("which_sim" = which_sim, "embryo_size" = embryo_size, "prop_ct" = prop_ct, "cell_grouping" = cell_grouping)
+
+  }) %>% bind_rows()
+
+  return(res_df)
+}
+
+
+prepare_res_df <- function(res_df, wt_sim_props) {
+  sims = seq(1, 10, 1)
+  emb_interval = 5
+  embs = sims*emb_interval
+
+  props = wt_sim_props %>%
+    mutate(cell_type = paste0("cell_type_", cell_type)) %>%
+    group_by(cell_type) %>%
+    mutate(ct_means = mean(cell_prop)) %>%
+    distinct(cell_type, ct_means)
+
+  res_df = res_df %>%
+    left_join(props, by = "cell_type") %>%
+    mutate(cell_type_prop = paste("prop_", round(ct_means, 3), sep = ""))
+
+  # order cell types by proportion and reset levels for plotting
+  ct_order = res_df %>%
+    select(cell_type_prop, ct_means) %>%
+    arrange(-ct_means) %>%
+    distinct(cell_type_prop) %>%
+    pull(cell_type_prop)
+
+  res_df = res_df %>%
+    left_join(data.frame("which_sim" = as.character(sims), "emb_num" = embs), by = "which_sim")
+
+  res_df$cell_type_prop = factor(res_df$cell_type_prop, levels = ct_order)
+  res_df = res_df %>%
+    mutate(is_sig = case_when(delta_p_value < 0.05 ~ TRUE,
+                              delta_p_value > 0.05 ~ FALSE))
+
+  num_cell_counts = res_df %>%
+    group_by(emb_num, effect_size, embryo_size, prop_ct, which_sim, cell_group) %>%
+    tally() %>%
+    group_by(prop_ct, embryo_size) %>% summarise("num_cell_types" = mean(n))
+
+  res_df = left_join(res_df, num_cell_counts, by = c("prop_ct", "embryo_size"))
+
+  res_df$embryo_size = factor(res_df$embryo_size,
+                              levels = unique(res_df$embryo_size) %>% as.numeric %>% sort() %>% as.character())
+  return(res_df)
+}
+
+
+calculate_TPR <- function(res_df) {
+
+  sum_df = res_df %>%
+    filter(!is.na(cell_group)) %>% # idk why this is here
+    mutate(type = case_when(
+      (cell_type == cell_group) & (delta_p_value < q_value_threshold) ~ "TP",
+      (cell_type == cell_group) & (delta_p_value >= q_value_threshold) ~ "FN",
+      (cell_type != cell_group) & (delta_p_value < q_value_threshold) ~ "FP",
+      (cell_type != cell_group) & (delta_p_value >= q_value_threshold) ~ "TN",
+    )) %>%
+    # group_by(cell_type, type) %>%
+    group_by(cell_type, effect_size, embryo_size, emb_num, which_sim, prop_ct, type) %>%
+    tally() %>%
+    pivot_wider(names_from = type, values_from = n) %>%
+    dplyr::union_all(dplyr::tibble(TP = integer(), FP = integer(),
+                                   TN = integer(), FN = integer())) %>%
+    replace(is.na(.), 0) %>%
+    mutate(TPR = TP / (TP + FN),
+           FPR = FP / (FP + TN))
+
+  return(sum_df)
+
+}
