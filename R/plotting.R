@@ -978,6 +978,7 @@ plot_state_graph_annotations <- function(ccm,
                                          fract_expr = 0.0,
                                          mean_expr = 0.0,
                                          unlabeled_groups = c("Unknown"),
+                                         label_groups=TRUE,
                                          hide_unlinked_nodes=TRUE,
                                          label_font_size=6,
                                          label_conn_linetype="dotted",
@@ -1052,8 +1053,6 @@ plot_state_graph_annotations <- function(ccm,
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
-
-
     if (group_outline) {
       p = p + ggforce::geom_mark_rect(aes(x, y,
                                           col = group_nodes_by,
@@ -1064,53 +1063,98 @@ plot_state_graph_annotations <- function(ccm,
                                       con.linetype=label_conn_linetype,
                                       data=g)
     } else {
-      p = p + ggforce::geom_mark_rect(aes(x, y,
-                                          fill = group_nodes_by,
-                                          label = group_nodes_by,
-                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                      size=0,
-                                      label.fontsize=label_font_size,
-                                      con.linetype=label_conn_linetype,
-                                      data=g)
+      if (label_groups){
+        p = p + ggforce::geom_mark_rect(aes(x, y,
+                                            fill = group_nodes_by,
+                                            label = group_nodes_by,
+                                            filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                        size=0,
+                                        expand = unit(2, "mm"),
+                                        label.buffer=unit(1, "mm"),
+                                        radius = unit(1.5, "mm"),
+                                        label.margin = margin(1, 1, 1, 1, "mm"),
+                                        label.fontsize=label_font_size,
+                                        label.fontface="plain",
+                                        con.linetype=label_conn_linetype,
+                                        data=g)
+      }else{
+        p = p + ggforce::geom_mark_rect(aes(x, y,
+                                            fill = group_nodes_by,
+                                            filter = group_nodes_by %in% unlabeled_groups == FALSE),
+                                        size=0,
+                                        label.fontsize=label_font_size,
+                                        con.linetype=label_conn_linetype,
+                                        data=g)
+      }
+
     }
 
   }
 
   if (is.null(color_nodes_by) == FALSE) {
+    if (is.null(label_nodes_by) == FALSE){
+      # if numerical
+      if (is.numeric(g[[color_nodes_by]])) {
+        p = p + ggnewscale::new_scale_fill() +
+          ggnetwork::geom_nodelabel(data = g,
+                                    aes(x, y,
+                                        fill = !!sym(color_nodes_by),
+                                        label = label_nodes_by),
+                                    size = node_size) +
+          labs(fill = color_nodes_by)
+        p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+      }
+      else {
+        # if categorical
+        p = p + ggnetwork::geom_nodelabel(data = g,
+                                          aes(x, y,
+                                              fill = color_nodes_by,
+                                              label = label_nodes_by),
+                                          size = node_size) +
+          labs(fill = color_nodes_by)
 
-    # if numerical
-    if (is.numeric(g[[color_nodes_by]])) {
-      p = p + ggnewscale::new_scale_fill() +
-        ggnetwork::geom_nodelabel(data = g,
-                                  aes(x, y,
-                                      fill = !!sym(color_nodes_by),
-                                      label = label_nodes_by),
-                                  size = node_size) +
-        labs(fill = color_nodes_by)
-      p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
-    }
-    else {
-      # if categorical
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y,
-                                            fill = color_nodes_by,
-                                            label = label_nodes_by),
-                                        size = node_size) +
-        labs(fill = color_nodes_by)
-
+      }
+    }else{
+      # if numerical
+      if (is.numeric(g[[color_nodes_by]])) {
+        p = p + ggnewscale::new_scale_fill() +
+          ggnetwork::geom_nodes(data = g,
+                                    aes(x, y,
+                                        color = !!sym(color_nodes_by)),
+                                    size = node_size) +
+          labs(color = color_nodes_by)
+        p = p + scale_color_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+      }
+      else {
+        # if categorical
+        p = p + ggnetwork::geom_nodes(data = g,
+                                          aes(x, y,
+                                              color = color_nodes_by),
+                                          size = node_size) +
+          labs(color = color_nodes_by)
+      }
     }
 
   } else {
+    if (is.null(label_nodes_by) == FALSE){
     p = p + ggnetwork::geom_nodelabel(data = g,
                                       aes(x, y, xend = xend, yend = yend,
                                           label = label_nodes_by),
                                       size = node_size)
+    }else{
+      p = p + ggnetwork::geom_nodes(data = g,
+                                        aes(x, y, xend = xend, yend = yend),
+                                        size = node_size)
+    }
   }
 
   if (is.null(edge_labels) == FALSE) {
     label_df = layout_info$label_df
-    p = p +  ggnetwork::geom_nodetext(data = label_df,
-                                      aes(x,y, label = label), size=3)
+    #p = p +  ggnetwork::geom_nodetext(data = label_df,
+    #                                  aes(x,y, label = label))
+    p = p + geom_text(data = label_df,
+                      aes(x,y, label = label),
+                      size=2)
   }
 
   p = p + scale_size_identity() +
