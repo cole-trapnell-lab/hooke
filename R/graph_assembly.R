@@ -608,7 +608,7 @@ measure_time_delta_along_path <- function(path_df, ccs, interval_col="timepoint"
 
   cells_along_path_df$y = cells_along_path_df[[interval_col]]
 
-  path_model = lm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
+  path_model = speedglm::speedlm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
 
   path_model_tidied = broom::tidy(path_model)
   path_model_glanced = broom::glance(path_model)
@@ -657,7 +657,7 @@ measure_perturbation_freq_along_path <- function(path_df, ccs, perturbation_col=
   cells_along_path_df$perturb = cells_along_path_df[[perturbation_col]]
   cells_along_path_df$timepoint = cells_along_path_df[[interval_col]]
 
-  path_model = glm(#perturb ~ timepoint + geodesic_dist,
+  path_model = speedglm::speedglm(#perturb ~ timepoint + geodesic_dist,
     perturb ~ geodesic_dist,
                    data=cells_along_path_df,
                    weights=cells_along_path_df$num_cells,
@@ -677,7 +677,7 @@ measure_perturbation_freq_along_path <- function(path_df, ccs, perturbation_col=
   #   print (summary(path_model))
   # }
 
-  if (path_model$converged == FALSE | path_model$boundary == TRUE | unlist(path_model_glanced[1, "pseudo.r.squared"]) < 0)
+  if (path_model$convergence == FALSE | unlist(path_model_glanced[1, "pseudo.r.squared"]) < 0)
   {
     return(tibble(perturb_dist_effect = 0,
                   perturb_dist_effect_pval = 1,

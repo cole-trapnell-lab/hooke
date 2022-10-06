@@ -74,7 +74,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #stopifnot(nrow(newdata) == 1)
   newdata$Offset = 1
 
-  base_X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
+  model_terms = terms(ccm@model_aux[["model_frame"]])
+  base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
                          xlev = ccm@model_aux[["xlevels"]])
 
 
