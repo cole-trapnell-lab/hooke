@@ -60,6 +60,8 @@ simulate_seq <- function(cell_count_wide,
                          sim_range = 10,
                          size = 1000) {
 
+  set.seed(random_seed)
+
   sims = seq(1, sim_range, 1)
 
   if (is.null(embryo_dim)) {
@@ -67,7 +69,7 @@ simulate_seq <- function(cell_count_wide,
   }
 
   all_dat = lapply(sims, function(x){
-    dsim <- VGAM::simulate.vlm(dfit, nsim = x)
+    dsim <- VGAM::simulate.vlm(dfit, nsim = x, seed = random_seed)
     aaa <- array(unlist(dsim), c(embryo_dim*x, ncol(fitted(dfit)), x))
     aaa = aaa[,,1]
   })
@@ -85,7 +87,9 @@ simulate_seq <- function(cell_count_wide,
 
   cell_totals = colSums(cell_count_wide)
   my.sd = sd(cell_totals)
-  sim.total.cells = round(rnorm(length(unique(sim_props$embryo_unq)), mean = size, sd = my.sd))
+  # this was giving negative numbers for really low counts
+  # sim.total.cells = round(rnorm(n = length(unique(sim_props$embryo_unq)), mean = size, sd = my.sd))
+  sim.total.cells = rpois(length(unique(sim_props$embryo_unq)), size)
   tot_df = data.frame(unique(sim_props$embryo_unq), sim.total.cells, stringsAsFactors = F)
   colnames(tot_df) = c('embryo_unq', 'total_cells')
   sim_count_df = sim_props %>%
@@ -266,7 +270,7 @@ mutate_ccs = function(sim_ccs,
   # now turn it back into a cell count ccs
   mt_ccs = methods::new("cell_count_set",
                         cell_count_cds,
-                        cds=cell_count_cds)
+                        cds = cell_count_cds)
 
   return(mt_ccs)
 }
@@ -429,7 +433,7 @@ fit_propeller = function(wt_ccs,
                          mt_ccs,
                          group_col = "genotype"){
 
-  comb_ccs = combine_simulation(wt_sim_ccs, mut_sim_ccs)
+  comb_ccs = combine_simulation(wt_ccs, mt_ccs)
 
   sample_to_group = colData(comb_ccs) %>%
     as.data.frame() %>%
@@ -437,6 +441,7 @@ fit_propeller = function(wt_ccs,
     select(sample, !!sym(group_col))
 
   prop_coldata = counts(comb_ccs) %>%
+    as.matrix %>%
     as.data.frame()  %>%
     tibble::rownames_to_column("cell_group") %>%
     pivot_longer(-cell_group) %>%
@@ -552,6 +557,8 @@ run_simulation = function(which_sim,
       mutate(cell_group = BaselineProp.clusters) %>%
       mutate(method = method)
 
+  } else if (method == "louvain") {
+
   }
 
 
@@ -562,6 +569,22 @@ run_simulation = function(which_sim,
 
 }
 
+
+
+
+# louvain + glm
+
+# louvain_glm <- function() {
+#
+#   louvain.model <- model.matrix(~Condition, data=test.meta)
+#   louvain.count <- as.matrix(table(sim.clust.merge$Louvain.Clust, sim.clust.merge$Sample))
+#   louvain.dge <- DGEList(counts=louvain.count, lib.size=log(colSums(louvain.count)))
+#   louvain.dge <- estimateDisp(louvain.dge, louvain.model)
+#   louvain.fit <- glmQLFit(louvain.dge, louvain.model, robust=TRUE)
+#   louvain.res <- as.data.frame(topTags(glmQLFTest(louvain.fit, coef=2), sort.by='none', n=Inf))
+#   table(louvain.res$FDR <= 0.1)
+#
+# }
 
 
 beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
@@ -597,6 +620,8 @@ beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
   test_res %>% tidyr::unnest(c(bb.fit))
 
 }
+
+
 
 # BB
 
@@ -792,5 +817,26 @@ calculate_TPR <- function(res_df) {
            FPR = FP / (FP + TN))
 
   return(sum_df)
+
+}
+
+
+calc_tpr = function(df, q_value_threshold) {
+
+  df  %>%
+    mutate(type = case_when(
+      (cell_type == as.character(cell_group)) & (p.value < q_value_threshold) ~ "TP",
+      (cell_type == as.character(cell_group)) & (p.value >= q_value_threshold) ~ "FN",
+      (cell_type != as.character(cell_group)) & (p.value < q_value_threshold) ~ "FP",
+      (cell_type != as.character(cell_group)) & (p.value >= q_value_threshold) ~ "TN",
+    )) %>%
+    group_by(cell_type, type, effect_size, embryo_size, method) %>%
+    tally() %>%
+    pivot_wider(names_from = type, values_from = n) %>%
+    dplyr::union_all(dplyr::tibble(TP = integer(), FP = integer(),
+                                   TN = integer(), FN = integer())) %>%
+    replace(is.na(.), 0) %>%
+    mutate(TPR = TP / (TP + FN),
+           FPR = FP / (FP + TN)) %>% replace(is.na(.), 0) %>% as.data.frame()
 
 }
