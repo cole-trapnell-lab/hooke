@@ -608,7 +608,7 @@ measure_time_delta_along_path <- function(path_df, ccs, interval_col="timepoint"
 
   cells_along_path_df$y = cells_along_path_df[[interval_col]]
 
-  path_model = speedglm::speedlm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
+  path_model = lm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
 
   path_model_tidied = broom::tidy(path_model)
   path_model_glanced = broom::glance(path_model)
@@ -1983,11 +1983,13 @@ assess_support_for_transition_graph <- function(control_timeseries_ccm,
 
   edge_support_labels = path_score_tbl %>%
     ungroup () %>%
+    arrange(desc(perturb_model_path_score)) %>%
     dplyr::select(from, to, perturb_name)  %>%
     group_by(from, to) %>%
     distinct() %>%
     summarize(edge_name = stringr::str_c(from, to, sep="~"),
-              label=paste0(perturb_name, collapse = "\n"))
+              label=ifelse(n() > 3, paste0(c(perturb_name[1:3], paste("+", n()-3, " more", sep="")), collapse = "\n"),
+                           paste0(perturb_name, collapse = "\n")))
 
   #print (edge_support_labels)
   edge_support_summary = edge_support_summary %>% left_join(edge_support_labels)
