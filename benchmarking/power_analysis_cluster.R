@@ -43,15 +43,13 @@ parser$add_argument("--num_groups_perturbed", type = "integer", default = 1,
 parser$add_argument("--num_bootstraps", type = "integer", default = 0,
                     help = "how times to bootstrap vhat")
 
+parser$add_argument("--run_bb", type = "boolean", default = T)
 
-# parser$add_argument("--emb_num", type = "integer", default = 8,
-#                     help = "how many embryos for each condition")
-#
-# parser$add_argument("--num_celL_types", type = "integer", default = 85,
-#                     help = "the number of cell types")
-#
-# parser$add_argument("--make_batch_effect", type = "character", default = "no",
-#                     help = "should synthetic batch effects be added? (yes/no)")
+parser$add_argument("--run_hooke", type = "boolean", default = T)
+
+parser$add_argument("--run_hooke_boot", type = "boolean", default = T)
+
+parser$add_argument("--run_propeller", type = "boolean", default = F)
 
 
 args <- parser$parse_args()
@@ -64,8 +62,11 @@ prop_umi <- args$prop_umi
 prop_cell_type <- args$prop_cell_type
 cell_group <- args$cell_group
 num_groups_perturbed <- args$num_groups_perturbed
+run_propeller <- args$run_propeller
+run_hooke <- args$run_hooke
+run_bb <- args$run_bb
+run_hooke_boot <- args$run_hooke_boot
 num_bootstraps <- args$num_bootstraps
-
 
 set.seed(seed)
 
@@ -81,7 +82,6 @@ if (is.null(prop_umi) == FALSE) {
 if (is.null(prop_cell_type) == FALSE) {
   cds = downsample_cell_types(cds, prop = prop_cell_type)
 }
-
 
 
 # 1. make a ccs
@@ -161,76 +161,86 @@ if (method == "compare") {
 
   # run the hooke version
 
-  sim_hooke_df = run_simulation(which_sim,
-                                wt_sim,
-                                mut_sim,
-                                cell_types_to_perturb = cell_types,
-                                effects = effect_list,
-                                method = "hooke",
-                                random.seed = seed)
+  if (run_hooke) {
+    sim_hooke_df = run_simulation(which_sim,
+                                  wt_sim,
+                                  mut_sim,
+                                  cell_types_to_perturb = cell_types,
+                                  effects = effect_list,
+                                  method = "hooke",
+                                  random.seed = seed)
 
-  sim_hooke_df %>%
-    fwrite(file = paste0(outdir,
-                         "simulation_which_sim_", which_sim,
-                         "-embryo_size_", embryo_size,
-                         "-method_", "hooke",
-                         ifelse(is.null(seed), "",paste0("-seed_", seed)),
-                         ".csv"), sep = ",")
+    sim_hooke_df %>%
+      fwrite(file = paste0(outdir,
+                           "simulation_which_sim_", which_sim,
+                           "-embryo_size_", embryo_size,
+                           "-method_", "hooke",
+                           ifelse(is.null(seed), "",paste0("-seed_", seed)),
+                           ".csv"), sep = ",")
+  }
+
+  if (run_hooke_boot) {
+    sim_hooke_boot_df = run_simulation(which_sim,
+                                       wt_sim,
+                                       mut_sim,
+                                       cell_types_to_perturb = cell_types,
+                                       effects = effect_list,
+                                       method = "hooke",
+                                       num_bootstraps = 10,
+                                       random.seed = seed)
+    sim_hooke_boot_df %>%
+      fwrite(file = paste0(outdir,
+                           "simulation_which_sim_", which_sim,
+                           "-embryo_size_", embryo_size,
+                           "-method_", "hooke",
+                           ifelse(is.null(num_bootstraps), "",paste0("-num-bootstraps_", num_bootstraps)),
+                           ifelse(is.null(seed), "",paste0("-seed_", seed)),
+                           ".csv"), sep = ",")
+  }
+
+  if (run_propeller) {
+    # # run the propeller version
+    sim_prop_df = run_simulation(which_sim,
+                                 wt_sim,
+                                 mut_sim,
+                                 cell_types_to_perturb = cell_types,
+                                 effects = effect_list,
+                                 method = "propeller",
+                                 random.seed = seed)
 
 
-  sim_hooke_boot_df = run_simulation(which_sim,
-                                    wt_sim,
-                                    mut_sim,
-                                    cell_types_to_perturb = cell_types,
-                                    effects = effect_list,
-                                    method = "hooke",
-                                    num_bootstraps = 10,
-                                    random.seed = seed)
-  sim_hooke_boot_df %>%
-    fwrite(file = paste0(outdir,
-                         "simulation_which_sim_", which_sim,
-                         "-embryo_size_", embryo_size,
-                         "-method_", "hooke",
-                         ifelse(is.null(num_bootstraps), "",paste0("-num-bootstraps_", num_bootstraps)),
-                         ifelse(is.null(seed), "",paste0("-seed_", seed)),
-                         ".csv"), sep = ",")
+    sim_prop_df %>%
+      fwrite(file = paste0(outdir,
+                           "simulation_which_sim_", which_sim,
+                           "-embryo_size_", embryo_size,
+                           "-method_", "propeller",
+                           ifelse(is.null(seed), "",paste0("-seed_", seed)),
+                           ".csv"), sep = ",")
+  }
+
+  if (run_bb){
+    # run bb
+    sim_bb_df = run_simulation(which_sim,
+                               wt_sim,
+                               mut_sim,
+                               cell_types_to_perturb = cell_types,
+                               effects = effect_list,
+                               method = "bb",
+                               random.seed = seed)
+
+    sim_bb_df %>%
+      fwrite(file = paste0(outdir,
+                           "simulation_which_sim_", which_sim,
+                           "-embryo_size_", embryo_size,
+                           "-method_", "bb",
+                           ifelse(is.null(num_bootstraps), "",paste0("-num-bootstraps_", num_bootstraps)),
+                           ifelse(is.null(seed), "",paste0("-seed_", seed)),
+                           ".csv"), sep = ",")
+
+  }
 
 
-  # # run the propeller version
-  # sim_prop_df = run_simulation(which_sim,
-  #                              wt_sim,
-  #                              mut_sim,
-  #                              cell_types_to_perturb = cell_types,
-  #                              effects = effect_list,
-  #                              method = "propeller",
-  #                              random.seed = seed)
-  #
-  #
-  # sim_prop_df %>%
-  #   fwrite(file = paste0(outdir,
-  #                        "simulation_which_sim_", which_sim,
-  #                        "-embryo_size_", embryo_size,
-  #                        "-method_", "propeller",
-  #                        ifelse(is.null(seed), "",paste0("-seed_", seed)),
-  #                        ".csv"), sep = ",")
 
-  # run bb
-  sim_bb_df = run_simulation(which_sim,
-                             wt_sim,
-                             mut_sim,
-                             cell_types_to_perturb = cell_types,
-                             effects = effect_list,
-                             method = "bb",
-                             random.seed = seed)
-
-  sim_bb_df %>%
-    fwrite(file = paste0(outdir,
-                         "simulation_which_sim_", which_sim,
-                         "-embryo_size_", embryo_size,
-                         "-method_", "bb",
-                         ifelse(is.null(num_bootstraps), "",paste0("-num-bootstraps_", num_bootstraps)),
-                         ifelse(is.null(seed), "",paste0("-seed_", seed)),
-                         ".csv"), sep = ",")
 
 } else if (method == "all_cell_types") {
 
@@ -281,22 +291,22 @@ if (method == "compare") {
 
 
   # run the propeller version
-  # sim_prop_df = run_simulation(which_sim,
-  #                              wt_sim,
-  #                              mut_sim,
-  #                              cell_types_to_perturb = NULL,
-  #                              effects = effect_list,
-  #                              method = "propeller",
-  #                              random.seed = seed)
-  #
-  #
-  # sim_prop_df %>%
-  #   fwrite(file = paste0(outdir,
-  #                        "simulation_which_sim_", which_sim,
-  #                        "-embryo_size_", embryo_size,
-  #                        "-method_", "propeller",
-  #                        ifelse(is.null(seed), "",paste0("-seed_", seed)),
-  #                        ".csv"), sep = ",")
+  sim_prop_df = run_simulation(which_sim,
+                               wt_sim,
+                               mut_sim,
+                               cell_types_to_perturb = NULL,
+                               effects = effect_list,
+                               method = "propeller",
+                               random.seed = seed)
+
+
+  sim_prop_df %>%
+    fwrite(file = paste0(outdir,
+                         "simulation_which_sim_", which_sim,
+                         "-embryo_size_", embryo_size,
+                         "-method_", "propeller",
+                         ifelse(is.null(seed), "",paste0("-seed_", seed)),
+                         ".csv"), sep = ",")
 
   # run bb
   sim_bb_df = run_simulation(which_sim,

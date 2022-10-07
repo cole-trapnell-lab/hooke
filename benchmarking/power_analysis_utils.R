@@ -823,6 +823,17 @@ calculate_TPR <- function(res_df) {
 
 calc_tpr = function(df, q_value_threshold) {
 
+  missing_values = df %>%
+    group_by(cell_type, embryo_size, rep, method) %>%
+    tally() %>%
+    pivot_wider(values_from = n, names_from = method) %>%
+    replace(is.na(.), 0) %>%
+    mutate_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), ~.-87) %>%
+    ungroup %>%
+    group_by(cell_type, embryo_size) %>%
+    summarise_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), sum) %>%
+    pivot_longer(-c(cell_type, embryo_size), values_to = "missing", names_to = "method")
+
   df  %>%
     mutate(type = case_when(
       (cell_type == as.character(cell_group)) & (p.value < q_value_threshold) ~ "TP",
@@ -836,7 +847,10 @@ calc_tpr = function(df, q_value_threshold) {
     dplyr::union_all(dplyr::tibble(TP = integer(), FP = integer(),
                                    TN = integer(), FN = integer())) %>%
     replace(is.na(.), 0) %>%
+    left_join(missing_values, by = c("cell_type", "embryo_size", "method")) %>%
+    mutate(FN = FN - missing) %>% select(-missing) %>%
     mutate(TPR = TP / (TP + FN),
-           FPR = FP / (FP + TN)) %>% replace(is.na(.), 0) %>% as.data.frame()
+           FPR = FP / (FP + TN)) %>%
+    replace(is.na(.), 0) %>% as.data.frame()
 
 }
