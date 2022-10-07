@@ -980,9 +980,11 @@ plot_state_graph_annotations <- function(ccm,
                                          unlabeled_groups = c("Unknown"),
                                          label_groups=TRUE,
                                          hide_unlinked_nodes=TRUE,
-                                         label_font_size=6,
+                                         group_label_font_size=6,
+                                         edge_label_font_size=2,
                                          label_conn_linetype="dotted",
                                          legend_position = "none",
+                                         con_colour = "darkgrey",
                                          group_outline=FALSE)
 {
 
@@ -1047,7 +1049,7 @@ plot_state_graph_annotations <- function(ccm,
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
   p <- ggplot() +
-    ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness), data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
+    ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
 
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
@@ -1059,8 +1061,9 @@ plot_state_graph_annotations <- function(ccm,
                                           label = group_nodes_by,
                                           filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                       size=0.5,
-                                      label.fontsize=label_font_size,
+                                      label.fontsize=group_label_font_size,
                                       con.linetype=label_conn_linetype,
+                                      con.colour=con_colour,
                                       data=g)
     } else {
       if (label_groups){
@@ -1073,17 +1076,19 @@ plot_state_graph_annotations <- function(ccm,
                                         label.buffer=unit(1, "mm"),
                                         radius = unit(1.5, "mm"),
                                         label.margin = margin(1, 1, 1, 1, "mm"),
-                                        label.fontsize=label_font_size,
+                                        label.fontsize=group_label_font_size,
                                         label.fontface="plain",
                                         con.linetype=label_conn_linetype,
+                                        con.colour=con_colour,
                                         data=g)
       }else{
         p = p + ggforce::geom_mark_rect(aes(x, y,
                                             fill = group_nodes_by,
                                             filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                         size=0,
-                                        label.fontsize=label_font_size,
+                                        label.fontsize=group_label_font_size,
                                         con.linetype=label_conn_linetype,
+                                        con.colour=con_colour,
                                         data=g)
       }
 
@@ -1154,7 +1159,7 @@ plot_state_graph_annotations <- function(ccm,
     #                                  aes(x,y, label = label))
     p = p + geom_text(data = label_df,
                       aes(x,y, label = label),
-                      size=2)
+                      size=edge_label_font_size)
   }
 
   p = p + scale_size_identity() +
