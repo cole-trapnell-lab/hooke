@@ -382,6 +382,91 @@ plot_top_regulators = function(regulator_df, cds, group_label_size=2, resid_std_
 }
 
 
+# Calculate the probability vector
+makeprobsvec <- function(p) {
+  phat <- p/sum(p)
+  phat[is.na(phat)] = 0
+  phat
+}
+
+# Calculate the probability matrix for a relative abundance matrix
+makeprobs <- function(a) {
+  colSums<-apply(a,2,sum)
+  b <- Matrix::t(Matrix::t(a)/colSums)
+  b[is.na(b)] = 0
+  b
+}
+
+# Calculate the Shannon entropy based on the probability vector
+# shannon.entropy <- function(p) {
+#   if (min(p) < 0 || (p) <=0)
+#     return(Inf)
+#   p.norm <- p[p>0]/sum(p)
+#   -sum(log2(p.norm)*p.norm)
+# }
+
+shannon_entropy <- function(p) {
+  #if (Matrix::rowMin(p) < 0 || (p) <=0)
+  #  return(Inf)
+  p.norm <- p / Matrix::rowSums(p)
+  lg_pnorm = log2(p.norm) * p.norm
+  lg_pnorm[p.norm == 0] = 0
+  SE = -Matrix::rowSums(lg_pnorm)
+  return (SE)
+}
+
+# Calculate the Jensen-Shannon distance for two probability distribution
+js_dist_to_pattern <- function (x, pattern)
+{
+  stopifnot(ncol(x) == length(pattern))
+  avg_x_pattern = sweep(x, 2, pattern, "+") / 2
+
+  JSdiv = shannon_entropy(avg_x_pattern) -
+    (shannon_entropy(x) + shannon_entropy(matrix(pattern, nrow=1))) * 0.5
+  JSdiv[is.infinite(JSdiv)] = 1
+  JSdiv[JSdiv < 0] = 0
+  JSdist <- sqrt(JSdiv)
+  pattern_match_score = 1 - JSdist
+  return(pattern_match_score)
+}
+
+score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_graph, estimate_matrix, state_term="cell_group", cores=1){
+
+  parents = get_parents(state_graph, cell_state) #igraph::neighbors(state_graph, cell_state, mode="in")
+  parents = intersect(parents, colnames(estimate_matrix))
+
+  children = get_children(state_graph, cell_state)#igraph::neighbors(state_graph, cell_state, mode="out")
+  children = intersect(children, colnames(estimate_matrix))
+
+  siblings = get_siblings(state_graph, cell_state)#igraph::neighbors(state_graph, parents, mode="out")
+  siblings = intersect(siblings, colnames(estimate_matrix))
+
+  #states_in_contrast = c(cell_state, parents, children, siblings) %>% unique()
+
+  expr_df = tibble(gene_id=row.names(estimate_matrix))
+
+
+  self_and_parent = exp(estimate_matrix[gene_patterns$gene_id, c(cell_state, parents), drop=FALSE])
+  self_parent_sibs = exp(estimate_matrix[gene_patterns$gene_id, c(cell_state, parents, siblings), drop=FALSE])
+
+  num_parents = length(parents)
+  num_siblings = length(siblings)
+  gene_patterns_and_scores = gene_patterns %>%
+    tidyr::unnest(interpretation) %>%
+    #group_by(interpretation) %>%
+    mutate(pattern_match_score =
+             case_when(interpretation %in% c("Absent") ~ 0,
+                       interpretation %in% c("Maintained") ~ js_dist_to_pattern(self_and_parent,c(1, rep(1, num_parents))),
+                       interpretation %in% c("Selectively maintained", "Specifically maintained") ~ js_dist_to_pattern(self_parent_sibs, c(1, rep(1, num_parents), rep(0, num_siblings))),
+                       interpretation %in% c("Upregulated", "Activated") ~ js_dist_to_pattern(self_and_parent, c(1, rep(0, num_parents))),
+                       interpretation %in% c("Selectively upregulated", "Specifically upregulated", "Selectively activated", "Specifically activated") ~ js_dist_to_pattern(self_parent_sibs, c(1, rep(0, num_parents), rep(0, num_siblings))),
+                       interpretation %in% c("Downregulated", "Dectivated") ~ js_dist_to_pattern(self_and_parent, c(0, rep(1, num_parents))),
+                       interpretation %in% c("Selectively downregulated", "Specifically downregulated", "Selectively deactivated", "Specifically deactivated") ~ js_dist_to_pattern(self_parent_sibs, c(0, rep(1, num_parents), rep(0, num_siblings))),
+                       TRUE ~ 0)
+           )
+  return(gene_patterns_and_scores)
+}
+
 
 classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matrix, stderr_matrix, state_term="cell_group", log_fc_thresh=1, abs_expr_thresh = 1e-3, sig_thresh=0.05, cores=1){
   #expr_self = expr_mat[,cell_state]
@@ -772,6 +857,15 @@ classify_genes_over_graph <- function(ccm,
       sig_thresh=sig_thresh,
       cores=cores))
 
+  cell_states = cell_states %>%
+    filter(is.na(gene_classes) == FALSE) %>%
+    dplyr::mutate(gene_class_scores = purrr::map2(.f = purrr::possibly(
+      score_genes_for_expression_pattern, NA_real_),
+      .x = cell_state,
+      .y = gene_classes,
+      state_graph,
+      estimate_matrix))
+  return(cell_states)
 }
 
 #' get the parent(s) of a state in a state transition graph
