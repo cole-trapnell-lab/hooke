@@ -858,10 +858,13 @@ collect_psg_node_metadata <- function(ccm,
   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   node_metadata = tibble(id=cell_groups)
 
+  metadata_cols = c(color_nodes_by,
+                    group_nodes_by)
+  if (is.null(label_nodes_by) == FALSE && label_nodes_by != "cell_group")
+    metadata_cols = c(metadata_cols, label_nodes_by)
+
   #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = colData(ccm@ccs@cds)[,c(color_nodes_by,
-                                                label_nodes_by,
-                                                group_nodes_by), drop=F] %>%
+  cell_group_metadata = colData(ccm@ccs@cds)[,metadata_cols, drop=F] %>%
     as.data.frame
   cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
 
@@ -882,11 +885,12 @@ collect_psg_node_metadata <- function(ccm,
     node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
   }
   if (is.null(label_nodes_by) == FALSE){
-    label_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(label_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
+    label_by_metadata = cell_group_metadata[,c("cell_group", label_nodes_by), drop=F]
     colnames(label_by_metadata) = c("cell_group", "label_nodes_by")
+    label_by_metadata = label_by_metadata %>%
+      as.data.frame %>%
+      count(cell_group, label_nodes_by) %>%
+      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
     node_metadata = left_join(node_metadata, label_by_metadata, by=c("id"="cell_group"))
   }else{
     node_metadata$label_nodes_by = node_metadata$id
