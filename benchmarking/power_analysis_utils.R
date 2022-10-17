@@ -524,7 +524,7 @@ run_simulation = function(which_sim,
   } else if (method == "bb") {
 
 
-    df = df %>% mutate(fit_bb = purrr::map2(.f = beta_binom_test,
+    df = df %>% mutate(fit_bb = purrr::map2(.f = purrr::possibly(beta_binom_test, NA_character_),
                                             .x = cell_type,
                                             .y = effect_size,
                                             wt_df = wt_df,
@@ -617,7 +617,7 @@ beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
                                df = comb_df))
 
 
-  test_res %>% tidyr::unnest(c(bb.fit))
+  test_res %>% filter(!is.na(bb.fit)) %>% tidyr::unnest(c(bb.fit))
 
 }
 
@@ -823,16 +823,17 @@ calculate_TPR <- function(res_df) {
 
 calc_tpr = function(df, q_value_threshold) {
 
-  missing_values = df %>%
-    group_by(cell_type, embryo_size, rep, method) %>%
-    tally() %>%
-    pivot_wider(values_from = n, names_from = method) %>%
-    replace(is.na(.), 0) %>%
-    mutate_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), ~.-87) %>%
-    ungroup %>%
-    group_by(cell_type, embryo_size) %>%
-    summarise_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), sum) %>%
-    pivot_longer(-c(cell_type, embryo_size), values_to = "missing", names_to = "method")
+  # missing_values =
+  # df %>%
+  #   group_by(cell_type, embryo_size, rep, method) %>%
+  #   tally() %>%
+  #   pivot_wider(values_from = n, names_from = method) %>%
+  #   replace(is.na(.), 0) #%>%
+  #   mutate_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), ~.-87) %>%
+  #   ungroup %>%
+  #   group_by(cell_type, embryo_size) %>%
+  #   summarise_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), sum) %>%
+  #   pivot_longer(-c(cell_type, embryo_size), values_to = "missing", names_to = "method")
 
   df  %>%
     mutate(type = case_when(
@@ -840,6 +841,8 @@ calc_tpr = function(df, q_value_threshold) {
       (cell_type == as.character(cell_group)) & (p.value >= q_value_threshold) ~ "FN",
       (cell_type != as.character(cell_group)) & (p.value < q_value_threshold) ~ "FP",
       (cell_type != as.character(cell_group)) & (p.value >= q_value_threshold) ~ "TN",
+      (cell_type == as.character(cell_group)) & (is.na(p.value)) ~ "FN",
+      (cell_type != as.character(cell_group)) & (is.na(p.value)) ~ "TN"
     )) %>%
     group_by(cell_type, type, effect_size, embryo_size, method) %>%
     tally() %>%
@@ -847,8 +850,8 @@ calc_tpr = function(df, q_value_threshold) {
     dplyr::union_all(dplyr::tibble(TP = integer(), FP = integer(),
                                    TN = integer(), FN = integer())) %>%
     replace(is.na(.), 0) %>%
-    left_join(missing_values, by = c("cell_type", "embryo_size", "method")) %>%
-    mutate(FN = FN - missing) %>% select(-missing) %>%
+    # left_join(missing_values, by = c("cell_type", "embryo_size", "method")) %>%
+    # mutate(FN = FN - missing) %>% select(-missing) %>%
     mutate(TPR = TP / (TP + FN),
            FPR = FP / (FP + TN)) %>%
     replace(is.na(.), 0) %>% as.data.frame()
