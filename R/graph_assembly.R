@@ -496,90 +496,6 @@ get_perturbation_paths <- function(perturbation_ccm,
 }
 
 
-assess_graph_for_perturbation_support <- function(perturbation_ccm,
-                                                  time_window,
-                                                         pathfinding_graph,
-                                                         interval_step,
-                                                         interval_col,
-                                                         log_abund_detection_thresh,
-                                                         q_val,
-                                                         ...){
-
-  start_time = min(time_window$start_time)
-  stop_time = min(time_window$stop_time)
-
-  earliest_loss_tbl = hooke:::estimate_loss_timing(perturbation_ccm,
-                                                   start_time=start_time,
-                                                   stop_time=stop_time,
-                                                   interval_step = interval_step,
-                                                   interval_col=interval_col,
-                                                   log_abund_detection_thresh=log_abund_detection_thresh,
-                                                   q_val = q_val,
-                                                   ...)
-
-  pathfinding_graph_as_df = igraph::as_data_frame(pathfinding_graph)
-
-  #dplyr::rename(log_abund_x,
-  #              to_delta_log_abund = delta_log_abund)
-  pathfinding_graph_as_df = dplyr::left_join(pathfinding_graph_as_df, earliest_loss_tbl %>% setNames(paste0('from_', names(.))), by=c("from"="from_cell_group"))# %>%
-  pathfinding_graph_as_df = dplyr::left_join(pathfinding_graph_as_df, earliest_loss_tbl %>% setNames(paste0('to_', names(.))), by=c("to"="to_cell_group")) #%>%
-
-  #  dplyr::rename(from_delta_log_abund = delta_log_abund)
-  pathfinding_graph_as_df = pathfinding_graph_as_df %>% mutate_if(is.numeric, coalesce, -Inf)
-
-  print ("Here's the key pathfinding info")
-  #print (pathfinding_graph_as_df)
-
-  #pathfinding_graph_as_df %>% select (from, to, from_earliest_time, from_latest_time, to_earliest_time, to_latest_time) %>% print(n=1000)
-  #
-
-  # Include edges (from, to) where to is not lost before from:
-  #pathfinding_graph_as_df = pathfinding_graph_as_df %>%
-    #filter(!(to_earliest_time < from_earliest_time))
-
-
-  # We DO WANT "from lost before to" - this is consistent with the edge direction
-  # We DO NOT WANT "to lost before from" - this violates the edge direction
-  pathfinding_graph_as_df = pathfinding_graph_as_df %>%
-    mutate(to_lost = is.finite(to_earliest_time),
-           from_lost = is.finite(from_earliest_time),
-           to_lost_within_window = to_lost & to_earliest_time > start_time,
-           from_lost_within_window = from_lost & from_earliest_time > start_time,
-           from_lost_before_to = from_lost & to_lost & from_earliest_time < to_earliest_time,
-           to_lost_before_from = to_lost & to_earliest_time < from_earliest_time) # this case also covers when to is lost but from is not. Also bad.
-
-  # pathfinding_graph_as_df = pathfinding_graph_as_df %>%
-  #   mutate(conflicts_with_perturb = to_lost_before_from,
-  #          supported_by_perturb = from_lost_before_to)
-
-  pathfinding_graph_as_df = pathfinding_graph_as_df %>%
-    mutate(conflicts_with_perturb = to_lost_before_from,
-           supported_by_perturb = from_lost_before_to)
-
-  #pathfinding_graph_as_df %>% print (n=1000)
-
-  # If for edge (from, to) from is lost, include the edge if from is lost at or after that :
-  #pathfinding_graph_as_df = pathfinding_graph_as_df %>%
-  #  filter(from_lost_before_to & !to_lost_before_from)
-
-
-  print (pathfinding_graph_as_df)
-
-  pathfinding_graph_revised = pathfinding_graph_as_df %>%
-    igraph::graph_from_data_frame(directed=TRUE,  vertices=data.frame(id=igraph::V(pathfinding_graph)$name))
-  #plot_state_graph_annotations(tbx16_ccm, xxx_pathfinding_graph_revised, group_nodes_by="cell_type", edge_size=2, hide_unlinked_nodes=F)
-
-
-
-  #if (require_presence_at_all_timepoints){
-  #pathfinding_graph = igraph::intersection(pathfinding_graph,
-  #                                         edges_between_concurrent_states %>%
-  #                                         igraph::graph_from_data_frame(directed=TRUE, vertices=node_metadata))
-  #}
-  return (pathfinding_graph_revised)
-}
-
-
 # 2) Make sure this graph is acyclic by deleting problematic edges
 # from https://github.com/sachsmc/causaloptim/blob/master/R/graph-utilities.R
 
@@ -608,20 +524,22 @@ find_cycles = function(g) {
 #' score a path based on fitting a linear model of time ~ geodeisic distance
 #' @param ccs
 #' @param path_df
-measure_time_delta_along_path <- function(path_df, ccs, interval_col="timepoint") {
+measure_time_delta_along_path <- function(path_df, ccs, cells_along_path_df, interval_col="timepoint") {
 
 
   #cds = ccs@cds
   vertices = union(path_df$to, path_df$from) %>% unique()
   path_df = path_df %>% arrange(distance_from_root) %>% mutate(geodesic_dist = cumsum(weight))
 
-  cells_along_path_df = normalized_counts(ccs, "size_only", pseudocount = 0)[vertices,] %>%
-    as.matrix() %>%
-    Matrix::t() %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column() %>%
-    tidyr::pivot_longer(!matches("rowname")) %>%
-    rename(sample=rowname, cell_group=name, num_cells=value)
+  cells_along_path_df = cells_along_path_df %>% filter(cell_group %in% vertices)
+
+  # cells_along_path_df = normalized_counts(ccs, "size_only", pseudocount = 0)[vertices,] %>%
+  #   as.matrix() %>%
+  #   Matrix::t() %>%
+  #   as.data.frame() %>%
+  #   tibble::rownames_to_column() %>%
+  #   tidyr::pivot_longer(!matches("rowname")) %>%
+  #   rename(sample=rowname, cell_group=name, num_cells=value)
 
   cells_along_path_df = cells_along_path_df %>%
     left_join(colData(ccs) %>% as.data.frame %>%
@@ -637,7 +555,7 @@ measure_time_delta_along_path <- function(path_df, ccs, interval_col="timepoint"
 
   cells_along_path_df$y = cells_along_path_df[[interval_col]]
 
-  path_model = lm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
+  path_model = speedglm::speedlm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
 
   path_model_tidied = broom::tidy(path_model)
   path_model_glanced = broom::glance(path_model)
@@ -654,20 +572,14 @@ measure_time_delta_along_path <- function(path_df, ccs, interval_col="timepoint"
 #' score a path based on fitting a linear model of perturbation ~ geodesic distance
 #' @param ccs
 #' @param path_df
-measure_perturbation_freq_along_path <- function(path_df, ccs, perturbation_col="knockout", interval_col="timepoint") {
+measure_perturbation_freq_along_path <- function(path_df, ccs, cells_along_path_df, perturbation_col="knockout", interval_col="timepoint") {
 
 
   #cds = ccs@cds
   vertices = union(path_df$to, path_df$from) %>% unique()
   path_df = path_df %>% arrange(distance_from_root) %>% mutate(geodesic_dist = cumsum(weight))
 
-  cells_along_path_df = normalized_counts(ccs, "size_only", pseudocount = 0)[vertices,] %>%
-    as.matrix() %>%
-    Matrix::t() %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column() %>%
-    tidyr::pivot_longer(!matches("rowname")) %>%
-    rename(sample=rowname, cell_group=name, num_cells=value)
+  cells_along_path_df = cells_along_path_df %>% filter(cell_group %in% vertices)
 
   cells_along_path_df = cells_along_path_df %>%
     left_join(colData(ccs) %>% as.data.frame %>%
@@ -748,6 +660,7 @@ build_timeseries_transition_graph <- function(ccm,
 
   timepoints = seq(start_time, stop_time, interval_step)
 
+  message("Estimating abundances over time interval")
   timepoint_pred_df = estimate_abundances_over_interval(ccm, start_time, stop_time, interval_col=interval_col, interval_step=interval_step, ...)
 
   select_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
@@ -759,6 +672,7 @@ build_timeseries_transition_graph <- function(ccm,
   time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
     filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
 
+  message(paste("Comparing abundances at",  dim(time_contrasts), "timepoints"))
   relevant_comparisons = time_contrasts %>%
     mutate(comp_abund = purrr::map2(.f = select_timepoints,
                                     .x = t1,
@@ -768,6 +682,8 @@ build_timeseries_transition_graph <- function(ccm,
     mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
                                   .x = comp_abund,
                                   ccm = ccm))
+
+  message(paste("Finding reciprocal pairs"))
   relevant_comparisons = relevant_comparisons %>%
     tidyr::unnest(rec_edges) %>%
     #dplyr::filter(pcor < 0) %>% # do we just want negative again?
@@ -778,27 +694,35 @@ build_timeseries_transition_graph <- function(ccm,
   edge_union = relevant_comparisons %>% select(from, to) %>% distinct()
 
 
-  #print ("finding shortest paths...")
+  print (paste("finding shortest paths between ", nrow(edge_union), "pairs of nodes"))
   #print(head(relevant_comparisons))
   paths_for_relevant_edges = edge_union %>%
     mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
                               .x = from, .y = to,
                               pathfinding_graph))
 
+  cells_along_path_df = normalized_counts(ccm@ccs, "size_only", pseudocount = 0) %>%
+    as.matrix() %>%
+    Matrix::t() %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column() %>%
+    tidyr::pivot_longer(!matches("rowname")) %>%
+    rename(sample=rowname, cell_group=name, num_cells=value)
 
-  #print ("scoring paths for time flow...")
+  print ("scoring paths for time flow...")
   #print(head(paths_for_relevant_edges))
   paths_for_relevant_edges = paths_for_relevant_edges %>%
     filter(!is.na(path)) %>%
     mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
                                                      .x = path,
                                                      ccs=ccm@ccs,
+                                                     cells_along_path_df=cells_along_path_df,
                                                      interval_col=interval_col)) %>%
     tidyr::unnest(time_vs_distance_model_stats)
   #cells_along_path(ccs, paths_for_relevant_edges$path[[1]] %>% dplyr::select(from, to))
 
 
-  #print ("tabulating model stats...")
+  print ("tabulating model stats...")
   #print(head(paths_for_relevant_edges))
   paths_for_relevant_edges = paths_for_relevant_edges %>% mutate(#time_dist_model_score = time_dist_effect * time_dist_model_adj_rsq,
     time_dist_model_score = time_dist_model_ncells * time_dist_model_adj_rsq,
@@ -818,6 +742,7 @@ build_timeseries_transition_graph <- function(ccm,
 
   #G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = FALSE)
 
+  print ("combining paths...")
   G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = TRUE)
 
   if (make_dag){
@@ -829,6 +754,7 @@ build_timeseries_transition_graph <- function(ccm,
 
     print (igraph::edge_attr(G, "support"))
 
+    print ("breaking cycles...")
     G = hooke:::break_cycles_in_state_transition_graph(G)
 
     G = compute_min_path_cover(ccm, G, weight_attribute="support")
@@ -907,12 +833,21 @@ get_paths_between_recip_time_nodes <- function(ccm,
 
   #paths_between_recip_time_nodes %>% filter (from == "15") %>% print
 
+  cells_along_path_df = normalized_counts(ccm@ccs, "size_only", pseudocount = 0) %>%
+    as.matrix() %>%
+    Matrix::t() %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column() %>%
+    tidyr::pivot_longer(!matches("rowname")) %>%
+    rename(sample=rowname, cell_group=name, num_cells=value)
+
   # Score each shortest path for correlation between time and distance along it
   paths_between_recip_time_nodes = paths_between_recip_time_nodes %>%
     filter(!is.na(path)) %>%
     mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
                                                      .x = path,
                                                      ccs=ccm@ccs,
+                                                     cells_along_path_df=cells_along_path_df,
                                                      interval_col=interval_col)) %>%
     tidyr::unnest(time_vs_distance_model_stats)
 
@@ -978,36 +913,46 @@ get_timeseries_paths <- function(ccm,
 
 select_paths_from_pathfinding_graph <- function(pathfinding_graph, selected_paths, allow_cycles=FALSE)
 {
-  G = pathfinding_graph
-  G = igraph::delete_edges(G, igraph::E(G))
 
-  for (i in (1:nrow(selected_paths))){
-    next_path = selected_paths$path[[i]] %>% select(from, to)
-    next_path_graph = next_path %>% igraph::graph_from_data_frame(directed=TRUE)
-    G_prime = igraph::union(G, next_path_graph)
-    if (allow_cycles | length(find_cycles(G_prime)) == 0){
-      G = G_prime
-    }else{
-      # Debug:
-      #print ("skipping due to cycle:")
-      #print (selected_paths[i,] %>% select(-path))
-    }
-  }
-  igraph::E(G)$transcriptome_dist = igraph::E(pathfinding_graph)[igraph::E(G)]$weight
-
-  #print (selected_paths)
   support_tbl= selected_paths %>% dplyr::select(path_contrast, path_score, path) %>% tidyr::unnest(path)
+  G = igraph::graph_from_data_frame(support_tbl %>% select(from, to) %>% distinct(), vertices=data.frame(id=igraph::V(pathfinding_graph)$name))
   edge_support_summary = support_tbl %>% group_by(from, to) %>% dplyr::select(from, to, path_score, path_contrast)  %>%
-    distinct() %>% summarize(support=sum(path_score))
-
+     distinct() %>% summarize(support=sum(path_score))
   edge_support_summary = edge_support_summary %>% mutate(support = ifelse(is.na(support), 0, support))
-  #print (edge_support_summary %>% as.data.frame)
-
-  #annotated_G = igraph::as_data_frame(G) %>% as_tibble %>% dplyr::select(from, to) %>% left_join(edge_support)
   annotated_G = igraph::as_data_frame(G) %>% as_tibble %>% dplyr::select(from, to) %>% distinct() %>% left_join(edge_support_summary)
   annotated_G = igraph::graph_from_data_frame(annotated_G, directed=TRUE, vertices=data.frame(id=igraph::V(G)$name))
-
   return (annotated_G)
+
+  # G = pathfinding_graph
+  # G = igraph::delete_edges(G, igraph::E(G))
+  #
+  # for (i in (1:nrow(selected_paths))){
+  #   next_path = selected_paths$path[[i]] %>% select(from, to)
+  #   next_path_graph = next_path %>% igraph::graph_from_data_frame(directed=TRUE)
+  #   G_prime = igraph::union(G, next_path_graph)
+  #   if (allow_cycles | length(find_cycles(G_prime)) == 0){
+  #     G = G_prime
+  #   }else{
+  #     # Debug:
+  #     #print ("skipping due to cycle:")
+  #     #print (selected_paths[i,] %>% select(-path))
+  #   }
+  # }
+  # igraph::E(G)$transcriptome_dist = igraph::E(pathfinding_graph)[igraph::E(G)]$weight
+  #
+  # #print (selected_paths)
+  # support_tbl= selected_paths %>% dplyr::select(path_contrast, path_score, path) %>% tidyr::unnest(path)
+  # edge_support_summary = support_tbl %>% group_by(from, to) %>% dplyr::select(from, to, path_score, path_contrast)  %>%
+  #   distinct() %>% summarize(support=sum(path_score))
+  #
+  # edge_support_summary = edge_support_summary %>% mutate(support = ifelse(is.na(support), 0, support))
+  # #print (edge_support_summary %>% as.data.frame)
+  #
+  # #annotated_G = igraph::as_data_frame(G) %>% as_tibble %>% dplyr::select(from, to) %>% left_join(edge_support)
+  # annotated_G = igraph::as_data_frame(G) %>% as_tibble %>% dplyr::select(from, to) %>% distinct() %>% left_join(edge_support_summary)
+  # annotated_G = igraph::graph_from_data_frame(annotated_G, directed=TRUE, vertices=data.frame(id=igraph::V(G)$name))
+  #
+  # return (annotated_G)
 }
 
 #' Break cycles in a state graph
@@ -1055,12 +1000,21 @@ score_paths_for_perturbations <- function(perturbation_ccm, paths_between_recip_
   #print (perturb_model_pcor_graph)
   #print (paths_between_recip_time_nodes)
 
+  cells_along_path_df = normalized_counts(perturbation_ccm@ccs, "size_only", pseudocount = 0) %>%
+    as.matrix() %>%
+    Matrix::t() %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column() %>%
+    tidyr::pivot_longer(!matches("rowname")) %>%
+    rename(sample=rowname, cell_group=name, num_cells=value)
+
   paths_between_perturb_vs_wt_node_pairs = paths_between_recip_time_nodes %>%
     filter(!is.na(path)) %>%
     #mutate(pcor_between_node_pair =  get_pcor_between_pair(perturb_model_pcor_matrix, from, to)) %>%
     mutate(perturb_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_perturbation_freq_along_path, NA_character_),
                                                         .x = path,
                                                         ccs=perturbation_ccm@ccs,
+                                                        cells_along_path_df=cells_along_path_df,
                                                         perturbation_col=perturbation_col,
                                                         interval_col=interval_col)) %>%
     filter(!is.na(perturb_vs_distance_model_stats)) %>%
@@ -1424,6 +1378,7 @@ assemble_timeseries_transitions <- function(ccm,
                                             links_between_components=c("none", "strongest-pcor", "strong-pcor"),
                                             ...){
 
+  message("Determining extant cell types")
   extant_cell_type_df = get_extant_cell_types(ccm,
                                               start_time,
                                               stop_time,
@@ -1436,6 +1391,7 @@ assemble_timeseries_transitions <- function(ccm,
   # that we will find shortest paths over this graph between destination states and their plausible
   # origin states, then choose the best origins for each destination.
 
+  message("initializing pathfinding graph")
   pathfinding_graph = init_pathfinding_graph(ccm,
                                              extant_cell_type_df,
                                              links_between_components=links_between_components)
@@ -1462,230 +1418,6 @@ assemble_timeseries_transitions <- function(ccm,
 
   return(G)
 }
-
-#' assemble a state transition graph from a timeseries
-#' @export
-assemble_perturbation_transitions <- function(ccm,
-                                              q_val=0.01,
-                                              start_time = NULL,
-                                              stop_time = NULL,
-                                              perturbation_col="knockout",
-                                              interval_col="timepoint",
-                                              interval_step = 2,
-                                              min_interval = 4,
-                                              max_interval = 24,
-                                              log_abund_detection_thresh=-5,
-                                              percent_max_threshold=0,
-                                              weigh_by_pcor = F,
-                                              ...){
-
-  # Get a table of the cell types that are in the control
-  # FIXME: "knockout" is hard coded and should be a user-defined term in the model
-  extant_cell_type_df = get_extant_cell_types(ccm,
-                                              start_time,
-                                              stop_time,
-                                              interval_col=interval_col,
-                                              percent_max_threshold=percent_max_threshold,
-                                              log_abund_detection_thresh=log_abund_detection_thresh,
-                                              perturbation_col=perturbation_col,
-                                              knockout=FALSE,
-                                              ...)
-
-  # Now let's set up a directed graph that links the states between which cells *could* directly
-  # transition. If we don't know the direction of flow, add edges in both directions. The idea is
-  # that we will find shortest paths over this graph between destination states and their plausible
-  # origin states, then choose the best origins for each destination.
-
-  pathfinding_graph = init_pathfinding_graph(ccm, extant_cell_type_df)
-  pathfinding_graph = assess_graph_for_perturbation_support(ccm,
-                                                                   pathfinding_graph,
-                                                                   start_time,
-                                                                   stop_time,
-                                                                   interval_step=interval_step,
-                                                                   interval_col=interval_col,
-                                                                   percent_max_threshold=percent_max_threshold,
-                                                                   log_abund_detection_thresh=log_abund_detection_thresh,
-                                                                   q_val=q_val,
-                                                                   #perturbation_col=perturbation_col,
-                                                                   ...)
-
-
-  return(pathfinding_graph)
-
-  # G = build_timeseries_transition_dag(ccm,
-  #                                     extant_cell_type_df,
-  #                                     pathfinding_graph,
-  #                                     q_val,
-  #                                     start_time,
-  #                                     stop_time,
-  #                                     interval_col,
-  #                                     interval_step,
-  #                                     min_interval,
-  #                                     max_interval,
-  #                                     min_dist_vs_time_r_sq,
-  #                                     knockout=FALSE,
-  #                                     ...)
-  #
-  # igraph::V(G)$cell_group = ccm@ccs@info$cell_group
-
-  return(G)
-
-  # G = build_perturbation_transition_dag(ccm,
-  #                                       extant_cell_type_df,
-  #                                       pathfinding_graph,
-  #                                       q_val,
-  #                                       start_time,
-  #                                       stop_time,
-  #                                       perturbation_col,
-  #                                       interval_col,
-  #                                       interval_step,
-  #                                       min_interval,
-  #                                       max_interval,
-  #                                       min_dist_vs_time_r_sq,
-  #                                       ...)
-  #
-  # covered_G = compute_min_path_cover(ccm, G, "support")
-  #
-  # igraph::V(covered_G)$cell_group = ccm@ccs@info$cell_group
-
-  return(covered_G)
-}
-
-#' #' assemble a state transition graph from a set of perturbations
-#' #' @export
-#' assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
-#'                                                          perturbation_ccm_tbl,
-#'                                                          q_val=0.01,
-#'                                                          start_time = NULL,
-#'                                                          stop_time = NULL,
-#'                                                          perturbation_col="knockout",
-#'                                                          interval_col="timepoint",
-#'                                                          interval_step = 2,
-#'                                                          min_interval = 4,
-#'                                                          max_interval = 24,
-#'                                                          log_abund_detection_thresh=-5,
-#'                                                          percent_max_threshold=0,
-#'                                                          ...)
-#' {
-#'
-#'   # Get a table of the cell types that are in the control
-#'   # FIXME: "knockout" is hard coded and should be a user-defined term in the model
-#'   extant_cell_type_df = get_extant_cell_types(control_timeseries_ccm,
-#'                                               start_time,
-#'                                               stop_time,
-#'                                               interval_col=interval_col,
-#'                                               percent_max_threshold=percent_max_threshold,
-#'                                               log_abund_detection_thresh=log_abund_detection_thresh,
-#'                                               perturbation_col=perturbation_col,
-#'                                               knockout=FALSE,
-#'                                               ...)
-#'
-#'   # Now let's set up a directed graph that links the states between which cells *could* directly
-#'   # transition. If we don't know the direction of flow, add edges in both directions. The idea is
-#'   # that we will find shortest paths over this graph between destination states and their plausible
-#'   # origin states, then choose the best origins for each destination.
-#'
-#'   pathfinding_graph = init_pathfinding_graph(control_timeseries_ccm, extant_cell_type_df)
-#'
-#'   perturbation_ccm_tbl = perturbation_ccm_tbl %>%
-#'          dplyr::mutate(perturb_pathfinding_graph = purrr::map2(.f = purrr::possibly(
-#'            assess_graph_for_perturbation_support, NA_real_),
-#'            .x = perturb_ccm,
-#'            .y = perturb_time_window,
-#'            pathfinding_graph,
-#'            interval_step=interval_step,
-#'            interval_col=interval_col,
-#'            percent_max_threshold=percent_max_threshold,
-#'            log_abund_detection_thresh=log_abund_detection_thresh,
-#'            q_val=q_val,
-#'            #perturbation_col=perturbation_col,
-#'            ...))
-#'
-#'   perturbation_graph_edges = perturbation_ccm_tbl %>%
-#'     select(perturb_name, perturb_pathfinding_graph) %>%
-#'     #filter(!is.na(perturb_pathfinding_graph)) %>%
-#'     mutate(perturb_pathfinding_graph_df = purrr::map(.f = purrr::possibly(igraph::as_data_frame, NA_real_), .x = perturb_pathfinding_graph)) %>%
-#'     filter(!is.na(perturb_pathfinding_graph_df)) %>%
-#'     tidyr::unnest(perturb_pathfinding_graph_df)
-#'
-#'   #mutate(conflicts_with_perturb = to_lost_before_from,
-#'   #       supported_by_perturb = from_lost_before_to)
-#'
-#'   #print (perturbation_graph_edges)
-#'
-#'   print ("example conflicts:")
-#'   perturbation_graph_edges %>% filter(conflicts_with_perturb & from %in% c("16", "22") & to %in% c("16", "22")) %>% select(-perturb_pathfinding_graph) %>% print(n=1000)
-#'
-#'
-#'   print ("example supports:")
-#'   perturbation_graph_edges %>% filter(supported_by_perturb & from %in% c("16", "22") & to %in% c("16", "22")) %>% select(-perturb_pathfinding_graph) %>% print(n=1000)
-#'
-#'
-#'   print ("example conflicts:")
-#'   perturbation_graph_edges %>% filter(conflicts_with_perturb) %>% print (n=50)
-#'
-#'   print ("example supports:")
-#'   perturbation_graph_edges %>% filter(supported_by_perturb) %>% print (n=50)
-#'
-#'
-#'   perturbation_graph_edge_summary = perturbation_graph_edges %>%
-#'     group_by(from, to) %>%
-#'     summarize(num_perturbations = length(unique(perturb_name)),
-#'               num_perturbations_supporting = sum(supported_by_perturb),
-#'               num_perturbations_conflicting = sum(conflicts_with_perturb),
-#'               perturbations_supporting=paste0(unique(perturb_name[supported_by_perturb]), collapse = "\n"),
-#'               perturbations_conflicting=paste0(unique(perturb_name[conflicts_with_perturb]), collapse = "\n"),
-#'               net_perturbations_supporting = num_perturbations_supporting - num_perturbations_conflicting,
-#'               perturbation_support_score = num_perturbations + num_perturbations_supporting - num_perturbations_conflicting)
-#'
-#'   #perturbation_graph_edge_summary = perturbation_graph_edge_summary %>% filter(net_perturbations_supporting >= 0)
-#'
-#'   #,
-#'   #edge_name = stringr::str_c(from, to, sep="~"),
-#'   #,
-#'   #)
-#'
-#'   #print(perturbation_ccm_tbl)
-#'
-#'   #combined_pathfinding_graph = perturbation_ccm_tbl %>% filter(!is.na(perturb_pathfinding_graph)) %>% pull(perturb_pathfinding_graph)
-#'   #combined_pathfinding_graph = do.call(igraph::union, combined_pathfinding_graph)
-#'
-#'   weighted_edges = hooke:::weigh_edges_by_umap_dist(control_timeseries_ccm, perturbation_graph_edge_summary)
-#'   combined_pathfinding_graph = igraph::graph_from_data_frame(weighted_edges, directed=TRUE, vertices=data.frame(id=igraph::V(pathfinding_graph)$name))
-#'
-#'   #   #igraph::edge_attr(G, "support") = igraph::edge_attr(G, "total_perturb_path_score_supporting")
-#'   # cycle_breaking_scores = igraph::edge_attr(combined_pathfinding_graph, "num_perturbations_supporting")
-#'   # cycle_breaking_scores[is.na(cycle_breaking_scores)] = 0
-#'   # igraph::edge_attr(combined_pathfinding_graph, "support") = cycle_breaking_scores
-#'   #
-#'   # print ("breaking cycles...")
-#'   # combined_pathfinding_graph = break_cycles_in_state_transition_graph(combined_pathfinding_graph)
-#'   # print ("done")
-#'
-#'   # print (combined_pathfinding_graph)
-#'   # print (igraph::E(combined_pathfinding_graph)$weight)
-#'   #
-#'   # G = build_timeseries_transition_dag(control_timeseries_ccm,
-#'   #                                     extant_cell_type_df,
-#'   #                                     combined_pathfinding_graph,
-#'   #                                     q_val=q_val,
-#'   #                                     start_time=start_time,
-#'   #                                     stop_time=stop_time,
-#'   #                                     interval_col=interval_col,
-#'   #                                     interval_step=interval_step,
-#'   #                                     min_interval=min_interval,
-#'   #                                     max_interval=max_interval,
-#'   #                                     min_dist_vs_time_r_sq=0,
-#'   #                                     knockout=FALSE,
-#'   #                                     ...)
-#'   #
-#'   # igraph::V(G)$cell_group = control_timeseries_ccm@ccs@info$cell_group
-#'   # return(G)
-#'
-#'   return(combined_pathfinding_graph)
-#' }
-
-
 
 #' Assemble a state transition graph from a set of perturbations
 #'
@@ -1779,11 +1511,20 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
   if (verbose)
     message ("Assessing time flows across loss paths")
 
+  cells_along_path_df = normalized_counts(control_timeseries_ccm@ccs, "size_only", pseudocount = 0) %>%
+    as.matrix() %>%
+    Matrix::t() %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column() %>%
+    tidyr::pivot_longer(!matches("rowname")) %>%
+    rename(sample=rowname, cell_group=name, num_cells=value)
+
   # Measure the flow of time along each perturbation loss path
   path_tbl = path_tbl %>%
     mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
                                                      .x = path,
                                                      ccs=control_timeseries_ccm@ccs,
+                                                     cells_along_path_df=cells_along_path_df,
                                                      interval_col=interval_col)) %>%
     tidyr::unnest(time_vs_distance_model_stats)
 
