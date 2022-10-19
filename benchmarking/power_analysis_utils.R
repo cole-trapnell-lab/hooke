@@ -261,8 +261,8 @@ mutate_ccs = function(sim_ccs,
 
   covariates_df = colData(sim_ccs)
   covariates_df$effect = effect_size
-  rownames(covariates_df) = seq(1:dim(sim_count_wide)[2])
-  colnames(sim_count_wide) = seq(1:dim(sim_count_wide)[2])
+  rownames(covariates_df) = colnames(sim_ccs) #seq(1:dim(sim_count_wide)[2])
+  colnames(sim_count_wide) = colnames(sim_ccs) #seq(1:dim(sim_count_wide)[2])
 
   cell_count_cds = monocle3::new_cell_data_set(sim_count_wide,
                                                cell_metadata=covariates_df)
@@ -349,7 +349,7 @@ combine_simulation <- function(wt_ccs,
 
   comb_coldata = rbind(colData(wt_ccs), colData(mt_ccs))
 
-  comb_coldata$embryo = paste0(comb_coldata$embryo_unq, comb_coldata$genotype )
+  comb_coldata$embryo = paste0( comb_coldata$genotype, comb_coldata$embryo_unq )
   cell_count_cds = monocle3::new_cell_data_set(comb_counts,
                                                cell_metadata=comb_coldata)
 
@@ -370,6 +370,7 @@ combine_simulation <- function(wt_ccs,
 #'
 fit_combine_ccm = function(wt_ccs,
                            mt_ccs,
+                           norm_method = "size_factors",
                            ctrl_penalty_matrix = NULL,
                            model_formula_str = "~ genotype",
                            nuisance_model_formula_str = NULL,
@@ -382,7 +383,8 @@ fit_combine_ccm = function(wt_ccs,
                                   main_model_formula_str = model_formula_str,
                                   nuisance_model_formula_str = nuisance_model_formula_str,
                                   penalty_matrix = ctrl_penalty_matrix,
-                                  num_bootstraps = num_bootstraps)
+                                  num_bootstraps = num_bootstraps,
+                                  norm_method = norm_method)
 
   return(comb_ccm)
 
@@ -459,11 +461,6 @@ fit_propeller = function(wt_ccs,
 }
 
 
-fit_betabinomial <- function(wt_df,
-                             mt_df) {
-
-
-}
 
 #' @param which_sim
 #' @param wt_sim
@@ -473,6 +470,7 @@ fit_betabinomial <- function(wt_df,
 run_simulation = function(which_sim,
                           wt_sim,
                           mut_sim,
+                          norm_method = "size_factors",
                           cell_types_to_perturb = NULL,
                           num_bootstraps = NULL,
                           method = c("hooke", "bb", "propeller"),
@@ -509,6 +507,7 @@ run_simulation = function(which_sim,
                                        .x = mutated_sim_ccs,
                                        wt_ccs = wt_sim_ccs,
                                        model_formula_str = "~ genotype",
+                                       norm_method = norm_method,
                                        ctrl_penalty_matrix = ctrl_penalty_matrix,
                                        num_bootstraps = num_bootstraps))
 
@@ -587,17 +586,35 @@ run_simulation = function(which_sim,
 # }
 
 
-beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
+beta_binom_test <- function(wt_df, mut_df, which_type, effect_size, use_size_factors = F) {
 
   # only edit the 1 cell type
   adj_df = mut_df %>% mutate(cells = ifelse(cell_type == which_type,
                                             round(cells * (1-effect_size)),
                                             cells))
 
+
   comb_df = rbind(wt_df, adj_df) %>%
     mutate(genotype = forcats::fct_relevel(genotype, c(unique(wt_df$genotype))))
 
   all_cell_types = unique(comb_df$cell_type)
+
+  if (use_size_factors) {
+    wt_sim_ccs = sim_df_to_ccs(wt_df)
+    mut_sim_ccs = sim_df_to_ccs(adj_df)
+    colData(mut_sim_ccs)$effect  = effect_size
+
+    comb_ccs = combine_simulation(wt_sim_ccs, mut_sim_ccs)
+    sf_df = data.frame("sf" = monocle3::size_factors(comb_ccs))
+    sf_df = sf_df %>% rownames_to_column("embryo_unq")
+    sf_df$embryo_unq = gsub("WT|MT", "", sf_df$embryo_unq)
+    # size factors
+    comb_df = left_join(comb_df,
+                        sf_df,
+                        by = "embryo_unq") %>%
+      mutate(cells = round(cells / sf)) %>%
+      select(-sf)
+  }
 
   run_bb = function(df, x) {
     df = df %>% filter(cell_type == x)
@@ -857,3 +874,11 @@ calc_tpr = function(df, q_value_threshold) {
     replace(is.na(.), 0) %>% as.data.frame()
 
 }
+
+
+get_simulated_embryo = function() {
+
+}
+
+
+
