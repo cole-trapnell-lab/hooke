@@ -267,15 +267,20 @@ bootstrap_model = function(ccs,
                            initial_penalties,
                            pln_min_ratio,
                            pln_num_penalties,
-                           random.seed) {
+                           random.seed,
+                           norm_method) {
 
   # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
 
+  if (norm_method == "size_factors") {
+    norm_method = monocle3::size_factors(sub_ccs)
+  }
+
   # remake data from new ccs
   sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
                                           covariates = colData(sub_ccs) %>% as.data.frame,
-                                          offset = monocle3::size_factors(sub_ccs))
+                                          offset = norm_method)
   # rerun the model using the same initial parameters
   # as the original, non bootstrapped model
   sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
@@ -305,6 +310,7 @@ bootstrap_vhat = function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
+                          norm_method,
                           num_bootstraps = 2) {
   # to do: parallelize
   bootstraps = lapply(seq(1, num_bootstraps), function(i) {
@@ -316,7 +322,8 @@ bootstrap_vhat = function(ccs,
                                          initial_penalties,
                                          pln_min_ratio,
                                          pln_num_penalties,
-                                         random.seed = i)
+                                         random.seed = i,
+                                         norm_method = norm_method)
 
     best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
     coef(best_bootstrapped_model) %>%
@@ -386,7 +393,7 @@ new_cell_count_model <- function(ccs,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
                                  norm_method = c("size_factors","TSS", "CSS",
-                                                 "RLE", "GMPR", "Wrench", "none"),
+                                                 "RLE", "GMPR", "Wrench"),
                                  size_factors = NULL,
                                  num_bootstraps = NULL,
                                  inception = NULL,
@@ -498,6 +505,7 @@ new_cell_count_model <- function(ccs,
                                        pln_min_ratio,
                                        pln_num_penalties,
                                        verbose,
+                                       norm_method,
                                        num_bootstraps)
   }
 
