@@ -393,7 +393,7 @@ new_cell_count_model <- function(ccs,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
                                  norm_method = c("size_factors","TSS", "CSS",
-                                                 "RLE", "GMPR", "Wrench"),
+                                                 "RLE", "GMPR", "Wrench", "none"),
                                  size_factors = NULL,
                                  num_bootstraps = NULL,
                                  inception = NULL,
@@ -420,6 +420,10 @@ new_cell_count_model <- function(ccs,
     pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
                                         covariates = colData(ccs) %>% as.data.frame,
                                         offset = norm_method)
+
+    if (norm_method == "none") {
+      pln_data$Offset = 1
+    }
   }
 
 
