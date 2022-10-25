@@ -52,7 +52,7 @@ setClass("cell_count_model",
                    best_reduced_model = "PLNnetworkfit",
                    sparsity = "numeric",
                    model_aux = "SimpleList",
-                   bootstrapped_vhat = "matrix")
+                   vhat = "matrix")
 )
 
 
@@ -296,6 +296,42 @@ bootstrap_model = function(ccs,
 }
 
 
+compute_vhat = function(model) {
+
+    if (model$d > 0) {
+      ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
+      ## safe inversion using Matrix::solve and Matrix::diag and error handling
+
+      vcov_mat = vcov(model)
+
+      vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+
+      #dimnames(vhat) <- dimnames(vcov_mat)
+      safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+      vcov_mat = vcov_mat[safe_rows, safe_cols]
+
+      out <- tryCatch(Matrix::solve(vcov_mat),
+                      error = function(e) {e})
+      row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+      if (is(out, "error")) {
+        warning(paste("Inversion of the Fisher information matrix failed with following error message:",
+                      out$message,
+                      "Returning NA",
+                      sep = "\n"))
+        vhat <- matrix(NA, nrow = model$p, ncol = model$d)
+      } else {
+        row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+        row.names(vhat) = colnames(vhat) = row.names(vcov(model))
+        vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+      }
+      #dimnames(vhat) <- dimnames(vcov_mat)
+    } else {
+      vhat <- NULL
+    }
+    vhat
+}
+
+
 
 #' computes the avg vhat across n bootstraps
 #' @param ccm
@@ -497,20 +533,20 @@ new_cell_count_model <- function(ccs,
   best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
   if (is.null(num_bootstraps)) {
-    bootstrapped_vhat = matrix(, nrow = 1, ncol = 1)
+    vhat = compute_vhat(best_full_model)
   } else {
-    bootstrapped_vhat = bootstrap_vhat(ccs,
-                                       full_model_formula_str,
-                                       best_full_model,
-                                       best_reduced_model,
-                                       reduced_pln_model,
-                                       pseudocount,
-                                       initial_penalties,
-                                       pln_min_ratio,
-                                       pln_num_penalties,
-                                       verbose,
-                                       norm_method,
-                                       num_bootstraps)
+    vhat = bootstrap_vhat(ccs,
+                          full_model_formula_str,
+                          best_full_model,
+                          best_reduced_model,
+                          reduced_pln_model,
+                          pseudocount,
+                          initial_penalties,
+                          pln_min_ratio,
+                          pln_num_penalties,
+                          verbose,
+                          norm_method,
+                         num_bootstraps)
   }
 
   ccm <- methods::new("cell_count_model",
@@ -523,7 +559,7 @@ new_cell_count_model <- function(ccs,
                       reduced_model_family = reduced_pln_model,
                       sparsity = sparsity_factor,
                       model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels),
-                      bootstrapped_vhat = bootstrapped_vhat
+                      vhat = vhat
                       )
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
