@@ -75,10 +75,6 @@ retina_ccs = new_cell_count_set(retina_cds,
                    sample_group = "top_oligo",
                    cell_group = "cell_type")
 
-
-colData(retina_ccs)$BMP = ifelse(colData(retina_ccs)$treatment == "BMP", T, F)
-my_plot_cells(retina_ccs, color_cells_by="BMP")
-
 colData(retina_cds)$treatment %>% unique()
 
 retina_ccm = new_cell_count_model(retina_ccs, 
