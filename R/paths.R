@@ -45,25 +45,24 @@ calc_mst <- function(edges, weight = "pcor") {
 #' @param edges data frame of edges with edge weights
 #' @param from
 #' @param to
-#' @import igraph
-#' @timport
 #' @return data frame containing the shortest path
 #' @export
-calc_shortest_path <- function(edges, from, to) {
-  edges = edges %>% dplyr::select(from, to, x, y, z, x_z, y_z, z_z, weight)
+calc_shortest_path <- function(G, from, to) {
+  #edges = edges %>% dplyr::select(from, to, weight) %>% distinct()
 
   # if from or to is not in edges, return NA
-  if (!from %in% edges$from | !to %in% edges$to) {
-    return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
+  #if (!from %in% edges$from | !to %in% edges$to) {
+  #  return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
+#
+ # }
 
-  }
-
-  G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
+  #G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
 
   mf = igraph::shortest_paths(G, from = from, to = to, weights = igraph::E(G)$weight, output="epath")
 
-  if (is.null(mf$vpath)) {
-    return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
+  if (is.null(mf$epath) | length(mf$epath[[1]]) == 0) {
+    stop(paste("No path from", from, " to ", to))
+    #return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
   }
 
   directed_subgraph = igraph::subgraph.edges(G, mf$epath[[1]])
@@ -81,11 +80,11 @@ calc_shortest_path <- function(edges, from, to) {
 #'
 distance_to_root <- function(edges) {
 
-  g = edges %>% select(from,to) %>% igraph::graph_from_data_frame()
+  g = edges %>% select(from,to) %>% distinct() %>% igraph::graph_from_data_frame()
   distances = igraph::distances(g) %>%
     as.data.frame() %>%
-    rownames_to_column("to") %>%
-    pivot_longer(-c("to"), names_to = "from", values_to = "distance_from_root")
+    tibble::rownames_to_column("to") %>%
+    tidyr::pivot_longer(-c("to"), names_to = "from", values_to = "distance_from_root")
 
   node_info = tidygraph::as_tbl_graph(g) %>%
     tidygraph::activate(nodes) %>%
@@ -94,8 +93,8 @@ distance_to_root <- function(edges) {
     as.data.frame()
 
   distance_df = inner_join(distances,
-             filter(node_info, is_root),
-             by = c("from"="name")) %>%
+                           filter(node_info, is_root),
+                           by = c("from"="name")) %>%
     select(-c(is_leaf,is_root, from))
 
   left_join(edges, distance_df, by = c("to"))
@@ -115,11 +114,11 @@ distance_to_root <- function(edges) {
 #' @param gamma
 #' @param sum_weights
 get_weighted_edges <- function(ccm,
-                          edges,
-                          alpha= 1,
-                          beta = 1,
-                          gamma = 1,
-                          sum_weights = T) {
+                               edges,
+                               alpha= 1,
+                               beta = 1,
+                               gamma = 1,
+                               sum_weights = T) {
 
   # get weighted path
   dist_df = get_distances(ccm@ccs, matrix = F)
@@ -146,9 +145,9 @@ get_weighted_edges <- function(ccm,
 #' @param source
 #' @param target
 #'
-get_shortest_path <- function(from, to, weighted_edges) {
+get_shortest_path <- function(from, to, traversal_graph) {
   # print(paste0(from, "-",to))
-  shortest_path_df = calc_shortest_path(weighted_edges, from, to) %>%
+  shortest_path_df = calc_shortest_path(traversal_graph, from, to) %>%
     select(from, to, weight) %>%
     distance_to_root() %>%
     arrange(distance_from_root)
@@ -185,8 +184,8 @@ get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
     filter(pcor > 0 &
-           to_delta_q_value < q_value_threshold &
-           from_delta_q_value < q_value_threshold)
+             to_delta_q_value < q_value_threshold &
+             from_delta_q_value < q_value_threshold)
 
   assertthat::assert_that(
     tryCatch(expr = nrow(pos_edges) != 0,
@@ -211,9 +210,9 @@ get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
                                                 purrr::possibly(get_shortest_path, NA_real_),
                                               .x = from, .y = to,
                                               weighted_edges)) %>%
-    select(shortest_path) %>%
+    select(origin=from, destination=to, shortest_path) %>%
     tidyr::unnest(shortest_path) %>%
-    select(-weight) %>%
+    # select(-weight) %>%
     distinct()
 
   return(edge_path)

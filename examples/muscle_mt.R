@@ -75,11 +75,11 @@ meso_mt_ccs = new_cell_count_set(meso_mt_cds,
                                  cell_group = "cluster")
 
 meso_mt_ccm = new_cell_count_model(meso_mt_ccs,
-                                   model_formula_str = "~ as.factor(timepoint) + gene_target",
+                                   main_model_formula_str = "~ as.factor(timepoint) + gene_target",
                                    #whitelist = total_green_edges,
                                    base_penalty = 5)
 
-plot(meso_mt_ccm@best_model, output="corrplot")
+plot(model(meso_mt_ccm, "reduced"), output="corrplot")
 
 time_18_ctrlinj = estimate_abundances(meso_mt_ccm, data.frame(timepoint="18", gene_target="ctrl-inj"))
 time_18_tbx16 = estimate_abundances(meso_mt_ccm, data.frame(timepoint="18", gene_target="tbx16"))
@@ -92,9 +92,9 @@ cond_mt_24_ctrlinj_v_tbx16_tbl = compare_abundances(meso_mt_ccm, time_24_ctrlinj
 cond_mt_18_24_ctrlinj_tbl = compare_abundances(meso_mt_ccm, time_18_ctrlinj, time_24_ctrlinj)
 
 
-plot_contrast(meso_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "receiver", p_value_thresh = 0.05)
-plot_contrast(meso_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "sender", p_value_thresh = 0.05)
-plot_contrast(meso_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, p_value_thresh = 0.05)
+plot_contrast(meso_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "receiver", q_value_thresh = 0.05)
+plot_contrast(meso_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "sender", q_value_thresh = 0.05)
+plot_contrast(meso_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, q_value_thresh = 0.05)
 
 colData(meso_mt_cds)$umap_1 = reducedDims(meso_mt_cds)[["UMAP"]][,1]
 colData(meso_mt_cds)$umap_2 = reducedDims(meso_mt_cds)[["UMAP"]][,2]
@@ -104,7 +104,7 @@ colData(meso_mt_cds) %>%
   ggplot(aes(umap_1, umap_2, color=cluster)) + geom_point(size=0.1)
 
 mt_umap_centers = centroids(meso_mt_ccs)
-corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(meso_mt_ccm,
+corr_edge_coords_umap_delta_abund = hooke:::collect_pln_graph_edges(meso_mt_ccm,
                                                             cond_mt_18_ctrlinj_v_tbx16_tbl,
                                                             log_abundance_thresh=-5)
 
@@ -149,13 +149,12 @@ fast_mt_ccs = new_cell_count_set(fast_muscle_cds,
                                  cell_group = "cell_type_sub")
 
 fast_mt_ccm = new_cell_count_model(fast_mt_ccs,
-                                   model_formula_str = "~ timepoint + gene_target",
-                                   #whitelist = total_green_edges,
-                                   base_penalty = 5)
+                                   main_model_formula_str = "~ as.factor(timepoint) + gene_target",
+                                   pln_min_ratio=1e-4)
 
-#fast_mt_ccm = select_model(fast_mt_ccm, criterion="StARS", sparsity_factor=2)
+fast_mt_ccm = select_model(fast_mt_ccm, criterion="StARS", sparsity_factor=1)
 
-plot(fast_mt_ccm@best_model, output="corrplot")
+plot(model(fast_mt_ccm,"reduced"), output="corrplot")
 
 time_18_ctrlinj = estimate_abundances(fast_mt_ccm, data.frame(timepoint="18", gene_target="ctrl-inj"))
 time_18_tbx16 = estimate_abundances(fast_mt_ccm, data.frame(timepoint="18", gene_target="tbx16"))
@@ -168,20 +167,26 @@ cond_mt_24_ctrlinj_v_tbx16_tbl = compare_abundances(fast_mt_ccm, time_24_ctrlinj
 cond_mt_18_24_ctrlinj_tbl = compare_abundances(fast_mt_ccm, time_18_ctrlinj, time_24_ctrlinj)
 
 
-plot_contrast(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, p_value_thresh = 1)
+plot_contrast(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, q_value_thresh = 1)
 
-plot_contrast(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, p_value_thresh = 1, plot_labels="none") +
+plot_contrast(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, q_value_thresh = 1, plot_labels="none") +
   ggsave("fast_muscle_wt_18_24.png", width=7, height=6)
 
-plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, p_value_thresh = 1, plot_labels="none") +
+plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, q_value_thresh = 1, plot_labels="none") +
   ggsave("fast_muscle_tbx16_18_24.png", width=7, height=6)
 
-plot_contrast(fast_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "receiver", p_value_thresh = 1)
-plot_contrast(fast_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "sender", p_value_thresh = 0.05)
-plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, p_value_thresh = 1)
+plot_contrast(fast_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "receiver", q_value_thresh = 1)
+plot_contrast(fast_mt_ccm, cond_mt_18_ctrlinj_v_tbx16_tbl, scale_shifts_by = "sender", q_value_thresh = 0.05)
+plot_contrast(fast_mt_ccm, cond_mt_24_ctrlinj_v_tbx16_tbl, q_value_thresh = 1)
 
 
+# Compare pcors in full and reduced models:
 
+full_edges = hooke:::collect_pln_graph_edges(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, model_for_pcors = "full") %>% dplyr::select(from, to, pcor)
+reduced_edges = hooke:::collect_pln_graph_edges(fast_mt_ccm, cond_mt_18_24_ctrlinj_tbl, model_for_pcors = "reduced") %>% dplyr::select(from, to, pcor)
+
+full_vs_reduced = full_join(full_edges, reduced_edges, by=c("from", "to")) %>% tidyr::replace_na(list(pcor.x = 0, pcor.y = 0))
+qplot(pcor.x, pcor.y, data=full_vs_reduced) + geom_abline() + geom_smooth(method="lm")
 # mutant alone ----------------------------------------------------------------
 # whitelist=total_green_edges,
 # blacklist = total_green_edge_blacklist,

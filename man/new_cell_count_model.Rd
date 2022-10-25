@@ -6,22 +6,36 @@
 \usage{
 new_cell_count_model(
   ccs,
-  model_formula_str,
+  main_model_formula_str,
+  nuisance_model_formula_str = "1",
   penalty_matrix = NULL,
   whitelist = NULL,
   blacklist = NULL,
+  sparsity_factor = 0.1,
+  base_penalty = 1,
+  min_penalty = 0.01,
+  max_penalty = 1e+06,
+  verbose = FALSE,
+  pseudocount = 0,
+  pln_min_ratio = 0.001,
+  pln_num_penalties = 30,
+  size_factors = NULL,
   ...
 )
 }
 \arguments{
 \item{ccs}{A Hooke cell_count_set object.}
 
-\item{model_formula_str}{A character string specifying the model of cell abundances across samples.
-where terms refer to columns in\code{colData(ccs)}}
+\item{main_model_formula_str}{A character string specifying the model of cell abundances across samples,
+where terms refer to columns in\code{colData(ccs)}. Put main effects here.}
+
+\item{nuisance_model_formula_str}{A character string specifying the model of cell abundances across samples. Put nuisance effects here.}
 
 \item{penalty_matrix}{A numeric NxN symmetric matrix specifying penalties for
 the PLN model, where N is the number of cell types. Entries must be
 positive. Use to specify an undirected graph prior for the PLN model.}
+
+\item{sparsity_factor}{A positive number to control how sparse the PLN network is. Larger values make the network more sparse.}
 }
 \value{
 a new cell_count_model object

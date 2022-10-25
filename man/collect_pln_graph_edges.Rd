@@ -6,9 +6,9 @@
 \usage{
 collect_pln_graph_edges(
   ccm,
-  umap_centers,
   cond_b_vs_a_tbl,
-  log_abundance_thresh = 1 - 5
+  log_abundance_thresh = 1 - 5,
+  model_for_pcors = "reduced"
 )
 }
 \arguments{

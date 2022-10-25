@@ -4,7 +4,7 @@
 \alias{get_pcor_edges}
 \title{returns edges based on pcor values}
 \usage{
-get_pcor_edges(ccm)
+get_pcor_edges(ccm, selected_model = c("reduced", "full"))
 }
 \description{
 returns edges based on pcor values

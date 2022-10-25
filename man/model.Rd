@@ -4,7 +4,7 @@
 \alias{model}
 \title{Get the selected PLNnetwork from a cell_count_model object.}
 \usage{
-model(ccm)
+model(ccm, model_to_return = c("full", "reduced"))
 }
 \arguments{
 \item{ccm}{A cell_count_model object.}

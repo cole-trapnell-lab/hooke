@@ -18,11 +18,13 @@ and feature metadata.
 \describe{
 \item{\code{ccs}}{cell_count_set the underlying object of cell counts this class models.}
 
-\item{\code{model_formula_str}}{character string, specifies the model for the cell abundances.}
+\item{\code{model_formula}}{specifies the model for the cell abundances.}
 
 \item{\code{model_family}}{PLNnetworkfamily a family of PLNnetwork models for the cell count data.}
 
-\item{\code{best_model}}{PLNnetworkfit the current best PLN network model for the cell count data.}
+\item{\code{best_full_model}}{PLNnetworkfit the current best PLN network model for the cell count data. Both main effects and nuisance terms}
+
+\item{\code{best_reduced_model}}{PLNnetworkfit the current best (reduced) PLN network model for the cell count data. Nuisance terms only}
 
 \item{\code{model_aux}}{SimpleList auxiliary information from from PLN model construction}
 }}

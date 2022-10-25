@@ -6,11 +6,11 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
                          xlev = ccm@model_aux[["xlevels"]])
   #O <- model.offset(ccm@model_aux[["model_frame"]])
-  EZ <- tcrossprod(X, ccm@best_model$model_par$Theta)
+  EZ <- tcrossprod(X, model(ccm)$model_par$Theta)
   #if (!is.null(O))
   #  EZ <- EZ + O
-  EZ <- sweep(EZ, 2, 0.5 * diag(ccm@best_model$model_par$Sigma), "+")
-  colnames(EZ) <- colnames(ccm@best_model$model_par$Sigma)
+  EZ <- sweep(EZ, 2, 0.5 * diag(model(ccm)$model_par$Sigma), "+")
+  colnames(EZ) <- colnames(model(ccm)$model_par$Sigma)
   results <- switch(type, link = EZ, response = exp(EZ))
   attr(results, "type") <- type
   results
@@ -20,18 +20,30 @@ compute_vhat = function(ccm) {
   if (model(ccm)$d > 0) {
     ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
     ## safe inversion using Matrix::solve and Matrix::diag and error handling
-    out <- tryCatch(Matrix::solve(vcov(model(ccm))),
+
+    vcov_mat = vcov(model(ccm))
+
+    vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+
+    #dimnames(vhat) <- dimnames(vcov_mat)
+    safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+    vcov_mat = vcov_mat[safe_rows, safe_cols]
+
+    out <- tryCatch(Matrix::solve(vcov_mat),
                     error = function(e) {e})
+    row.names(out) = colnames(out) = names(safe_rows[safe_rows])
     if (is(out, "error")) {
       warning(paste("Inversion of the Fisher information matrix failed with following error message:",
                     out$message,
                     "Returning NA",
                     sep = "\n"))
-      vhat <- matrix(NA, nrow = self$p, ncol = self$d)
+      vhat <- matrix(NA, nrow = model(ccm)$p, ncol = model(ccm)$d)
     } else {
-      vhat <- out #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+      row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+      row.names(vhat) = colnames(vhat) = row.names(vcov(model(ccm)))
+      vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
     }
-    dimnames(vhat) <- dimnames(vcov(model(ccm)))
+    #dimnames(vhat) <- dimnames(vcov_mat)
   } else {
     vhat <- NULL
   }
@@ -44,25 +56,47 @@ compute_vhat = function(ccm) {
 #' @importFrom tibble tibble
 #' @export
 estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
+
+  # check that all terms in new data have been specified
+  missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
+
+  if (length(missing_terms) > 1) {
+    missing_terms = paste(missing_terms,collapse = ", ")
+  }
+
+  assertthat::assert_that(
+    tryCatch(expr = length(missing_terms) == 0,
+             error = function(e) FALSE),
+    msg = paste0(missing_terms, " missing from newdata columns"))
+
+
+
   #stopifnot(nrow(newdata) == 1)
   newdata$Offset = 1
 
-  base_X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
+  model_terms = terms(ccm@model_aux[["model_frame"]])
+  base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
                          xlev = ccm@model_aux[["xlevels"]])
 
 
   #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
   #                  xlev = ccm@model_aux[["xlevels"]])
-  X = Matrix::bdiag(rep.int(list(base_X), ccm@best_model$p))
+  X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
+
+  # if it doesn't exist, use orig computation
+  if (is.na(ccm@bootstrapped_vhat)[[1]]) {
+    v_hat = compute_vhat(ccm)
+  } else {
+    v_hat = ccm@bootstrapped_vhat
+  }
 
 
-
-  v_hat = compute_vhat(ccm) #vcov(ccm@best_model)
-  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(ccm@best_model$n)
+  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(model(ccm)$n)
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
-  log_abund = pred_out[1,]
+  #log_abund = pred_out[1,]
+  log_abund = as.numeric(pred_out)
   log_abund_sd = sqrt(diag(coef(model(ccm), type="covariance")))
   log_abund_se = se_fit
 
@@ -73,8 +107,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #percent_range = 100 * (exp(log_abund) - exp(min_log_abundances)) / (exp(max_log_abundances) - exp(min_log_abundances))
   pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out),
                         log_abund,
-                        log_abund_sd,
                         log_abund_se)
+  pred_out_tbl = left_join(pred_out_tbl,  tibble::tibble(cell_group=names(log_abund_sd), log_abund_sd), by=c("cell_group"))
   #max_log_abundances,
   #min_log_abundances,
   #percent_max,
@@ -83,6 +117,35 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   pred_out_tbl = cbind(newdata, pred_out_tbl)
   return(pred_out_tbl)
 }
+
+
+# To do : need better error message for when you are missing a column that needs to be specified for the model
+#' Predict cell type abundances given a PLN model over a range of time or other interval
+#'
+#' @importFrom tibble tibble
+#' @export
+estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="timepoint", interval_step=2, ...) {
+
+  timepoint_pred_df = tibble(IV= seq(start, stop, interval_step), ...)
+  colnames(timepoint_pred_df)[1] = interval_col
+
+  time_interval_pred_helper = function(tp, ...){
+    tp_tbl = tibble(IV=tp, ...)
+    colnames(tp_tbl)[1] = interval_col
+    estimate_abundances(ccm, tp_tbl)
+  }
+
+  timepoint_pred_df = timepoint_pred_df %>%
+    dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
+      .f = time_interval_pred_helper, NA_real_),
+      .x = !!sym(interval_col),
+      ...)) %>%
+    select(timepoint_abund) %>%
+    tidyr::unnest(c(timepoint_abund))
+
+  return(timepoint_pred_df)
+}
+
 
 #' Compare two estimates of cell abundances from a Hooke model
 #' @param ccm A cell_count_model

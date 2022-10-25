@@ -34,7 +34,8 @@ setClass("cell_count_set",
 #' @field ccs cell_count_set the underlying object of cell counts this class models.
 #' @field model_formula specifies the model for the cell abundances.
 #' @field model_family PLNnetworkfamily a family of PLNnetwork models for the cell count data.
-#' @field best_model PLNnetworkfit the current best PLN network model for the cell count data.
+#' @field best_full_model PLNnetworkfit the current best PLN network model for the cell count data. Both main effects and nuisance terms
+#' @field best_reduced_model PLNnetworkfit the current best (reduced) PLN network model for the cell count data. Nuisance terms only
 #' @field model_aux SimpleList auxiliary information from from PLN model construction
 #' @name cell_count_model
 #' @rdname cell_count_model
@@ -43,12 +44,18 @@ setClass("cell_count_set",
 #' @exportClass cell_count_model
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
-                   model_formula = "formula",
-                   # FIXME: for some reason I can't include these as slots. Maybe because they are R6? dunno. For now, they live in model_aux
-                   model_family = "PLNnetworkfamily",
-                   best_model = "PLNnetworkfit",
-                   model_aux = "SimpleList")
+                   full_model_formula = "formula",
+                   full_model_family = "PLNnetworkfamily",
+                   best_full_model = "PLNnetworkfit",
+                   reduced_model_formula = "formula",
+                   reduced_model_family = "PLNnetworkfamily",
+                   best_reduced_model = "PLNnetworkfit",
+                   sparsity = "numeric",
+                   model_aux = "SimpleList",
+                   bootstrapped_vhat = "matrix")
 )
+
+
 
 
 
@@ -72,6 +79,8 @@ new_cell_count_set <- function(cds,
                                lower_threshold = NULL,
                                upper_threshold = NULL) {
 
+  colData(cds)$sample = NULL
+
   # check if anything contains NAs in it
   # if so drop them
   num_sample_group_NAs = sum(is.na(colData(cds)[[sample_group]]))
@@ -87,12 +96,14 @@ new_cell_count_set <- function(cds,
   }
 
 
+
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
   # coldata_df$partition = partitions(cds)
 
   coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = as.character(cell_group))
+  #coldata_df$cell_group = factor(coldata_df$cell_group, levels=unique(colData(cds)[,cell_group]))
 
   coldata_df$group_id = coldata_df %>%
     dplyr::group_indices_("sample", "cell_group") %>% as.character
@@ -105,6 +116,7 @@ new_cell_count_set <- function(cds,
     dplyr::summarize(cells = dplyr::n())
 
   cds_covariates_df = coldata_df %>%
+    dplyr::select(-cell_group) %>%
     dplyr::group_by_("sample") %>%
     dplyr::summarize(across(where(is.numeric), mean),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
@@ -114,7 +126,7 @@ new_cell_count_set <- function(cds,
     cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
   }
 
-  cds_covariates_df = cds_covariates_df %>% as.data.frame(cds_covariates_df)
+  cds_covariates_df = cds_covariates_df %>% as.data.frame(cds_covariates_df, stringsAsFactors=FALSE)
   row.names(cds_covariates_df) = cds_covariates_df %>% dplyr::pull(sample)
 
   cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)
@@ -131,6 +143,9 @@ new_cell_count_set <- function(cds,
     cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
   }
 
+  # remove from cds
+  removed_cell_states = setdiff(cell_states, rownames(cell_counts_wide))
+
   #cell_counts_wide = t(cell_counts_wide)
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
@@ -142,9 +157,9 @@ new_cell_count_set <- function(cds,
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
                                            gene_metadata=cell_metadata),
-               cds=cds,
-               info = SimpleList(sample_group = sample_group,
-                                 cell_group = cell_group))
+               cds=cds[, !colData(cds)[[cell_group]] %in% removed_cell_states],
+               info=SimpleList(sample_group=sample_group,
+                               cell_group=cell_group))
 
 
   # assertthat::assert_that(class(expression_data) == "matrix" ||
@@ -205,10 +220,134 @@ new_cell_count_set <- function(cds,
   # cds <- estimate_size_factors(cds)
   # cds
 
+
+
   ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
   row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(cds)
+  ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
 
   return (ccs)
+}
+
+#' resamples the ccs counts using a multinomial distribution
+#' @param ccs
+#' @param random.seed
+bootstrap_ccs = function(ccs, random.seed=NULL) {
+  count_mat = counts(ccs)
+  num_cols = dim(count_mat)[2]
+  set.seed(random.seed)
+  count_list = lapply(seq(1,num_cols), function(i){
+    counts = count_mat[,i]
+    size = sum(count_mat[,i])
+    prob = counts/size
+    sample_counts = rmultinom(1, size, prob)
+
+  })
+  new_count_mat = do.call(cbind,count_list)
+  colnames(new_count_mat) = colnames(count_mat)
+  counts(ccs) = new_count_mat
+  return(ccs)
+}
+
+#'
+#' @param ccs
+#' @param full_model_formula_str
+#' @param best_full_model
+#' @param reduced_pln_model
+#' @param pseudocount
+#' @param initial_penalties
+#' @param pln_min_ratio
+#' @param pln_num_penalties
+#' @param random.seed
+bootstrap_model = function(ccs,
+                           full_model_formula_str,
+                           best_full_model,
+                           reduced_pln_model,
+                           pseudocount,
+                           initial_penalties,
+                           pln_min_ratio,
+                           pln_num_penalties,
+                           random.seed) {
+
+  # resample the counts
+  sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
+
+  # remake data from new ccs
+  sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
+                                          covariates = colData(sub_ccs) %>% as.data.frame,
+                                          offset = size_factors(sub_ccs))
+  # rerun the model using the same initial parameters
+  # as the original, non bootstrapped model
+  sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+                                                            data = sub_pln_data,
+                                                            penalties = reduced_pln_model$penalties,
+                                                            control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                            control_main=list(penalty_weights=initial_penalties,
+                                                                              trace = ifelse(FALSE, 2, 0),
+                                                                              inception = best_full_model)))
+
+  return(sub_full_model)
+
+}
+
+
+
+#' computes the avg vhat across n bootstraps
+#' @param ccm
+#' @param num_bootstraps
+bootstrap_vhat = function(ccs,
+                          full_model_formula_str,
+                          best_full_model,
+                          best_reduced_model,
+                          reduced_pln_model,
+                          pseudocount,
+                          initial_penalties,
+                          pln_min_ratio,
+                          pln_num_penalties,
+                          verbose,
+                          num_bootstraps = 2) {
+  # to do: parallelize
+  bootstraps = lapply(seq(1, num_bootstraps), function(i) {
+    bootstrapped_model = bootstrap_model(ccs,
+                                         full_model_formula_str,
+                                         best_full_model,
+                                         reduced_pln_model,
+                                         pseudocount,
+                                         initial_penalties,
+                                         pln_min_ratio,
+                                         pln_num_penalties,
+                                         random.seed = i)
+
+    best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
+    coef(best_bootstrapped_model) %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column("cell_group")
+  })
+
+  # compute the covariance of the parameters
+  get_cov_mat = function(data, cell_group) {
+
+    cov_matrix = cov(data)
+    rownames(cov_matrix) = paste0(cell_group, "_", rownames(cov_matrix))
+    colnames(cov_matrix) = paste0(cell_group, "_", colnames(cov_matrix))
+    return(cov_matrix)
+
+  }
+
+  bootstrapped_df = do.call(rbind, bootstraps) %>%
+    group_by(cell_group) %>%
+    tidyr::nest() %>%
+    mutate(cov_mat = purrr::map2(.f = get_cov_mat,
+                                 .x = data,
+                                 .y = cell_group))
+
+  bootstrapped_vhat = Matrix::bdiag(bootstrapped_df$cov_mat) %>% as.matrix()
+  names = lapply(bootstrapped_df$cov_mat, function(m){ colnames(m)}) %>% unlist()
+  rownames(bootstrapped_vhat) = names
+  colnames(bootstrapped_vhat) = names
+
+
+  return(bootstrapped_vhat)
 }
 
 
@@ -219,8 +358,9 @@ new_cell_count_set <- function(cds,
 #' allows user to update it.
 #'
 #' @param ccs A Hooke cell_count_set object.
-#' @param model_formula_str A character string specifying the model of cell abundances across samples.
-#' where terms refer to columns in\code{colData(ccs)}
+#' @param main_model_formula_str A character string specifying the model of cell abundances across samples,
+#' where terms refer to columns in\code{colData(ccs)}. Put main effects here.
+#' @param nuisance_model_formula_str A character string specifying the model of cell abundances across samples. Put nuisance effects here.
 #' @param penalty_matrix A numeric NxN symmetric matrix specifying penalties for
 #'   the PLN model, where N is the number of cell types. Entries must be
 #'   positive. Use to specify an undirected graph prior for the PLN model.
@@ -232,7 +372,8 @@ new_cell_count_set <- function(cds,
 #' @importFrom PLNmodels getModel
 #' @export
 new_cell_count_model <- function(ccs,
-                                 model_formula_str,
+                                 main_model_formula_str,
+                                 nuisance_model_formula_str = "1",
                                  penalty_matrix = NULL,
                                  whitelist=NULL,
                                  blacklist=NULL,
@@ -241,11 +382,12 @@ new_cell_count_model <- function(ccs,
                                  min_penalty=0.01,
                                  max_penalty=1e6,
                                  verbose=FALSE,
-                                 penalty_type="distance",
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
                                  size_factors = NULL,
+                                 num_bootstraps = NULL,
+                                 inception = NULL,
                                  ...) {
 
   if (!is.null(size_factors)) {
@@ -264,13 +406,18 @@ new_cell_count_model <- function(ccs,
                                         offset = size_factors(ccs))
   }
 
+  main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
+  nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
 
-  model_formula_str = paste("Abundance", model_formula_str, " + offset(log(Offset))")
-  model_formula = as.formula(model_formula_str)
+  full_model_formula_str = paste("Abundance~", main_model_formula_str, "+", nuisance_model_formula_str, " + offset(log(Offset))")
+  full_model_formula = as.formula(full_model_formula_str)
+
+  reduced_model_formula_str = paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
+  reduced_model_formula = as.formula(reduced_model_formula_str)
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, type=penalty_type, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty,...)
+    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
     # TODO: check and validate dimensions of the user-provided penaties
@@ -297,64 +444,63 @@ new_cell_count_model <- function(ccs,
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula
   # created with as.formula (e.g. after pasting).
-  pln_model <- do.call(PLNmodels::PLNnetwork, args=list(model_formula,
-                                     data=pln_data,
-                                     control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
-                                     control_main=list(penalty_weights=initial_penalties,
-                                                       trace = ifelse(verbose, 2, 0)),
-                                     ...),)
+
+  reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+                                                                data=pln_data,
+                                                                control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                                control_main=list(penalty_weights=initial_penalties,
+                                                                                  trace = ifelse(verbose, 2, 0),
+                                                                                  inception = inception),
+                                                                ...),)
+
+
+  full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+                                                               data=pln_data,
+                                                               penalties = reduced_pln_model$penalties,
+                                                               control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                               control_main=list(penalty_weights=initial_penalties,
+                                                                                 trace = ifelse(verbose, 2, 0),
+                                                                                 inception = inception),
+                                                               ...),)
+
+  model_frame = model.frame(full_model_formula[-2], pln_data)
+  xlevels = .getXlevels(terms(model_frame), model_frame)
 
   # Choose a model that isn't very aggressively sparsified
-  best_model <- PLNmodels::getBestModel(pln_model, "EBIC")
-  best_model <- PLNmodels::getModel(pln_model, var=best_model$penalty * sparsity_factor)
+  best_reduced_model <- PLNmodels::getBestModel(reduced_pln_model, "EBIC")
+  best_reduced_model <- PLNmodels::getModel(reduced_pln_model, var=best_reduced_model$penalty * sparsity_factor)
 
-  # assertthat::assert_that(class(expression_data) == "matrix" ||
-  #                           is_sparse_matrix(expression_data),
-  #                         msg = paste("Argument expression_data must be a",
-  #                                     "matrix - either sparse from the",
-  #                                     "Matrix package or dense"))
-  # if (!is.null(cell_metadata)) {
-  #   assertthat::assert_that(nrow(cell_metadata) == ncol(expression_data),
-  #                           msg = paste("cell_metadata must be NULL or have",
-  #                                       "the same number of rows as columns",
-  #                                       "in expression_data"))
-  #   assertthat::assert_that(!is.null(row.names(cell_metadata)) &
-  #                             all(row.names(cell_metadata) == colnames(expression_data)),
-  #                           msg = paste("row.names of cell_metadata must be equal to colnames of",
-  #                                       "expression_data"))
-  # }
-  #
-  # if (!is.null(gene_metadata)) {
-  #   assertthat::assert_that(nrow(gene_metadata) == nrow(expression_data),
-  #                           msg = paste("gene_metadata must be NULL or have",
-  #                                       "the same number of rows as rows",
-  #                                       "in expression_data"))
-  #   assertthat::assert_that(!is.null(row.names(gene_metadata)) & all(
-  #     row.names(gene_metadata) == row.names(expression_data)),
-  #     msg = paste("row.names of gene_metadata must be equal to row.names of",
-  #                 "expression_data"))
-  # }
-  #
-  # if (is.null(cell_metadata)) {
-  #   cell_metadata <- data.frame(cell = colnames(expression_data),
-  #                               row.names = colnames(expression_data))
-  # }
-  #
-  # if(!('gene_short_name' %in% colnames(gene_metadata))) {
-  #   warning(paste("Warning: gene_metadata must contain a column verbatim",
-  #                 "named 'gene_short_name' for certain functions."))
-  # }
-  #
+  # Choose a model that isn't very aggressively sparsified
+  #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
+  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
-  model_frame = model.frame(model_formula[-2], pln_data)
-  xlevels = .getXlevels(terms(model_frame), model_frame)
+  if (is.null(num_bootstraps)) {
+    bootstrapped_vhat = matrix(, nrow = 1, ncol = 1)
+  } else {
+    bootstrapped_vhat = bootstrap_vhat(ccs,
+                                       full_model_formula_str,
+                                       best_full_model,
+                                       best_reduced_model,
+                                       reduced_pln_model,
+                                       pseudocount,
+                                       initial_penalties,
+                                       pln_min_ratio,
+                                       pln_num_penalties,
+                                       verbose,
+                                       num_bootstraps)
+  }
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
-                      model_formula = model_formula,
-                      best_model = best_model,
-                      model_family = pln_model,
-                      model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels)
+                      full_model_formula = full_model_formula,
+                      best_full_model = best_full_model,
+                      full_model_family = full_pln_model,
+                      reduced_model_formula = reduced_model_formula,
+                      best_reduced_model = best_reduced_model,
+                      reduced_model_family = reduced_pln_model,
+                      sparsity = sparsity_factor,
+                      model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels),
+                      bootstrapped_vhat = bootstrapped_vhat
                       )
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
@@ -376,11 +522,24 @@ new_cell_count_model <- function(ccs,
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
-select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0)
+select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
 {
-  best_model <- PLNmodels::getBestModel(ccm@model_family, criterion)
-  best_model <- PLNmodels::getModel(ccm@model_family, var=best_model$penalty * sparsity_factor)
-  ccm@best_model = best_model
+  models_to_update = match.arg(models_to_update)
+
+  #if (models_to_update == "reduced" || models_to_update == "both"){
+    base_reduced_model <- PLNmodels::getBestModel(ccm@reduced_model_family, criterion)
+    best_reduced_model <- PLNmodels::getModel(ccm@reduced_model_family, var=base_reduced_model$penalty * sparsity_factor)
+    ccm@best_reduced_model = best_reduced_model
+  #}
+
+  #if (models_to_update == "full" || models_to_update == "both"){
+  #  best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
+    best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
+    ccm@best_full_model = best_full_model
+  #}
+
+  ccm@sparsity = sparsity_factor
+
   return(ccm)
 }
 
@@ -391,42 +550,12 @@ select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0)
 #' @param whitelist a data frame with two columns corresponding to (undirected) edges that should receive no penalty
 #' @param blacklist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
-init_penalty_matrix = function(ccs, type = c("distance", "JS"), whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
+init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
+  cell_group_centroids = centroids(ccs)
+  dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
 
-  type <- match.arg(type)
-
-  if (type == "distance") {
-    cell_group_centroids = centroids(ccs)
-    dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
-
-    row.names(dist_matrix) <- cell_group_centroids$cell_group
-    colnames(dist_matrix) <- cell_group_centroids$cell_group
-  }
-  else if (type == "JS") {
-
-    cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]]) %>%
-      select(rowname, cell_group)
-
-    agg_expr_mat = monocle3::aggregate_gene_expression(ccs@cds,
-                                                       cell_group_df = cell_group_df,
-                                                       norm_method = "size_only",
-                                                       scale_agg_values = FALSE,
-                                                       pseudocount = 0,
-                                                       cell_agg_fun = "mean")
-
-    agg_coldata = ccs@metadata[["cell_group_assignments"]] %>%
-      dplyr::group_by(cell_group) %>%
-      dplyr::summarize(num_cells_in_group = n()) %>%
-      as.data.frame
-    row.names(agg_coldata) = colnames(agg_expr_mat)
-    pseudobulk_cds = new_cell_data_set(agg_expr_mat,
-                                       cell_metadata = agg_coldata,
-                                       rowData(ccs@cds) %>% as.data.frame)
-    pseudobulk_cds = pseudobulk_cds[,Matrix::colSums(exprs(pseudobulk_cds)) != 0]
-    divergence_matrix = textmineR::CalcJSDivergence(as.matrix(counts(pseudobulk_cds)), by_rows = FALSE)
-    # get JS distance
-    dist_matrix = sqrt(divergence_matrix)
-  }
+  row.names(dist_matrix) <- cell_group_centroids$cell_group
+  colnames(dist_matrix) <- cell_group_centroids$cell_group
 
   # TODO: do I need this? Probably the caller can and should do this.
   #dist_matrix = dist_matrix[colnames(data$Abundance), colnames(data$Abundance)]
@@ -453,8 +582,22 @@ init_penalty_matrix = function(ccs, type = c("distance", "JS"), whitelist=NULL, 
 
 
 
+#' Builds a model formula for time series models based on the range of the data
+#'
+#' This is just a utility function that puts the knots in reasonable positions based on the range of the data
+#' @export
+build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){
+  if (is.null(interval_start)){
+    interval_start = as.numeric(min(colData(ccs@cds)[,interval_var]))
+  }
+  if (is.null(interval_stop)){
+    interval_stop = as.numeric(max(colData(ccs@cds)[,interval_var]))
+  }
 
-
-
-
+  interval_breakpoints = seq(interval_start, interval_stop, length.out=num_breaks)
+  interval_breakpoints = interval_breakpoints[2:(length(interval_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
+  interval_formula_str = paste("~ ns(", interval_var, ", knots=", paste("c(",paste(interval_breakpoints, collapse=","), ")", sep=""), ")")
+  return(interval_formula_str)
+}
+#debug(build_interval_formula)
 
