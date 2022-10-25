@@ -166,7 +166,7 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = "BH"){
 
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
                                                 tvalue = delta_log_abund/(sqrt(log_abund_se_y^2 + log_abund_se_x^2)),
-                                                delta_p_value = 2 * pt(-abs(tvalue), df.r)
+                                                delta_p_value = 2 * pt(-abs(tvalue), df.r),
                                                 # delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
                                                 delta_q_value = p.adjust(delta_p_value, method = method)) %>% select(-tvalue)
   return(contrast_tbl)
