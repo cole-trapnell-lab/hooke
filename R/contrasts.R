@@ -155,10 +155,20 @@ estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="ti
 #' @importFrom dplyr full_join
 #' @export
 compare_abundances <- function(ccm, cond_x, cond_y, method = "BH"){
+
   contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by="cell_group")
+
+  # num samples
+  n = nrow(model(ccm)$fitted)
+  # num parameters
+  k = length(colnames(coef(ccm@best_full_model)))
+  df.r = n - k - 1
+
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
-                                                delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
-                                                delta_q_value = p.adjust(delta_p_value, method = method))
+                                                tvalue = delta_log_abund/(sqrt(log_abund_se_y^2 + log_abund_se_x^2)),
+                                                delta_p_value = 2 * pt(-abs(tvalue), df.r)
+                                                # delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
+                                                delta_q_value = p.adjust(delta_p_value, method = method)) %>% select(-tvalue)
   return(contrast_tbl)
 }
 
