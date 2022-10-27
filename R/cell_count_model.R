@@ -296,11 +296,15 @@ bootstrap_model = function(ccs,
 }
 
 
-compute_vhat = function(model) {
-
+compute_vhat = function(model, model_family, type) {
+  
     if (model$d > 0) {
       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
       ## safe inversion using Matrix::solve and Matrix::diag and error handling
+      
+      X = model_family$responses
+      Y = model_family$covariates
+      model$get_vcov_hat(type,X, Y)
 
       vcov_mat = vcov(model)
 
@@ -430,12 +434,14 @@ new_cell_count_model <- function(ccs,
                                  pln_num_penalties=30,
                                  norm_method = c("size_factors","TSS", "CSS",
                                                  "RLE", "GMPR", "Wrench", "none"),
+                                 vhat_method = c("wald", "sandwich", "louis", "bootstrap"),
                                  size_factors = NULL,
-                                 num_bootstraps = NULL,
+                                 num_bootstraps = 10,
                                  inception = NULL,
                                  ...) {
 
   norm_method <- match.arg(norm_method)
+  vhat_method <- match.arg(vhat_method)
   if (norm_method == "size_factors") {
     if (!is.null(size_factors)) {
 
@@ -532,9 +538,7 @@ new_cell_count_model <- function(ccs,
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
   best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
-  if (is.null(num_bootstraps)) {
-    vhat = compute_vhat(best_full_model)
-  } else {
+  if (vhat_method == "bootstrap") {
     vhat = bootstrap_vhat(ccs,
                           full_model_formula_str,
                           best_full_model,
@@ -546,7 +550,10 @@ new_cell_count_model <- function(ccs,
                           pln_num_penalties,
                           verbose,
                           norm_method,
-                         num_bootstraps)
+                          num_bootstraps)
+  } else {
+    vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
+    
   }
 
   ccm <- methods::new("cell_count_model",
