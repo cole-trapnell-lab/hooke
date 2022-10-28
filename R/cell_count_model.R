@@ -475,7 +475,7 @@ new_cell_count_model <- function(ccs,
   best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
   if (is.null(num_bootstraps)) {
-    bootstrapped_vhat = matrix(, nrow = 1, ncol = 1)
+    bootstrapped_vhat = matrix(NA, nrow = 1, ncol = 1)
   } else {
     bootstrapped_vhat = bootstrap_vhat(ccs,
                                        full_model_formula_str,
