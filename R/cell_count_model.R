@@ -52,7 +52,7 @@ setClass("cell_count_model",
                    best_reduced_model = "PLNnetworkfit",
                    sparsity = "numeric",
                    model_aux = "SimpleList",
-                   vhat = "matrix")
+                   vhat = "dgCMatrix")
 )
 
 
@@ -306,32 +306,34 @@ compute_vhat = function(model, model_family, type) {
       Y = model_family$covariates
       model$get_vcov_hat(type,X, Y)
 
-      vcov_mat = vcov(model)
+      vhat = vcov(model) 
+      # vcov_mat = vcov(model)
 
-      vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
-
-      #dimnames(vhat) <- dimnames(vcov_mat)
-      safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
-      vcov_mat = vcov_mat[safe_rows, safe_cols]
-
-      out <- tryCatch(Matrix::solve(vcov_mat),
-                      error = function(e) {e})
-      row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-      if (is(out, "error")) {
-        warning(paste("Inversion of the Fisher information matrix failed with following error message:",
-                      out$message,
-                      "Returning NA",
-                      sep = "\n"))
-        vhat <- matrix(NA, nrow = model$p, ncol = model$d)
-      } else {
-        row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-        row.names(vhat) = colnames(vhat) = row.names(vcov(model))
-        vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
-      }
-      #dimnames(vhat) <- dimnames(vcov_mat)
+    #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+    # 
+    #   #dimnames(vhat) <- dimnames(vcov_mat)
+    #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+    #   vcov_mat = vcov_mat[safe_rows, safe_cols]
+    # 
+    #   out <- tryCatch(Matrix::solve(vcov_mat),
+    #                   error = function(e) {e})
+    #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+    #   if (is(out, "error")) {
+    #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
+    #                   out$message,
+    #                   "Returning NA",
+    #                   sep = "\n"))
+    #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
+    #   } else {
+    #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+    #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
+    #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+    #   }
+    #   #dimnames(vhat) <- dimnames(vcov_mat)
     } else {
       vhat <- NULL
     }
+    vhat = methods::as(vhat, "dgCMatrix")
     vhat
 }
 
@@ -393,7 +395,7 @@ bootstrap_vhat = function(ccs,
   rownames(bootstrapped_vhat) = names
   colnames(bootstrapped_vhat) = names
 
-
+  bootstrapped_vhat = methods::as(bootstrapped_vhat, "dgCMatrix")
   return(bootstrapped_vhat)
 }
 
