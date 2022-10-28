@@ -60,6 +60,8 @@ simulate_seq <- function(cell_count_wide,
                          sim_range = 10,
                          size = 1000) {
 
+  set.seed(random_seed)
+
   sims = seq(1, sim_range, 1)
 
   if (is.null(embryo_dim)) {
@@ -67,7 +69,7 @@ simulate_seq <- function(cell_count_wide,
   }
 
   all_dat = lapply(sims, function(x){
-    dsim <- VGAM::simulate.vlm(dfit, nsim = x)
+    dsim <- VGAM::simulate.vlm(dfit, nsim = x, seed = random_seed)
     aaa <- array(unlist(dsim), c(embryo_dim*x, ncol(fitted(dfit)), x))
     aaa = aaa[,,1]
   })
@@ -85,7 +87,9 @@ simulate_seq <- function(cell_count_wide,
 
   cell_totals = colSums(cell_count_wide)
   my.sd = sd(cell_totals)
-  sim.total.cells = round(rnorm(length(unique(sim_props$embryo_unq)), mean = size, sd = my.sd))
+  # this was giving negative numbers for really low counts
+  # sim.total.cells = round(rnorm(n = length(unique(sim_props$embryo_unq)), mean = size, sd = my.sd))
+  sim.total.cells = rpois(length(unique(sim_props$embryo_unq)), size)
   tot_df = data.frame(unique(sim_props$embryo_unq), sim.total.cells, stringsAsFactors = F)
   colnames(tot_df) = c('embryo_unq', 'total_cells')
   sim_count_df = sim_props %>%
@@ -257,8 +261,8 @@ mutate_ccs = function(sim_ccs,
 
   covariates_df = colData(sim_ccs)
   covariates_df$effect = effect_size
-  rownames(covariates_df) = seq(1:dim(sim_count_wide)[2])
-  colnames(sim_count_wide) = seq(1:dim(sim_count_wide)[2])
+  rownames(covariates_df) = colnames(sim_ccs) #seq(1:dim(sim_count_wide)[2])
+  colnames(sim_count_wide) = colnames(sim_ccs) #seq(1:dim(sim_count_wide)[2])
 
   cell_count_cds = monocle3::new_cell_data_set(sim_count_wide,
                                                cell_metadata=covariates_df)
@@ -266,7 +270,7 @@ mutate_ccs = function(sim_ccs,
   # now turn it back into a cell count ccs
   mt_ccs = methods::new("cell_count_set",
                         cell_count_cds,
-                        cds=cell_count_cds)
+                        cds = cell_count_cds)
 
   return(mt_ccs)
 }
@@ -345,7 +349,7 @@ combine_simulation <- function(wt_ccs,
 
   comb_coldata = rbind(colData(wt_ccs), colData(mt_ccs))
 
-  comb_coldata$embryo = paste0(comb_coldata$embryo_unq, comb_coldata$genotype )
+  comb_coldata$embryo = paste0( comb_coldata$genotype, comb_coldata$embryo_unq )
   cell_count_cds = monocle3::new_cell_data_set(comb_counts,
                                                cell_metadata=comb_coldata)
 
@@ -366,6 +370,7 @@ combine_simulation <- function(wt_ccs,
 #'
 fit_combine_ccm = function(wt_ccs,
                            mt_ccs,
+                           norm_method = "size_factors",
                            ctrl_penalty_matrix = NULL,
                            model_formula_str = "~ genotype",
                            nuisance_model_formula_str = NULL,
@@ -378,7 +383,8 @@ fit_combine_ccm = function(wt_ccs,
                                   main_model_formula_str = model_formula_str,
                                   nuisance_model_formula_str = nuisance_model_formula_str,
                                   penalty_matrix = ctrl_penalty_matrix,
-                                  num_bootstraps = num_bootstraps)
+                                  num_bootstraps = num_bootstraps,
+                                  norm_method = norm_method)
 
   return(comb_ccm)
 
@@ -429,7 +435,7 @@ fit_propeller = function(wt_ccs,
                          mt_ccs,
                          group_col = "genotype"){
 
-  comb_ccs = combine_simulation(wt_sim_ccs, mut_sim_ccs)
+  comb_ccs = combine_simulation(wt_ccs, mt_ccs)
 
   sample_to_group = colData(comb_ccs) %>%
     as.data.frame() %>%
@@ -437,6 +443,7 @@ fit_propeller = function(wt_ccs,
     select(sample, !!sym(group_col))
 
   prop_coldata = counts(comb_ccs) %>%
+    as.matrix %>%
     as.data.frame()  %>%
     tibble::rownames_to_column("cell_group") %>%
     pivot_longer(-cell_group) %>%
@@ -454,11 +461,6 @@ fit_propeller = function(wt_ccs,
 }
 
 
-fit_betabinomial <- function(wt_df,
-                             mt_df) {
-
-
-}
 
 #' @param which_sim
 #' @param wt_sim
@@ -468,6 +470,7 @@ fit_betabinomial <- function(wt_df,
 run_simulation = function(which_sim,
                           wt_sim,
                           mut_sim,
+                          norm_method = "size_factors",
                           cell_types_to_perturb = NULL,
                           num_bootstraps = NULL,
                           method = c("hooke", "bb", "propeller"),
@@ -504,6 +507,7 @@ run_simulation = function(which_sim,
                                        .x = mutated_sim_ccs,
                                        wt_ccs = wt_sim_ccs,
                                        model_formula_str = "~ genotype",
+                                       norm_method = norm_method,
                                        ctrl_penalty_matrix = ctrl_penalty_matrix,
                                        num_bootstraps = num_bootstraps))
 
@@ -519,7 +523,7 @@ run_simulation = function(which_sim,
   } else if (method == "bb") {
 
 
-    df = df %>% mutate(fit_bb = purrr::map2(.f = beta_binom_test,
+    df = df %>% mutate(fit_bb = purrr::map2(.f = purrr::possibly(beta_binom_test, NA_character_),
                                             .x = cell_type,
                                             .y = effect_size,
                                             wt_df = wt_df,
@@ -552,6 +556,8 @@ run_simulation = function(which_sim,
       mutate(cell_group = BaselineProp.clusters) %>%
       mutate(method = method)
 
+  } else if (method == "louvain") {
+
   }
 
 
@@ -564,17 +570,51 @@ run_simulation = function(which_sim,
 
 
 
-beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
+
+# louvain + glm
+
+# louvain_glm <- function() {
+#
+#   louvain.model <- model.matrix(~Condition, data=test.meta)
+#   louvain.count <- as.matrix(table(sim.clust.merge$Louvain.Clust, sim.clust.merge$Sample))
+#   louvain.dge <- DGEList(counts=louvain.count, lib.size=log(colSums(louvain.count)))
+#   louvain.dge <- estimateDisp(louvain.dge, louvain.model)
+#   louvain.fit <- glmQLFit(louvain.dge, louvain.model, robust=TRUE)
+#   louvain.res <- as.data.frame(topTags(glmQLFTest(louvain.fit, coef=2), sort.by='none', n=Inf))
+#   table(louvain.res$FDR <= 0.1)
+#
+# }
+
+
+beta_binom_test <- function(wt_df, mut_df, which_type, effect_size, use_size_factors = F) {
 
   # only edit the 1 cell type
   adj_df = mut_df %>% mutate(cells = ifelse(cell_type == which_type,
                                             round(cells * (1-effect_size)),
                                             cells))
 
+
   comb_df = rbind(wt_df, adj_df) %>%
     mutate(genotype = forcats::fct_relevel(genotype, c(unique(wt_df$genotype))))
 
   all_cell_types = unique(comb_df$cell_type)
+
+  if (use_size_factors) {
+    wt_sim_ccs = sim_df_to_ccs(wt_df)
+    mut_sim_ccs = sim_df_to_ccs(adj_df)
+    colData(mut_sim_ccs)$effect  = effect_size
+
+    comb_ccs = combine_simulation(wt_sim_ccs, mut_sim_ccs)
+    sf_df = data.frame("sf" = monocle3::size_factors(comb_ccs))
+    sf_df = sf_df %>% rownames_to_column("embryo_unq")
+    sf_df$embryo_unq = gsub("WT|MT", "", sf_df$embryo_unq)
+    # size factors
+    comb_df = left_join(comb_df,
+                        sf_df,
+                        by = "embryo_unq") %>%
+      mutate(cells = round(cells / sf)) %>%
+      select(-sf)
+  }
 
   run_bb = function(df, x) {
     df = df %>% filter(cell_type == x)
@@ -594,9 +634,11 @@ beta_binom_test <- function(wt_df, mut_df, which_type, effect_size) {
                                df = comb_df))
 
 
-  test_res %>% tidyr::unnest(c(bb.fit))
+  test_res %>% filter(!is.na(bb.fit)) %>% tidyr::unnest(c(bb.fit))
 
 }
+
+
 
 # BB
 
@@ -794,3 +836,49 @@ calculate_TPR <- function(res_df) {
   return(sum_df)
 
 }
+
+
+calc_tpr = function(df, q_value_threshold) {
+
+  # missing_values =
+  # df %>%
+  #   group_by(cell_type, embryo_size, rep, method) %>%
+  #   tally() %>%
+  #   pivot_wider(values_from = n, names_from = method) %>%
+  #   replace(is.na(.), 0) #%>%
+  #   mutate_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), ~.-87) %>%
+  #   ungroup %>%
+  #   group_by(cell_type, embryo_size) %>%
+  #   summarise_at(c("hooke", "hooke_bootstrap", "propeller", "bb"), sum) %>%
+  #   pivot_longer(-c(cell_type, embryo_size), values_to = "missing", names_to = "method")
+
+  df  %>%
+    mutate(type = case_when(
+      (cell_type == as.character(cell_group)) & (p.value < q_value_threshold) ~ "TP",
+      (cell_type == as.character(cell_group)) & (p.value >= q_value_threshold) ~ "FN",
+      (cell_type != as.character(cell_group)) & (p.value < q_value_threshold) ~ "FP",
+      (cell_type != as.character(cell_group)) & (p.value >= q_value_threshold) ~ "TN",
+      (cell_type == as.character(cell_group)) & (is.na(p.value)) ~ "FN",
+      (cell_type != as.character(cell_group)) & (is.na(p.value)) ~ "TN"
+    )) %>%
+    group_by(cell_type, type, effect_size, embryo_size, method) %>%
+    tally() %>%
+    pivot_wider(names_from = type, values_from = n) %>%
+    dplyr::union_all(dplyr::tibble(TP = integer(), FP = integer(),
+                                   TN = integer(), FN = integer())) %>%
+    replace(is.na(.), 0) %>%
+    # left_join(missing_values, by = c("cell_type", "embryo_size", "method")) %>%
+    # mutate(FN = FN - missing) %>% select(-missing) %>%
+    mutate(TPR = TP / (TP + FN),
+           FPR = FP / (FP + TN)) %>%
+    replace(is.na(.), 0) %>% as.data.frame()
+
+}
+
+
+get_simulated_embryo = function() {
+
+}
+
+
+
