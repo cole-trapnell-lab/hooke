@@ -52,7 +52,7 @@ setClass("cell_count_model",
                    best_reduced_model = "PLNnetworkfit",
                    sparsity = "numeric",
                    model_aux = "SimpleList",
-                   vhat = "matrix")
+                   vhat = "dgCMatrix")
 )
 
 
@@ -296,38 +296,44 @@ bootstrap_model = function(ccs,
 }
 
 
-compute_vhat = function(model) {
-
+compute_vhat = function(model, model_family, type) {
+  
     if (model$d > 0) {
       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
       ## safe inversion using Matrix::solve and Matrix::diag and error handling
+      
+      X = model_family$responses
+      Y = model_family$covariates
+      model$get_vcov_hat(type,X, Y)
 
-      vcov_mat = vcov(model)
+      vhat = vcov(model) 
+      # vcov_mat = vcov(model)
 
-      vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
-
-      #dimnames(vhat) <- dimnames(vcov_mat)
-      safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
-      vcov_mat = vcov_mat[safe_rows, safe_cols]
-
-      out <- tryCatch(Matrix::solve(vcov_mat),
-                      error = function(e) {e})
-      row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-      if (is(out, "error")) {
-        warning(paste("Inversion of the Fisher information matrix failed with following error message:",
-                      out$message,
-                      "Returning NA",
-                      sep = "\n"))
-        vhat <- matrix(NA, nrow = model$p, ncol = model$d)
-      } else {
-        row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-        row.names(vhat) = colnames(vhat) = row.names(vcov(model))
-        vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
-      }
-      #dimnames(vhat) <- dimnames(vcov_mat)
+    #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+    # 
+    #   #dimnames(vhat) <- dimnames(vcov_mat)
+    #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+    #   vcov_mat = vcov_mat[safe_rows, safe_cols]
+    # 
+    #   out <- tryCatch(Matrix::solve(vcov_mat),
+    #                   error = function(e) {e})
+    #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+    #   if (is(out, "error")) {
+    #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
+    #                   out$message,
+    #                   "Returning NA",
+    #                   sep = "\n"))
+    #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
+    #   } else {
+    #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+    #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
+    #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+    #   }
+    #   #dimnames(vhat) <- dimnames(vcov_mat)
     } else {
       vhat <- NULL
     }
+    vhat = methods::as(vhat, "dgCMatrix")
     vhat
 }
 
@@ -389,7 +395,7 @@ bootstrap_vhat = function(ccs,
   rownames(bootstrapped_vhat) = names
   colnames(bootstrapped_vhat) = names
 
-
+  bootstrapped_vhat = methods::as(bootstrapped_vhat, "dgCMatrix")
   return(bootstrapped_vhat)
 }
 
@@ -430,12 +436,14 @@ new_cell_count_model <- function(ccs,
                                  pln_num_penalties=30,
                                  norm_method = c("size_factors","TSS", "CSS",
                                                  "RLE", "GMPR", "Wrench", "none"),
+                                 vhat_method = c("wald", "sandwich", "louis", "bootstrap"),
                                  size_factors = NULL,
-                                 num_bootstraps = NULL,
+                                 num_bootstraps = 10,
                                  inception = NULL,
                                  ...) {
 
   norm_method <- match.arg(norm_method)
+  vhat_method <- match.arg(vhat_method)
   if (norm_method == "size_factors") {
     if (!is.null(size_factors)) {
 
@@ -532,9 +540,7 @@ new_cell_count_model <- function(ccs,
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
   best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
 
-  if (is.null(num_bootstraps)) {
-    vhat = compute_vhat(best_full_model)
-  } else {
+  if (vhat_method == "bootstrap") {
     vhat = bootstrap_vhat(ccs,
                           full_model_formula_str,
                           best_full_model,
@@ -546,7 +552,10 @@ new_cell_count_model <- function(ccs,
                           pln_num_penalties,
                           verbose,
                           norm_method,
-                         num_bootstraps)
+                          num_bootstraps)
+  } else {
+    vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
+    
   }
 
   ccm <- methods::new("cell_count_model",
