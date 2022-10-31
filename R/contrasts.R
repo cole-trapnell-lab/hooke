@@ -92,7 +92,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
 
   v_hat = ccm@vhat
 
-  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
+  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(model(ccm)$n)
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
