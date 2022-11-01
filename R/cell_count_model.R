@@ -286,7 +286,10 @@ bootstrap_model = function(ccs,
   sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                                             data = sub_pln_data,
                                                             penalties = reduced_pln_model$penalties,
-                                                            control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                            control_init=list(min.ratio=pln_min_ratio,
+                                                                              nPenalties=pln_num_penalties,
+                                                                              vcov_est = "none",
+                                                                              inception = best_full_model),
                                                             control_main=list(penalty_weights=initial_penalties,
                                                                               trace = ifelse(FALSE, 2, 0),
                                                                               inception = best_full_model)))
@@ -297,24 +300,24 @@ bootstrap_model = function(ccs,
 
 
 compute_vhat = function(model, model_family, type) {
-  
+
     if (model$d > 0) {
       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
       ## safe inversion using Matrix::solve and Matrix::diag and error handling
-      
+
       X = model_family$responses
       Y = model_family$covariates
       model$get_vcov_hat(type,X, Y)
 
-      vhat = vcov(model) 
+      vhat = vcov(model)
       # vcov_mat = vcov(model)
 
     #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
-    # 
+    #
     #   #dimnames(vhat) <- dimnames(vcov_mat)
     #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
     #   vcov_mat = vcov_mat[safe_rows, safe_cols]
-    # 
+    #
     #   out <- tryCatch(Matrix::solve(vcov_mat),
     #                   error = function(e) {e})
     #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
@@ -355,7 +358,18 @@ bootstrap_vhat = function(ccs,
                           norm_method,
                           num_bootstraps = 2) {
   # to do: parallelize
-  bootstraps = lapply(seq(1, num_bootstraps), function(i) {
+
+  get_bootstrap_coef = function(random.seed,
+                                ccs,
+                                full_model_formula_str,
+                                best_full_model,
+                                reduced_pln_model,
+                                pseudocount,
+                                initial_penalties,
+                                pln_min_ratio,
+                                pln_num_penalties,
+                                norm_method) {
+
     bootstrapped_model = bootstrap_model(ccs,
                                          full_model_formula_str,
                                          best_full_model,
@@ -364,14 +378,30 @@ bootstrap_vhat = function(ccs,
                                          initial_penalties,
                                          pln_min_ratio,
                                          pln_num_penalties,
-                                         random.seed = i,
+                                         random.seed = random.seed,
                                          norm_method = norm_method)
 
     best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
     coef(best_bootstrapped_model) %>%
       as.data.frame() %>%
       tibble::rownames_to_column("cell_group")
-  })
+
+  }
+
+
+  coef_df = data.frame(seed = seq(1, num_bootstraps)) %>%
+    mutate(coef = purrr::map(.f = purrr::possibly(get_bootstrap_coef, NA_character_),
+                             .x = seed,
+                             ccs,
+                             full_model_formula_str,
+                             best_full_model,
+                             reduced_pln_model,
+                             pseudocount,
+                             initial_penalties,
+                             pln_min_ratio,
+                             pln_num_penalties,
+                             norm_method))
+  coef_df = coef_df %>% filter(!is.na(coef))
 
   # compute the covariance of the parameters
   get_cov_mat = function(data, cell_group) {
@@ -383,7 +413,7 @@ bootstrap_vhat = function(ccs,
 
   }
 
-  bootstrapped_df = do.call(rbind, bootstraps) %>%
+  bootstrapped_df = do.call(rbind, coef_df$coef) %>%
     group_by(cell_group) %>%
     tidyr::nest() %>%
     mutate(cov_mat = purrr::map2(.f = get_cov_mat,
@@ -555,7 +585,7 @@ new_cell_count_model <- function(ccs,
                           num_bootstraps)
   } else {
     vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
-    
+
   }
 
   ccm <- methods::new("cell_count_model",
