@@ -101,7 +101,10 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   log_abund_sd = sqrt(diag(coef(model(ccm), type="covariance")))
   log_abund_se = se_fit
 
-  log_abund[log_abund < min_log_abund] = min_log_abund
+  below_thresh = log_abund < min_log_abund
+  log_abund[below_thresh] = min_log_abund
+  log_abund_se[below_thresh] = 0
+
   #max_log_abundances = log(matrixStats::colMaxs(pln_model$fitted))
   #min_log_abundances = log(matrixStats::colMins(pln_model$fitted))
   #percent_max = 100 * (exp(log_abund)/exp(max_log_abundances))
