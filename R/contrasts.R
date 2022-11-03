@@ -91,8 +91,13 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   # }
 
   v_hat = ccm@vhat
+  v_hat_method = ccm@vhat_method
 
-  se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) #/ sqrt(model(ccm)$n)
+  if (v_hat_method == "wald") {
+    se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
+  } else {
+    se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+  }
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
