@@ -268,7 +268,8 @@ bootstrap_model = function(ccs,
                            pln_min_ratio,
                            pln_num_penalties,
                            random.seed,
-                           norm_method) {
+                           norm_method,
+                           backend = "nlopt") {
 
   # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
@@ -283,16 +284,28 @@ bootstrap_model = function(ccs,
                                           offset = norm_method)
   # rerun the model using the same initial parameters
   # as the original, non bootstrapped model
-  sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-                                                            data = sub_pln_data,
-                                                            penalties = reduced_pln_model$penalties,
-                                                            control_init=list(min.ratio=pln_min_ratio,
-                                                                              nPenalties=pln_num_penalties,
-                                                                              vcov_est = "none",
-                                                                              inception = best_full_model),
-                                                            control_main=list(penalty_weights=initial_penalties,
-                                                                              trace = ifelse(FALSE, 2, 0),
-                                                                              inception = best_full_model)))
+
+  if (backend == "torch") {
+    sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
+                                                       data = sub_pln_data,
+                                                       # penalties = reduced_pln_model$penalties,
+                                                       control = list(min.ratio=pln_min_ratio,
+                                                                      nPenalties=pln_num_penalties,
+                                                                      vcov_est = "none",
+                                                                      inception = best_full_model,
+                                                                      backend = "torch",
+                                                                      penalty_weights=initial_penalties,
+                                                                      trace = ifelse(FALSE, 2, 0))))
+
+  } else {
+    sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+                                                              data = sub_pln_data,
+                                                              penalties = reduced_pln_model$penalties,
+                                                              control_init=list(min.ratio=pln_min_ratio,
+                                                                                nPenalties=pln_num_penalties),
+                                                              control_main=list(penalty_weights=initial_penalties,
+                                                                                trace = ifelse(FALSE, 2, 0))))
+  }
 
   return(sub_full_model)
 
@@ -356,7 +369,8 @@ bootstrap_vhat = function(ccs,
                           pln_num_penalties,
                           verbose,
                           norm_method,
-                          num_bootstraps = 2) {
+                          num_bootstraps,
+                          backend) {
   # to do: parallelize
 
   get_bootstrap_coef = function(random.seed,
@@ -368,7 +382,8 @@ bootstrap_vhat = function(ccs,
                                 initial_penalties,
                                 pln_min_ratio,
                                 pln_num_penalties,
-                                norm_method) {
+                                norm_method,
+                                backend) {
 
     bootstrapped_model = bootstrap_model(ccs,
                                          full_model_formula_str,
@@ -379,13 +394,19 @@ bootstrap_vhat = function(ccs,
                                          pln_min_ratio,
                                          pln_num_penalties,
                                          random.seed = random.seed,
-                                         norm_method = norm_method)
+                                         norm_method = norm_method,
+                                         backend = backend)
 
-    best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
-    coef(best_bootstrapped_model) %>%
-      as.data.frame() %>%
-      tibble::rownames_to_column("cell_group")
-
+    if (backend == "torch") {
+      coef(bootstrapped_model) %>%
+        as.data.frame() %>%
+        tibble::rownames_to_column("cell_group")
+    } else {
+      best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
+      coef(best_bootstrapped_model) %>%
+        as.data.frame() %>%
+        tibble::rownames_to_column("cell_group")
+    }
   }
 
 
@@ -400,7 +421,8 @@ bootstrap_vhat = function(ccs,
                              initial_penalties,
                              pln_min_ratio,
                              pln_num_penalties,
-                             norm_method))
+                             norm_method,
+                             backend))
   coef_df = coef_df %>% filter(!is.na(coef))
 
   # compute the covariance of the parameters
@@ -470,6 +492,7 @@ new_cell_count_model <- function(ccs,
                                  size_factors = NULL,
                                  num_bootstraps = 10,
                                  inception = NULL,
+                                 backend = "nlopt",
                                  ...) {
 
   norm_method <- match.arg(norm_method)
@@ -543,20 +566,20 @@ new_cell_count_model <- function(ccs,
 
   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                 data=pln_data,
-                                                                control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                                control_init=list(min.ratio=pln_min_ratio,
+                                                                                  nPenalties=pln_num_penalties),
                                                                 control_main=list(penalty_weights=initial_penalties,
-                                                                                  trace = ifelse(verbose, 2, 0),
-                                                                                  inception = inception),
+                                                                                  trace = ifelse(verbose, 2, 0)),
                                                                 ...),)
 
 
   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                                                data=pln_data,
                                                                penalties = reduced_pln_model$penalties,
-                                                               control_init=list(min.ratio=pln_min_ratio, nPenalties=pln_num_penalties),
+                                                               control_init=list(min.ratio=pln_min_ratio,
+                                                                                 nPenalties=pln_num_penalties),
                                                                control_main=list(penalty_weights=initial_penalties,
-                                                                                 trace = ifelse(verbose, 2, 0),
-                                                                                 inception = inception),
+                                                                                 trace = ifelse(verbose, 2, 0)),
                                                                ...),)
 
   model_frame = model.frame(full_model_formula[-2], pln_data)
@@ -582,7 +605,8 @@ new_cell_count_model <- function(ccs,
                           pln_num_penalties,
                           verbose,
                           norm_method,
-                          num_bootstraps)
+                          num_bootstraps,
+                          backend)
   } else {
     vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
 
