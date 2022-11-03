@@ -52,7 +52,8 @@ setClass("cell_count_model",
                    best_reduced_model = "PLNnetworkfit",
                    sparsity = "numeric",
                    model_aux = "SimpleList",
-                   vhat = "dgCMatrix")
+                   vhat = "dgCMatrix",
+                   vhat_method = "character")
 )
 
 
@@ -323,6 +324,22 @@ compute_vhat = function(model, model_family, type) {
       model$get_vcov_hat(type,X, Y)
 
       vhat = vcov(model)
+
+      # zero out everything not on block diagonal
+      if (type == "sandwich") {
+
+        num_coef = dim(coef(model))[2]
+        num_blocks =dim(vhat)[1]/num_coef
+
+        blocks = lapply(1:num_blocks, function(i) {
+          start = num_coef*(i-1) + 1
+          end = num_coef*i
+          vhat[start:end,start:end]
+        })
+
+        vhat = Matrix::bdiag(blocks) %>% as.matrix()
+      }
+
       # vcov_mat = vcov(model)
 
     #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
@@ -622,7 +639,8 @@ new_cell_count_model <- function(ccs,
                       reduced_model_family = reduced_pln_model,
                       sparsity = sparsity_factor,
                       model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels),
-                      vhat = vhat
+                      vhat = vhat,
+                      vhat_method = vhat_method
                       )
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
