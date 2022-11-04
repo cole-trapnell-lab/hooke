@@ -4,7 +4,7 @@
 \alias{get_paga_graph}
 \title{Extract a partitioned abstract graph from a Monocle cell_data_set object}
 \usage{
-get_paga_graph(cds, reduction_method = "UMAP")
+get_paga_graph(cds, reduction_method = "UMAP", partition_q_value = 0.05)
 }
 \arguments{
 \item{cds}{A cell_data_set object. cluster_cells() must have been called.}

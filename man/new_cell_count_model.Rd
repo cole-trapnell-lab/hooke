@@ -19,7 +19,12 @@ new_cell_count_model(
   pseudocount = 0,
   pln_min_ratio = 0.001,
   pln_num_penalties = 30,
+  norm_method = c("size_factors", "TSS", "CSS", "RLE", "GMPR", "Wrench", "none"),
+  vhat_method = c("wald", "sandwich", "louis", "bootstrap"),
   size_factors = NULL,
+  num_bootstraps = 10,
+  inception = NULL,
+  backend = "nlopt",
   ...
 )
 }
