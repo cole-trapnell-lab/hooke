@@ -1039,7 +1039,7 @@ plot_state_graph_annotations <- function(ccm,
     edge_labels=NULL
   }
 
-  layout_info = layout_state_graph(G, node_metadata, edge_labels, weighted=FALSE)
+  layout_info = layout_state_graph(G, node_metadata, NULL, weighted=FALSE)
   gvizl_coords = layout_info$gvizl_coords
   bezier_df = layout_info$bezier_df
   if (is.null(edge_weights) == FALSE){
@@ -1158,12 +1158,19 @@ plot_state_graph_annotations <- function(ccm,
   }
 
   if (is.null(edge_labels) == FALSE) {
-    label_df = layout_info$label_df
+    label_df = layout_info$bezier_df %>%
+      group_by(edge_name) %>%
+      summarize(x = mean(x), y=mean(y))
+    label_df$label = edge_labels[label_df$edge_name]
+    #label_df = layout_info$label_df
     #p = p +  ggnetwork::geom_nodetext(data = label_df,
     #                                  aes(x,y, label = label))
-    p = p + geom_text(data = label_df,
-                      aes(x,y, label = label),
-                      size=edge_label_font_size)
+    #p = p + geom_text(data = label_df,
+    #                  aes(x,y, label = label),
+    #                  size=edge_label_font_size)
+    p = p + ggrepel::geom_text_repel(data = label_df,
+                                mapping = aes(x, y, label=label),
+                                size=edge_label_font_size)
   }
 
   p = p + scale_size_identity() +
@@ -1189,6 +1196,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                     interval_col,
                                     log_abund_detection_thresh,
                                     q_val,
+                                    loss_time = c("largest_loss", "largest_loss_time", "earliest_time", "latest_time", "peak_loss_time"),
                                     label_nodes_by=NULL,
                                     group_nodes_by=NULL,
                                     label_edges_by=NULL,
@@ -1209,6 +1217,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                     group_outline=FALSE,
                                     ...)
 {
+  loss_time = match.arg(loss_time)
 
   if (is(state_graph, "igraph")){
     edges = state_graph %>% igraph::as_data_frame()
@@ -1268,7 +1277,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
     edge_labels=NULL
   }
 
-  layout_info = hooke:::layout_state_graph(G, node_metadata, edge_labels, weighted=FALSE)
+  layout_info = hooke:::layout_state_graph(G, node_metadata, NULL, weighted=FALSE)
   gvizl_coords = layout_info$gvizl_coords
   bezier_df = layout_info$bezier_df
   if (is.null(edge_weights) == FALSE){
@@ -1319,20 +1328,20 @@ plot_state_graph_losses <- function(perturbation_ccm,
   p = p + ggnewscale::new_scale_fill() +
     ggnetwork::geom_nodelabel(data = g,
                               aes(x, y,
-                                  fill = peak_loss_time,
+                                  fill = !!sym(loss_time),
                                   label = label_nodes_by),
                               size = node_size)
-  p = p + scale_fill_stepsn(n.breaks=5, colours = terrain.colors(5)) #+ scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
-
-
-
-
-
-  if (is.null(edge_labels) == FALSE) {
-    label_df = layout_info$label_df
-    p = p +  ggnetwork::geom_nodetext(data = label_df,
-                                      aes(x,y, label = label), size=3)
+  if (loss_time == "largest_loss"){
+    p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+  }else{
+    p = p + scale_fill_stepsn(n.breaks=5, colours = terrain.colors(5)) #+ scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
   }
+
+  # if (is.null(edge_labels) == FALSE) {
+  #   label_df = layout_info$label_df
+  #   p = p +  ggnetwork::geom_nodetext(data = label_df,
+  #                                     aes(x,y, label = label), size=3)
+  # }
 
   p = p + scale_size_identity() +
     monocle3:::monocle_theme_opts() +
