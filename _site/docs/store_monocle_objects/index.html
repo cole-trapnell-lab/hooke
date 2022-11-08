@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+ 
+    <title>Hooke</title>
+    <meta name="description" content="Hooke - A powerful software toolkit for differential expression analysis.">
+ 
+<link rel="shortcut icon" type="image/png" href="/hooke/images/favicon.png"/> 
+   <link rel="stylesheet" href="/hooke/css/main.css">
+   <link rel="stylesheet" href="/hooke/node_modules/prismjs/themes/base16-atelierlakeside.light.css" />
+   <link rel="stylesheet" href="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.css">
+ 
+   <link rel="canonical" href="http://localhost:4000/hooke/docs/store_monocle_objects/">
+   
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QW21JE7HZ7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-QW21JE7HZ7');
+</script>
+
+     <!-- Begin of scripts to run the widget -->
+     <script src="/hooke/widget_scripts/htmlwidgets-1.2/htmlwidgets.js"></script>
+     <link href="/hooke/widget_scripts/rglwidgetClass-2/rgl.css" rel="stylesheet" />
+     <script src="/hooke/widget_scripts/rglwidgetClass-2/rglClass.src.js"></script>
+     <script src="/hooke/widget_scripts/CanvasMatrix4-2016/CanvasMatrix.src.js"></script>
+     <script src="/hooke/widget_scripts/rglWebGL-binding-0.99.16/rglWebGL.js"></script>
+     <script src="/hooke/widget_scripts/jquery-1.11.3/jquery.min.js"></script>
+     <link href="/hooke/widget_scripts/crosstalk-1.0.0/css/crosstalk.css" rel="stylesheet" /> 
+     <script src="/hooke/widget_scripts/crosstalk-1.0.0/js/crosstalk.min.js"></script> 
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+     <!-- End of scripts to run the widget -->
+ </head>
+
+
+
+
+
+
+  <body data-spy= "scroll" data-target= "#toc">
+    <div class="container-fullwidth">
+    <nav class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="/hooke/">Hooke</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+              <li><a href="/hooke/docs/introduction">Documentation</a></li>
+              <!-- <li><a href="/hooke/Paul/">Paul</a></li> -->
+              <li><a href="/hooke/contributors/">Contributors</a></li>
+              <li><a href="/hooke/papers/">Publications</a></li>
+              <li><a href="https://github.com/cole-trapnell-lab/hooke">GitHub</a></li>     
+          </ul>
+
+
+        <script async src="https://cse.google.com/cse.js?cx=002844359906969258106:dsowufscyiq"></script>
+        <div class="gcse-searchresults-only"></div>
+        <link rel="stylesheet" href="/hooke/css/search.css">
+        <form action="" method="GET">
+            <input class="form-control mr-sm-2" class="input" name="q" type="search" placeholder="Search site" aria-label="Search">
+        </form>
+      </div>
+      </div>
+    </nav>
+    </div>
+  </header>
+  
+
+    
+    <div class= "container">
+  <div class= "row">
+    <div class= "col-sm-4">
+      <ul class="section-nav" id= "toc" data-spy= "affix" data-toggle= "toc">
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/introduction">Introduction</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/updates">Major updates in Monocle 3</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/installation">Installing Monocle 3</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/help">Getting help</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/starting">Getting started with Monocle 3</a></li> 
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/alignment">Pre-process your data</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/clustering">Clustering and classifying your cells</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/trajectories">Constructing single-cell trajectories</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/differential">Differential expression analysis</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/projection">Projecting query data onto a reference</a></li>
+        <li class="toc-entry toc-h2"><a class="active" href="/hooke/docs/store_monocle_objects">Storing monocle objects</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/cicero">Single-cell ATAC-seq data</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/citations">Citations and acknowledgments</a></li>
+      </ul>
+    </div>
+    <!-- main content area start -->
+    <div class= "col-sm-8">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/hooke/">Home</a></li>
+          <li class="breadcrumb-item"><a href="/hooke/docs/introduction">Docs</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Project query data onto a reference.</li>
+        </ol>
+      </nav>
+
+<h2>Save monocle objects</h2>
+
+<p>
+The Monocle3 cell_data_set includes the UMAP models and nearest neighbor indexes, which are not R objects, so the <code>saveRDS()</code> and <code>readRDS()</code> functions do not manage them. The Monocle3 functions <code>save_monocle_objects</code> and <code>load_monocle_objects</code> save the complete cell_data_set in a specified directory.
+</p>
+
+<h3 id="save-monocle-objects">Save monocle objects</h3>
+
+<p>
+The <code>save_monocle_objects()</code> function saves all of the information in a cell_data_set to files that are stored in a directory with the name specified by the <code>directory_path</code> argument. The optional <code>comment</code> argument stores a memo string with the objects, which is reported when the cell_data_set is loaded with <code>load_monocle_objects()</code>.
+</p>
+
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">save_monocle_objects</span><span class="p">(</span><span class="n">cds</span><span class="o">=</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">directory_path</span><span class="o">=</span><span class="s1">'my_cds_objects'</span><span class="p">,</span><span class="w"> </span><span class="n">comment</span><span class="o">=</span><span class="s1">'This is my example cds. Stored 2022-04-18.'</span><span class="p">)</span></code></pre></figure>
+
+
+<h3 id="load-monocle-objects">Load monocle objects</h3>
+
+<p>
+The <code>load_monocle_objects()</code> function loads the complete data set into R from the files in the directory specified by the <code>directory_path</code> argument.
+</p>
+
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">load_monocle_objects</span><span class="p">(</span><span class="n">directory_path</span><span class="o">=</span><span class="s1">'my_cds_objects'</span><span class="p">)</span></code></pre></figure>
+
+
+<!-- main content area end -->
+</div></div></div>
+
+
+    <script src="/hooke/node_modules/jquery/dist/jquery.min.js"></script>
+<script src="/hooke/node_modules/bootstrap-sass/assets/javascripts/bootstrap.min.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.r.js" type="text/javascript"></script>
+<script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.js"></script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<footer>
+
+  <div class="wrapper">
+      <p>&copy; 2022 Cole Trapnell</p>
+  </div>
+
+</footer>
+
+
+
+
+
+
+
+  </body>
+
+</html>

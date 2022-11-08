@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+ 
+    <title>Hooke</title>
+    <meta name="description" content="Hooke - A powerful software toolkit for differential expression analysis.">
+ 
+<link rel="shortcut icon" type="image/png" href="/hooke/images/favicon.png"/> 
+   <link rel="stylesheet" href="/hooke/css/main.css">
+   <link rel="stylesheet" href="/hooke/node_modules/prismjs/themes/base16-atelierlakeside.light.css" />
+   <link rel="stylesheet" href="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.css">
+ 
+   <link rel="canonical" href="http://localhost:4000/hooke/docs/trajectories/">
+   
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QW21JE7HZ7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-QW21JE7HZ7');
+</script>
+
+     <!-- Begin of scripts to run the widget -->
+     <script src="/hooke/widget_scripts/htmlwidgets-1.2/htmlwidgets.js"></script>
+     <link href="/hooke/widget_scripts/rglwidgetClass-2/rgl.css" rel="stylesheet" />
+     <script src="/hooke/widget_scripts/rglwidgetClass-2/rglClass.src.js"></script>
+     <script src="/hooke/widget_scripts/CanvasMatrix4-2016/CanvasMatrix.src.js"></script>
+     <script src="/hooke/widget_scripts/rglWebGL-binding-0.99.16/rglWebGL.js"></script>
+     <script src="/hooke/widget_scripts/jquery-1.11.3/jquery.min.js"></script>
+     <link href="/hooke/widget_scripts/crosstalk-1.0.0/css/crosstalk.css" rel="stylesheet" /> 
+     <script src="/hooke/widget_scripts/crosstalk-1.0.0/js/crosstalk.min.js"></script> 
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+     <!-- End of scripts to run the widget -->
+ </head>
+
+
+
+
+
+
+  <body data-spy= "scroll" data-target= "#toc">
+    <div class="container-fullwidth">
+    <nav class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="/hooke/">Hooke</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+              <li><a href="/hooke/docs/introduction">Documentation</a></li>
+              <!-- <li><a href="/hooke/Paul/">Paul</a></li> -->
+              <li><a href="/hooke/contributors/">Contributors</a></li>
+              <li><a href="/hooke/papers/">Publications</a></li>
+              <li><a href="https://github.com/cole-trapnell-lab/hooke">GitHub</a></li>     
+          </ul>
+
+
+        <script async src="https://cse.google.com/cse.js?cx=002844359906969258106:dsowufscyiq"></script>
+        <div class="gcse-searchresults-only"></div>
+        <link rel="stylesheet" href="/hooke/css/search.css">
+        <form action="" method="GET">
+            <input class="form-control mr-sm-2" class="input" name="q" type="search" placeholder="Search site" aria-label="Search">
+        </form>
+      </div>
+      </div>
+    </nav>
+    </div>
+  </header>
+  
+
+    
+    <div class= "container">
+  <div class= "row">
+    <div class= "col-sm-4">
+      <ul class="section-nav" id= "toc" data-spy= "affix" data-toggle= "toc">
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/introduction">Introduction</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/updates">Major updates in Monocle 3</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/installation">Installing Monocle 3</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/help">Getting help</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/starting">Getting started with Monocle 3</a></li>
+<!--        <li class="toc-entry toc-h2"><a href="/hooke/docs/alignment">Pre-process your data</a></li>  -->
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/clustering">Clustering and classifying your cells</a></li>
+        <li class="toc-entry toc-h2"><a class="active" href="/hooke/docs/trajectories">Constructing single-cell trajectories</a>
+          <ul>
+            <li class="toc-entry toc-h3"><a href="#pre-process">Pre-process the data</a></li>
+            <li class="toc-entry toc-h3"><a href="#reduce-dimension">Reduce dimensionality and visualize the results</a></li>
+            <li class="toc-entry toc-h3"><a href="#cluster-cells">Cluster your cells</a></li>
+            <li class="toc-entry toc-h3"><a href="#learn-graph">Learn the trajectory graph</a></li>
+            <li class="toc-entry toc-h3"><a href="#order-cells">Order the cells in pseudotime</a></li>
+            <li class="toc-entry toc-h3"><a href="#subset-branch">Subset cells by branch</a></li>
+            <li class="toc-entry toc-h3"><a href="#3d-trajectories">Working with 3D trajectories</a></li>
+          </ul>
+        </li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/differential">Differential expression analysis</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/projection">Projecting query data onto a reference</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/store_monocle_objects">Storing monocle objects</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/cicero">Single-cell ATAC-seq data</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/citations">Citations and acknowledgments</a></li>
+      </ul>
+    </div>
+    <!-- main content area -->
+    <div class= "col-sm-8">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/hooke/">Home</a></li>
+          <li class="breadcrumb-item"><a href="/hooke/docs/introduction">Docs</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Trajectories</li>
+        </ol>
+      </nav>
+      
+      <h2>Constructing single-cell trajectories </h2>
+      
+      <p>   
+        During development, in response to stimuli, and throughout life, cells
+        transition from one functional "state" to another. Cells in different states
+        express different sets of genes, producing a dynamic repetoire of proteins and
+        metabolites that carry out their work. As cells move between states, they undergo a
+        process of transcriptional re-configuration, with some genes being silenced and
+        others newly activated. These transient states are often hard to characterize
+        because purifying cells in between more stable endpoint states can be difficult
+        or impossible. Single-cell RNA-Seq can enable you to see these states without
+        the need for purification. However, to do so, we must determine where each cell
+        is in the range of possible states. 
+      </p>
+      
+      <p>   
+        Monocle introduced the strategy of using RNA-Seq for <em>single-cell trajectory analysis</em>. 
+        Rather than purifying cells into discrete states
+        experimentally, Monocle uses an algorithm to learn the sequence of gene
+        expression changes each cell must go through as part of a dynamic biological
+        process. Once it has learned the overall "trajectory" of gene expression
+        changes, Monocle can place each cell at its proper position in the trajectory.
+        You can then use Monocle's differential analysis toolkit to find genes regulated
+        over the course of the trajectory, as described in the section 
+        <a href = "/hooke/docs/differential/#pseudo-dep">Finding genes that change as a function of pseudotime </a>. 
+        If there are
+        multiple outcomes for the process, Monocle will reconstruct a "branched"
+        trajectory. These branches correspond to cellular "decisions", and Monocle
+        provides powerful tools for identifying the genes affected by them and involved
+        in making them. You can see how to analyze branches in the section 
+        <a href = "/hooke/docs/differential/#branches">Analyzing branches in single-cell trajectories </a>.
+      </p>
+      <p>
+        The workflow for reconstructing trajectories is very similar to the workflow for clustering, but it has a few additional 
+        steps. To illustrate the workflow, we will use another <emph>C. elegans</emph> data set, this one from 
+        <a href="https://dx.doi.org/10.1101/565549">Packer & Zhu et al</a>. Their study includes a time series analysis of whole 
+        developing embyros. We will examine a small subset of the data which includes most of the neurons. We will load it as we 
+        did with the L2 data:
+      </p>
+      
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">expression_matrix</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">readRDS</span><span class="p">(</span><span class="n">url</span><span class="p">(</span><span class="s2">"https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/packer_embryo_expression.rds"</span><span class="p">))</span><span class="w">
+</span><span class="n">cell_metadata</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">readRDS</span><span class="p">(</span><span class="n">url</span><span class="p">(</span><span class="s2">"https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/packer_embryo_colData.rds"</span><span class="p">))</span><span class="w">
+</span><span class="n">gene_annotation</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">readRDS</span><span class="p">(</span><span class="n">url</span><span class="p">(</span><span class="s2">"https://depts.washington.edu:/trapnell-lab/software/monocle3/celegans/data/packer_embryo_rowData.rds"</span><span class="p">))</span><span class="w">
+
+</span><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">new_cell_data_set</span><span class="p">(</span><span class="n">expression_matrix</span><span class="p">,</span><span class="w">
+                         </span><span class="n">cell_metadata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cell_metadata</span><span class="p">,</span><span class="w">
+                         </span><span class="n">gene_metadata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gene_annotation</span><span class="p">)</span></code></pre></figure>
+      
+      <h3 id="pre-process">Pre-process the data</h3>
+      <p>
+        Pre-processing works exactly as in clustering analysis. This time, we will use a different strategy for batch correction, which includes what <emph>Packer & Zhu et al</emph> did in their original analysis:
+      </p>
+      <p>
+        Note: Your data will not have the loading batch information demonstrated here, you will correct batch using your own batch
+        information.
+      </p>
+
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">preprocess_cds</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">num_dim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="m">50</span><span class="p">)</span><span class="w">
+</span><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">align_cds</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">alignment_group</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"batch"</span><span class="p">,</span><span class="w"> </span><span class="n">residual_model_formula_str</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~ bg.300.loading + bg.400.loading + bg.500.1.loading + bg.500.2.loading + bg.r17.loading + bg.b01.loading + bg.b02.loading"</span><span class="p">)</span></code></pre></figure>
+
+
+      <p>Note that in addition to using the <code>alignment_group</code> argument to <code>align_cds()</code>, which aligns groups of cells (i.e. batches), we are also using <code>residual_model_formula_str</code>. This argument is for subtracting continuous effects. You can use this to control for things like the fraction of mitochondrial reads in each cell, which is sometimes used as a QC metric for each cell. In this experiment (as in many scRNA-seq experiments), some cells spontanously lyse, releasing their mRNAs into the cell suspension immediately prior to loading into the single-cell library prep. This "supernatant RNA" contaminates each cells' transcriptome profile to a certain extent. Fortunately, it is fairly straightforward to estimate the level of background contamination in each batch of cells and subtract it, which is what Packer et al did in the original study.  Each of the columns <code>bg.300.loading</code>, <code>bg.400.loading</code>, corresponds to a background signal that a cell might be contaminated with. Passing these colums as terms in the <code>residual_model_formula_str</code> tells <code>align_cds()</code> to subtract these signals prior to dimensionality reduction, clustering, and trajectory inference. Note that you can call <code>align_cds()</code> with <code>alignment_group</code>, <code>residual_model_formula</code>, or both.
+
+      
+      <h3 id="reduce-dimension">Reduce dimensionality and visualize the results</h3>
+      <p>
+        Next, we reduce the dimensionality of the data. However, unlike clustering, which works well with both UMAP and t-SNE, 
+        here we strongly urge you to use UMAP, the default method:
+      </p>
+      
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">reduce_dimension</span><span class="p">(</span><span class="n">cds</span><span class="p">)</span><span class="w">
+</span><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">label_groups_by_cluster</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">  </span><span class="n">color_cells_by</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"cell.type"</span><span class="p">)</span></code></pre></figure>
+      
+      <p>
+        As you can see, despite the fact that we are only looking at a small slice of this dataset, Monocle reconstructs a 
+        trajectory with numerous branches. Overlaying the manual annotations on the UMAP reveals that these branches are 
+        principally occupied by one cell type.
+      </p>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_umap_packer_cell_type.png" width= 760>
+      </div>
+      
+      <p>
+        As with clustering analysis, you can use <code>plot_cells()</code> to visualize how individual genes vary along the 
+        trajectory. Let's look at some genes with interesting patterns of expression in ciliated neurons:
+      </p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">ciliated_genes</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="nf">c</span><span class="p">(</span><span class="s2">"che-1"</span><span class="p">,</span><span class="w">
+                    </span><span class="s2">"hlh-17"</span><span class="p">,</span><span class="w">
+                    </span><span class="s2">"nhr-6"</span><span class="p">,</span><span class="w">
+                    </span><span class="s2">"dmd-6"</span><span class="p">,</span><span class="w">
+                    </span><span class="s2">"ceh-36"</span><span class="p">,</span><span class="w">
+                    </span><span class="s2">"ham-1"</span><span class="p">)</span><span class="w">
+
+</span><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w">
+           </span><span class="n">genes</span><span class="o">=</span><span class="n">ciliated_genes</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_cell_groups</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">show_trajectory_graph</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">)</span></code></pre></figure>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_ciliated_markers.png" width= 760>
+      </div>
+      
+      <p>
+        We will learn how to identify the genes that are restricted to each outcome of the trajectory later on in the section 
+        <a href = "/hooke/docs/differential/#pseudo-dep">Finding genes that change as a function of pseudotime</a>.
+      </p>
+      
+      
+      <h3 id="cluster-cells">Cluster your cells</h3>
+      <p>
+        Although cells may continuously transition from one state to the next with no discrete boundary between them, Monocle 
+        does not assume that all cells in the dataset descend from a common transcriptional "ancestor". In many experiments, 
+        there might in fact be multiple distinct trajectories. For example, in a tissue responding to an infection, tissue 
+        resident immune cells and stromal cells will have very different initial transcriptomes, and will respond to infection 
+        quite differently, so they should be a part of the same trajectory. 
+      </p>
+      
+      <p>
+        Monocle is able to learn when cells should be placed in the same trajectory as opposed to separate trajectories through 
+        its clustering procedure. Recall that we run <code>cluster_cells()</code>, each cell is assigned not only to a cluster 
+        but also to a <emph>partition</emph>. When you are learning trajectories, each partition will eventually become a separate 
+        trajectory. We run <code>cluster_cells()</code>as before.
+      </p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">cluster_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">)</span><span class="w">
+</span><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">color_cells_by</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"partition"</span><span class="p">)</span></code></pre></figure>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_umap_partition.png" width= 760>
+      </div>
+      
+      <h3 id="learn-graph">Learn the trajectory graph</h3>
+      <p>
+        Next, we will fit a <emph>principal graph</emph> within each partition using the <code>learn_graph()</code> function:
+      </p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">learn_graph</span><span class="p">(</span><span class="n">cds</span><span class="p">)</span><span class="w">
+</span><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w">
+           </span><span class="n">color_cells_by</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"cell.type"</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_groups_by_cluster</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_leaves</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_branch_points</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">)</span></code></pre></figure>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_pr_graph_packer_cell_type.png" width= 760>
+      </div>
+      
+      <p>This graph will be used in many downstream steps, such as branch analysis and differential expression.</p>
+      
+      <h3 id="order-cells">Order the cells in pseudotime</h3>
+      <p>
+        Once we've learned a graph, we are ready to order the cells according to their progress through the developmental 
+        program. Monocle measures this progress in <emph>pseudotime</emph>. The box below defines pseudotime.
+      </p>
+      
+      <div class= "panel panel-info">
+        <div class= "panel-heading">
+          <h3 class= "panel-title" data-toc-skip>What is pseudotime?</h3>
+        </div>
+        <div class= "panel-body">
+          <p>
+            <emph>Pseudotime</emph> is a measure of how much progress an individual cell has made through a process such as cell 
+            differentiation. 
+          </p>
+          
+          <p>
+            In many biological processes, cells do not progress in perfect synchrony.  In single-cell expression studies of processes 
+            such as cell differentiation, captured cells might be widely distributed in terms of progress.  That is, in a population 
+            of cells captured at exactly the same time, some cells might be far along, while others might not yet even have begun 
+            the process.  This asynchrony creates major problems when you want to understand the sequence of regulatory changes that 
+            occur as cells transition from one state to the next. Tracking the expression across cells captured at the same time 
+            produces a very compressed sense of a gene's kinetics, and the apparent variability of that gene's expression will be 
+            very high.
+          </p>
+          
+          <p>
+            By ordering each cell according to its progress along a learned trajectory, Monocle alleviates the problems that 
+            arise due to asynchrony. Instead of tracking changes in expression as a function of time, Monocle tracks changes as 
+            a function of progress along the trajectory, which we term "pseudotime". Pseudotime is an abstract unit of progress: 
+            it's simply the distance between a cell and the start of the trajectory, measured along the shortest path. The 
+            trajectory's total length is defined in terms of the total amount of transcriptional change that a cell undergoes as 
+            it moves from the starting state to the end state.
+          </p>
+        </div>
+      </div>
+      
+      <p>
+        In order to place the cells in order, we need to tell Monocle where the "beginning" of the biological process is. We do so 
+        by choosing regions of the graph that we mark as "roots" of the trajectory. In time series experiments, this can usually 
+        be accomplished by finding spots in the UMAP space that are occupied by cells from early time points:
+      </p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w">
+           </span><span class="n">color_cells_by</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"embryo.time.bin"</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_cell_groups</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_leaves</span><span class="o">=</span><span class="kc">TRUE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_branch_points</span><span class="o">=</span><span class="kc">TRUE</span><span class="p">,</span><span class="w">
+           </span><span class="n">graph_label_size</span><span class="o">=</span><span class="m">1.5</span><span class="p">)</span></code></pre></figure>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_pr_graph_by_time.png" width= 760>
+      </div>
+      
+      <p>
+        The black lines show the structure of the graph. Note that the graph is not fully connected: cells in different partitions 
+        are in distinct components of the graph. The circles with numbers in them denote special points within the graph. Each 
+        <emph>leaf</emph>, denoted by light gray circles, corresponds to a different outcome (i.e. cell fate) of the trajectory. 
+        Black circles indicate branch nodes, in which cells can travel to one of several outcomes. You can control whether or not 
+        these are shown in the plot with the <code>label_leaves</code> and <code>label_branch_points</code> arguments to 
+        <code>plot_cells</code>. Please note that numbers within the circles are provided for reference purposes only.
+      </p>
+      
+      <p>
+        Now that we have a sense of where the early cells fall, we can call <code>order_cells()</code>, which will calculate where 
+        each cell falls in pseudotime. In order to do so <code>order_cells()</code>needs you to specify the <emph>root nodes</emph> 
+        of the trajectory graph. If you don't provide them as an argument, it will launch a graphical user interface for selecting 
+        one or more root nodes.
+      </p>
+      
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">order_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">)</span></code></pre></figure>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/choose_root_recording.gif" width= 760>
+      </div>
+      
+      <p>
+        In the above example, we just chose one location, but you could pick as many as you want. Plotting the cells and coloring 
+        them by pseudotime shows how they were ordered:
+      </p>
+      
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w">
+           </span><span class="n">color_cells_by</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"pseudotime"</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_cell_groups</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_leaves</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_branch_points</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">graph_label_size</span><span class="o">=</span><span class="m">1.5</span><span class="p">)</span></code></pre></figure>
+      
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_pr_graph_by_pseudotime.png" width= 760>
+      </div>
+      <p>
+        Note that some of the cells are gray. This means they have <emph>infinite</emph> pseudotime, because they were not reachable 
+        from the root nodes that were picked. In general, any cell on a partition that lacks a root node will be assigned an infinite 
+        pseudotime. In general, you should choose at least one root per partition.
+      </p>
+      
+      <p>
+        It's often desirable to specify the root of the trajectory programmatically, rather than manually picking it. The function 
+        below does so by first grouping the cells according to which trajectory graph node they are nearest to. Then, it calculates 
+        what fraction of the cells at each node come from the earliest time point. Then it picks the node that is most heavily occupied 
+        by early cells and returns that as the root.
+      </p>
+      
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="c1"># a helper function to identify the root principal points:
+</span><span class="n">get_earliest_principal_node</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="k">function</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">time_bin</span><span class="o">=</span><span class="s2">"130-170"</span><span class="p">){</span><span class="w">
+  </span><span class="n">cell_ids</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">which</span><span class="p">(</span><span class="n">colData</span><span class="p">(</span><span class="n">cds</span><span class="p">)[,</span><span class="w"> </span><span class="s2">"embryo.time.bin"</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">time_bin</span><span class="p">)</span><span class="w">
+  
+  </span><span class="n">closest_vertex</span><span class="w"> </span><span class="o">&lt;-</span><span class="w">
+  </span><span class="n">cds</span><span class="o">@</span><span class="n">principal_graph_aux</span><span class="p">[[</span><span class="s2">"UMAP"</span><span class="p">]]</span><span class="o">$</span><span class="n">pr_graph_cell_proj_closest_vertex</span><span class="w">
+  </span><span class="n">closest_vertex</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">as.matrix</span><span class="p">(</span><span class="n">closest_vertex</span><span class="p">[</span><span class="n">colnames</span><span class="p">(</span><span class="n">cds</span><span class="p">),</span><span class="w"> </span><span class="p">])</span><span class="w">
+  </span><span class="n">root_pr_nodes</span><span class="w"> </span><span class="o">&lt;-</span><span class="w">
+  </span><span class="n">igraph</span><span class="o">::</span><span class="n">V</span><span class="p">(</span><span class="n">principal_graph</span><span class="p">(</span><span class="n">cds</span><span class="p">)[[</span><span class="s2">"UMAP"</span><span class="p">]])</span><span class="o">$</span><span class="n">name</span><span class="p">[</span><span class="nf">as.numeric</span><span class="p">(</span><span class="n">names</span><span class="w">
+  </span><span class="p">(</span><span class="n">which.max</span><span class="p">(</span><span class="n">table</span><span class="p">(</span><span class="n">closest_vertex</span><span class="p">[</span><span class="n">cell_ids</span><span class="p">,]))))]</span><span class="w">
+  
+  </span><span class="n">root_pr_nodes</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span><span class="n">cds</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">order_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">root_pr_nodes</span><span class="o">=</span><span class="n">get_earliest_principal_node</span><span class="p">(</span><span class="n">cds</span><span class="p">))</span></code></pre></figure>
+      
+      <p>
+        Passing the programatically selected root node to <code>order_cells()</code> via the <code>root_pr_node</code>argument 
+        yields:
+      </p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">plot_cells</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w">
+           </span><span class="n">color_cells_by</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"pseudotime"</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_cell_groups</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_leaves</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">label_branch_points</span><span class="o">=</span><span class="kc">FALSE</span><span class="p">,</span><span class="w">
+           </span><span class="n">graph_label_size</span><span class="o">=</span><span class="m">1.5</span><span class="p">)</span></code></pre></figure>
+
+      <div class= "text-center">
+        <img src= "/hooke/images/manual_images/embryo_pr_graph_by_pseudotime_programmatically_ordered.png" width= 760>
+      </div>
+      
+      <p>
+        Note that we could easily do this on a per-partition basis by first grouping the cells by partition 
+        using the <code>partitions()</code> function. This would result in all cells being assigned a finite pseudotime.
+      </p>
+      <h3 id="subset-branch">Subset cells by branch</h3>
+      <p>
+        It is often useful to subset cells based on their branch in the trajectory. The function <code>choose_graph_segments</code>
+        allows you to do so interactively.
+      </p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds_sub</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">choose_graph_segments</span><span class="p">(</span><span class="n">cds</span><span class="p">)</span></code></pre></figure>
+            
+      <div class= "text-center">
+        <img src= "/hooke/images/choose_graph_segments.gif" width= 760>
+      </div>
+
+      
+      <h3 id="3d-trajectories">Working with 3D trajectories</h3>
+      
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">cds_3d</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">reduce_dimension</span><span class="p">(</span><span class="n">cds</span><span class="p">,</span><span class="w"> </span><span class="n">max_components</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="m">3</span><span class="p">)</span><span class="w">
+</span><span class="n">cds_3d</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">cluster_cells</span><span class="p">(</span><span class="n">cds_3d</span><span class="p">)</span><span class="w">
+</span><span class="n">cds_3d</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">learn_graph</span><span class="p">(</span><span class="n">cds_3d</span><span class="p">)</span><span class="w">
+</span><span class="n">cds_3d</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">order_cells</span><span class="p">(</span><span class="n">cds_3d</span><span class="p">,</span><span class="w"> </span><span class="n">root_pr_nodes</span><span class="o">=</span><span class="n">get_earliest_principal_node</span><span class="p">(</span><span class="n">cds</span><span class="p">))</span><span class="w">
+
+</span><span class="n">cds_3d_plot_obj</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">plot_cells_3d</span><span class="p">(</span><span class="n">cds_3d</span><span class="p">,</span><span class="w"> </span><span class="n">color_cells_by</span><span class="o">=</span><span class="s2">"partition"</span><span class="p">)</span></code></pre></figure>
+      <p>
+      <!-- --> <iframe src="/hooke/images/manual_images/emb_3d_by_partition.html"
+        height="600" width="100%"
+        scrolling="no" seamless="seamless"
+        frameBorder="0">
+      </iframe>
+    <!-- -->
+  </p>
+    <a href="/hooke/docs/clustering" class="btn btn-info btn-sm btn-prev" role="button">Previous</a>
+    <a href="/hooke/docs/differential" class="btn btn-success btn-sm btn-next" role="button">Next</a>
+    </div>
+  </div>
+</div>
+
+
+    <script src="/hooke/node_modules/jquery/dist/jquery.min.js"></script>
+<script src="/hooke/node_modules/bootstrap-sass/assets/javascripts/bootstrap.min.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.r.js" type="text/javascript"></script>
+<script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.js"></script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<footer>
+
+  <div class="wrapper">
+      <p>&copy; 2022 Cole Trapnell</p>
+  </div>
+
+</footer>
+
+
+
+
+
+
+
+  </body>
+
+</html>

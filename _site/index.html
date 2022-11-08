@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+ 
+    <title>Hooke</title>
+    <meta name="description" content="Hooke - A powerful software toolkit for differential expression analysis.">
+ 
+<link rel="shortcut icon" type="image/png" href="/hooke/images/favicon.png"/> 
+   <link rel="stylesheet" href="/hooke/css/main.css">
+   <link rel="stylesheet" href="/hooke/node_modules/prismjs/themes/base16-atelierlakeside.light.css" />
+   <link rel="stylesheet" href="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.css">
+ 
+   <link rel="canonical" href="http://localhost:4000/hooke/">
+   
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QW21JE7HZ7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-QW21JE7HZ7');
+</script>
+
+     <!-- Begin of scripts to run the widget -->
+     <script src="/hooke/widget_scripts/htmlwidgets-1.2/htmlwidgets.js"></script>
+     <link href="/hooke/widget_scripts/rglwidgetClass-2/rgl.css" rel="stylesheet" />
+     <script src="/hooke/widget_scripts/rglwidgetClass-2/rglClass.src.js"></script>
+     <script src="/hooke/widget_scripts/CanvasMatrix4-2016/CanvasMatrix.src.js"></script>
+     <script src="/hooke/widget_scripts/rglWebGL-binding-0.99.16/rglWebGL.js"></script>
+     <script src="/hooke/widget_scripts/jquery-1.11.3/jquery.min.js"></script>
+     <link href="/hooke/widget_scripts/crosstalk-1.0.0/css/crosstalk.css" rel="stylesheet" /> 
+     <script src="/hooke/widget_scripts/crosstalk-1.0.0/js/crosstalk.min.js"></script> 
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+     <!-- End of scripts to run the widget -->
+ </head>
+
+
+
+
+
+
+  <body >
+    <div class="container-fullwidth">
+    <nav class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="/hooke/">Hooke</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+              <li><a href="/hooke/docs/introduction">Documentation</a></li>
+              <!-- <li><a href="/hooke/Paul/">Paul</a></li> -->
+              <li><a href="/hooke/contributors/">Contributors</a></li>
+              <li><a href="/hooke/papers/">Publications</a></li>
+              <li><a href="https://github.com/cole-trapnell-lab/hooke">GitHub</a></li>     
+          </ul>
+
+
+        <script async src="https://cse.google.com/cse.js?cx=002844359906969258106:dsowufscyiq"></script>
+        <div class="gcse-searchresults-only"></div>
+        <link rel="stylesheet" href="/hooke/css/search.css">
+        <form action="" method="GET">
+            <input class="form-control mr-sm-2" class="input" name="q" type="search" placeholder="Search site" aria-label="Search">
+        </form>
+      </div>
+      </div>
+    </nav>
+    </div>
+  </header>
+  
+
+    
+    <!-- Main jumbotron for a primary marketing message or call to action -->
+<div class="jumbotron" style="background-image: url(images/neurons_clipped.png); background-position: center; background-repeat: no-repeat; color: #ecf0f1;"> <!--; -->
+  <div class="container">
+    <div class="text-center">
+      <h1>Hooke</h1>
+      <p>An analysis toolkit for single-cell differential expression.</p>
+      <p><a class="btn btn-primary btn-lg" href="/hooke/docs/introduction" role="button">Get started&raquo;</a></p>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Example row of columns -->
+
+<!--
+  <div class="row">
+    
+    <div class="col-md-4">
+      <div class="text-center">
+        <img src="images/worm_trajectory.png" height=300 width=300></img>
+        <h2>Trajectories</h2>
+        <p>Build single-cell trajectories with the software that introduced pseudotime. Find cell fate decisions and the genes regulated as they're made.</p>
+        <p><a class="btn btn-default" href="/hooke/docs/trajectories" role="button">View details &raquo;</a></p>
+      </div>
+    </div>
+    
+    <div class="col-md-4">
+      <div class="text-center">
+        <img src="images/worm_umap.png" height=300 width=300></img>
+        <h2>Clustering</h2>
+        <p>Group and classify your cells based on gene expression. Identify new cell types and states and the genes that distinguish them.</p>
+        <p><a class="btn btn-default" href="/hooke/docs/clustering" role="button">View details &raquo;</a></p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="text-center">
+        <img src="images/worm_violin.png" height=300 width=300></img>
+        <h2>Differential expression</h2>
+        <p>Find genes that vary between cell types and states, over trajectories, or in response to perturbations using statistically robust, flexible differential analysis.</p>
+        <p><a class="btn btn-default" href="/hooke/docs/differential" role="button">View details &raquo;</a></p>
+      </div>
+    </div>
+  </div>
+ 
+-->
+ 
+  <!-- START THE FEATURETTES -->
+
+<!--
+  
+  <hr class="featurette-divider">
+  
+  <div class="row featurette">
+    <div class="col-md-7 col-md-push-5">
+      <h2 class="featurette-heading"><a href = "/hooke/docs/clustering"> Classify and count cells.</a></h2>
+      <p class="lead">Single-cell RNA-Seq experiments allow you to discover (and possibly rare) subtypes of cells. Monocle 3 helps you identify them.</p>
+      
+    </div>
+    <div class="col-md-5 col-md-pull-7">
+      <img class="featurette-image img-responsive center-block" src="/hooke/images/worm_classification.png" width=300 height=300 alt="Generic placeholder image">
+    </div>
+  </div>
+  
+  
+  <hr class="featurette-divider">
+  
+  <div class="row featurette">
+    <div class="col-md-7">
+      <h2 class="featurette-heading"><a href = "/hooke/docs/clustering/#find-markers">Identify new marker genes.</a></h2>
+      <p class="lead">
+        Many researchers are using single-cell RNA-Seq to discover new cell types. Monocle 3 can help you purify them or characterize 
+        them further by identifying key marker genes that you can use in follow up experiments such as immunofluorescence or flow 
+        sorting. 
+      </p>
+    </div>
+    <div class="col-md-5">
+      <img class="featurette-image img-responsive center-block" src="/hooke/images/top_markers.png" height=300 width=300 alt="Generic placeholder image">
+    </div>
+  </div>
+  
+  
+  <hr class="featurette-divider">
+  
+  <div class="row featurette">
+    <div class="col-md-7  col-md-push-5">
+      <h2 class="featurette-heading"><a href = "/hooke/docs/trajectories">Robustly track changes over (pseudo) time.</a></h2>
+      <p class="lead">
+        In development, disease, and throughout life, cells transition from one state to another.
+        Monocle introduced the concept of pseudotime, which is a measure of how far a cell has moved through biological progress. 
+      </p>
+    </div>
+    <div class="col-md-5  col-md-pull-7">
+      <img class="featurette-image img-responsive center-block" src="/hooke/images/pseudotime_dynamics.png" width=300 height=300 alt="Generic placeholder image">
+    </div>
+  </div>
+  
+  <hr class="featurette-divider">
+  
+  <div class="row featurette">
+    <div class="col-md-7">
+      <h2 class="featurette-heading"><a href = "/hooke/docs/differential">Dissect cellular decisions with branch analysis.</a></h2>
+      <p class="lead">Single-cell trajectory analysis how cells
+        choose between one of several possible
+        end states. The new reconstruction
+        algorithms introduced in Monocle 3  can robustly reveal
+        branching trajectories, along with the genes
+        that cells use to navigate these decisions.
+      </p>
+      
+    </div>
+    <div class="col-md-5">
+      <img class="featurette-image img-responsive center-block" src="/hooke/images/branch_module.png" height=300 width=300 alt="Generic placeholder image">
+    </div>
+    
+  </div>
+
+-->
+
+</div>
+  
+
+
+    <script src="/hooke/node_modules/jquery/dist/jquery.min.js"></script>
+<script src="/hooke/node_modules/bootstrap-sass/assets/javascripts/bootstrap.min.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.r.js" type="text/javascript"></script>
+<script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.js"></script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<footer>
+
+  <div class="wrapper">
+      <p>&copy; 2022 Cole Trapnell</p>
+  </div>
+
+</footer>
+
+
+
+
+
+
+
+  </body>
+
+</html>

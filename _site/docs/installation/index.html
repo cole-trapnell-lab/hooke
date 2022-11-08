@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+ 
+    <title>Hooke</title>
+    <meta name="description" content="Hooke - A powerful software toolkit for differential expression analysis.">
+ 
+<link rel="shortcut icon" type="image/png" href="/hooke/images/favicon.png"/> 
+   <link rel="stylesheet" href="/hooke/css/main.css">
+   <link rel="stylesheet" href="/hooke/node_modules/prismjs/themes/base16-atelierlakeside.light.css" />
+   <link rel="stylesheet" href="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.css">
+ 
+   <link rel="canonical" href="http://localhost:4000/hooke/docs/installation/">
+   
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QW21JE7HZ7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-QW21JE7HZ7');
+</script>
+
+     <!-- Begin of scripts to run the widget -->
+     <script src="/hooke/widget_scripts/htmlwidgets-1.2/htmlwidgets.js"></script>
+     <link href="/hooke/widget_scripts/rglwidgetClass-2/rgl.css" rel="stylesheet" />
+     <script src="/hooke/widget_scripts/rglwidgetClass-2/rglClass.src.js"></script>
+     <script src="/hooke/widget_scripts/CanvasMatrix4-2016/CanvasMatrix.src.js"></script>
+     <script src="/hooke/widget_scripts/rglWebGL-binding-0.99.16/rglWebGL.js"></script>
+     <script src="/hooke/widget_scripts/jquery-1.11.3/jquery.min.js"></script>
+     <link href="/hooke/widget_scripts/crosstalk-1.0.0/css/crosstalk.css" rel="stylesheet" /> 
+     <script src="/hooke/widget_scripts/crosstalk-1.0.0/js/crosstalk.min.js"></script> 
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+     <!-- End of scripts to run the widget -->
+ </head>
+
+
+
+
+
+
+  <body data-spy= "scroll" data-target= "#toc">
+    <div class="container-fullwidth">
+    <nav class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="/hooke/">Hooke</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+          <ul class="nav navbar-nav">
+              <li><a href="/hooke/docs/introduction">Documentation</a></li>
+              <!-- <li><a href="/hooke/Paul/">Paul</a></li> -->
+              <li><a href="/hooke/contributors/">Contributors</a></li>
+              <li><a href="/hooke/papers/">Publications</a></li>
+              <li><a href="https://github.com/cole-trapnell-lab/hooke">GitHub</a></li>     
+          </ul>
+
+
+        <script async src="https://cse.google.com/cse.js?cx=002844359906969258106:dsowufscyiq"></script>
+        <div class="gcse-searchresults-only"></div>
+        <link rel="stylesheet" href="/hooke/css/search.css">
+        <form action="" method="GET">
+            <input class="form-control mr-sm-2" class="input" name="q" type="search" placeholder="Search site" aria-label="Search">
+        </form>
+      </div>
+      </div>
+    </nav>
+    </div>
+  </header>
+  
+
+    
+    <div class= "container">
+  <div class= "row">
+    <div class= "col-sm-4">
+      <!--  <nav id= "toc" data-spy= "affix" data-toggle= "toc"></nav>-->
+      <ul class="section-nav" id= "toc" data-spy= "affix" data-toggle= "toc">
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/introduction">Introduction</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/features">Major features in Hooke</a></li>
+        <li class="toc-entry toc-h2"><a class="active" href="/hooke/docs/installation">Installing Hooke</a>
+          <ul>
+            <li class="toc-entry toc-h3"><a href="#required-software">Required software</a></li>
+            <li class="toc-entry toc-h3"><a href="#testing-installation">Testing the installation</a></li>
+            <li class="toc-entry toc-h3"><a href="#troubleshooting">Installation troubleshooting</a></li>
+          </ul>
+        </li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/help">Getting help</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/starting">Getting started with Hooke</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/citations">Citations and acknowledgments</a></li>
+      </ul>
+    </div>
+    <!-- main content area -->
+    <div class= "col-sm-8">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/hooke/">Home</a></li>
+          <li class="breadcrumb-item"><a href="/hooke/docs/introduction">Docs</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Installation</li>
+        </ol>
+      </nav>
+      <h2>Installing Hooke</h2>
+
+      <h3 id="required-software"> Required software </h3>
+
+      <p>Monocle 3 runs in the <a href= "https://www.r-project.org/">R statistical
+        computing environment</a>. You will need R version 4.1.0 or higher,
+        <a href="https://bioconductor.org/">Bioconductor</a> version 3.14, and
+        monocle3 1.2.7 or higher to have access to the latest features.
+      </p>
+
+      <p>To install Bioconductor, open R and run:</p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">requireNamespace</span><span class="p">(</span><span class="s2">"BiocManager"</span><span class="p">,</span><span class="w"> </span><span class="n">quietly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">TRUE</span><span class="p">))</span><span class="w">
+</span><span class="n">install.packages</span><span class="p">(</span><span class="s2">"BiocManager"</span><span class="p">)</span><span class="w">
+</span><span class="n">BiocManager</span><span class="o">::</span><span class="n">install</span><span class="p">(</span><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"3.14"</span><span class="p">)</span></code></pre></figure>
+
+      <p>Next, install a few Bioconductor dependencies that aren't automatically installed:</p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">BiocManager</span><span class="o">::</span><span class="n">install</span><span class="p">(</span><span class="nf">c</span><span class="p">(</span><span class="s1">'BiocGenerics'</span><span class="p">,</span><span class="w"> </span><span class="s1">'DelayedArray'</span><span class="p">,</span><span class="w"> </span><span class="s1">'DelayedMatrixStats'</span><span class="p">,</span><span class="w">
+                       </span><span class="s1">'limma'</span><span class="p">,</span><span class="w"> </span><span class="s1">'lme4'</span><span class="p">,</span><span class="w"> </span><span class="s1">'S4Vectors'</span><span class="p">,</span><span class="w"> </span><span class="s1">'SingleCellExperiment'</span><span class="p">,</span><span class="w">
+                       </span><span class="s1">'SummarizedExperiment'</span><span class="p">,</span><span class="w"> </span><span class="s1">'batchelor'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Matrix.utils'</span><span class="p">,</span><span class="w">
+                       </span><span class="s1">'HDF5Array'</span><span class="p">,</span><span class="w"> </span><span class="s1">'terra'</span><span class="p">,</span><span class="w"> </span><span class="s1">'ggrastr'</span><span class="p">))</span></code></pre></figure>
+
+      <p>Now, install monocle3 through the cole-trapnell-lab GitHub, execute:</p>
+
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">install.packages</span><span class="p">(</span><span class="s2">"devtools"</span><span class="p">)</span><span class="w">
+</span><span class="n">devtools</span><span class="o">::</span><span class="n">install_github</span><span class="p">(</span><span class="s1">'cole-trapnell-lab/monocle3'</span><span class="p">)</span></code></pre></figure>
+
+      <p>If you wish to install the develop branch of monocle3, execute:</p>
+
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">devtools</span><span class="o">::</span><span class="n">install_github</span><span class="p">(</span><span class="s1">'cole-trapnell-lab/monocle3'</span><span class="p">,</span><span class="w"> </span><span class="n">ref</span><span class="o">=</span><span class="s2">"develop"</span><span class="p">)</span></code></pre></figure>
+
+      <h3 id="testing-installation"> Testing the installation </h3>
+
+      <p> To ensure that Monocle 3 was installed correctly, start a new R session and
+        run:
+      </p>
+
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">library</span><span class="p">(</span><span class="n">monocle3</span><span class="p">)</span></code></pre></figure>
+
+      <h3 id="troubleshooting">Installation troubleshooting</h3>
+      <p>
+        Below are a few of the most common errors that users encounter when installing
+        Monocle 3. If you discover new difficulties, please open an issue on Github describing
+        the problem.
+      </p>
+      <h4>Errors involving Gdal:</h4>
+      <h5><strong>Example error messages:</strong></h5>
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">configure: error: gdal-config not found or not executable.
+ERROR: configuration failed <span class="k">for </span>package ‘sf’
+<span class="k">*</span> removing ‘/Library/Frameworks/R.framework/Versions/3.4/Resources/library/sf’
+Warning <span class="k">in </span>install.packages :
+installation of package ‘sf’ had non-zero <span class="nb">exit </span>status</code></pre></figure>
+
+      <h5><strong>Solution:</strong></h5>
+      <p>
+        One of Monocle 3's dependencies requires a package called gdal. For information on how to
+        install it on your system, see the sf installation instructions <a href="https://github.com/r-spatial/sf">here</a>.
+      </p>
+
+      <h4>Errors involving Xcode:</h4>
+
+      <h5><strong>Solution:</strong></h5>
+      <p>
+        For Mac users only, Xcode command line tools is required. To install, open terminal and type
+        <code>xcode-select --install</code> and then follow the prompts. When it has completed installation,
+        restart the Monocle 3 installation instructions.
+      </p>
+
+      <h4>Errors involving gfortran:</h4>
+      <h5><strong>Example error messages:</strong></h5>
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">make: gfortran: No such file or directory
+make: <span class="k">***</span> <span class="o">[</span>cigraph/src/AMD/Source/amd.o] Error 1
+ERROR: compilation failed <span class="k">for </span>package <span class="s1">'leidenbase'</span></code></pre></figure>
+
+      <h5><strong>Solution:</strong></h5>
+      <p>
+      The above error indicates that you need to install gfortran on your computer (for Mac users only). In order to do so,
+        <ul>
+          <li> Make sure that you have Xcode command line tools installed on your computer.
+          </li>
+          <li> Remove other gfortran installations if they exist. For this, you can launch a terminal window and type "which gfortran". If you see a path returned (e.g. /usr/local/bin/gfortran) you have a previous installation of gfortran that needs to be removed.
+          </li>
+          <li> Download new gfortran binaries for your operating system from <a href="https://gcc.gnu.org/wiki/GFortranBinaries">here</a> and decompress the folder (eg: gunzip gfortran-8.3-bin.tar.gz).
+          </li>
+          <li> Then run, sudo tar -xvf gfortran-8.3-bin.tar -C / which will install everything in /usr/local/bin/gfortran.
+          </li>
+        </ul>
+      </p>
+
+      <h4>Errors involving reticulate:</h4>
+      <h5><strong>Example error messages:</strong></h5>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">Error <span class="k">in </span>system<span class="o">(</span><span class="s2">"which python"</span>, intern <span class="o">=</span> TRUE<span class="o">)</span> : <span class="s1">'which'</span> not found</code></pre></figure>
+
+      <h5><strong>Solution:</strong></h5>
+      <p>
+        Many users report issues configuring 'reticulate' to find their Python installation. These issues
+        seem to be particularly problematic for Windows users. Because of this, we have rewritten the functions that
+        required Python so that <strong>Reticulate and Python are no longer required for installation</strong>. If you
+        are still getting errors relating to Python or Reticulate, please make sure you are attempting to install
+        Monocle 3 version 0.2.0 or later.
+      </p>
+      <a href="/hooke/docs/features" class="btn btn-info btn-sm btn-prev" role="button">Previous</a>
+      <a href="/hooke/docs/help" class="btn btn-success btn-sm btn-next" role="button">Next</a>
+    </div>
+  </div>
+</div>
+
+
+    <script src="/hooke/node_modules/jquery/dist/jquery.min.js"></script>
+<script src="/hooke/node_modules/bootstrap-sass/assets/javascripts/bootstrap.min.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.js"></script>
+<script src="/hooke/node_modules/prismjs/prism.r.js" type="text/javascript"></script>
+<script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v0.4.1/dist/bootstrap-toc.min.js"></script>
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<footer>
+
+  <div class="wrapper">
+      <p>&copy; 2022 Cole Trapnell</p>
+  </div>
+
+</footer>
+
+
+
+
+
+
+
+  </body>
+
+</html>
