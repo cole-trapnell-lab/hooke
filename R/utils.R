@@ -50,42 +50,9 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 }
 
 
-add_covariate <- function(ccs, pb_cds, covariate) {
-  assertthat::assert_that(
-    tryCatch(expr = covariate %in% colnames(colData(ccs@cds)),
-             error = function(e) FALSE),
-    msg = "covariate not in colnames")
 
-  assertthat::assert_that(
-    tryCatch(expr = !covariate %in% colnames(colData(pb_cds)),
-             error = function(e) FALSE),
-    msg = "covariate already in colnames")
 
-  group_to_covariate = colData(ccs@cds) %>%
-    as.data.frame %>%
-    select(group_id, all_of(covariate)) %>%
-    distinct()
 
-  pb_coldata = colData(pb_cds) %>%
-    as.data.frame %>%
-    left_join(group_to_covariate, by = "group_id")
-
-  colData(pb_cds)[[covariate]] =  pb_coldata[[covariate]]
-
-  return(pb_cds)
-}
-
-find_edges <- function(states, gene_model_ccm) {
-
-  from_cond_est = estimate_abundances(gene_model_ccm, tibble("cell_state" = states[1]))
-  to_cond_est = estimate_abundances(gene_model_ccm, tibble("cell_state" = states[2]))
-  from_to_cond_diff = compare_abundances(gene_model_ccm, from_cond_est, to_cond_est) %>%
-    filter(delta_p_value < 0.05)
-
-  gene_edges = collect_pln_graph_edges(gene_model_ccm, from_to_cond_diff)
-  gene_edges
-
-}
 
 #' calculates the fraction expression, mean expression and specificity
 #' for each gene split by the specified group
@@ -228,35 +195,6 @@ plot_sub_contrast <- function (ccm,
 
 
 
-#' projection wrap up
-#' @param query_cds
-#' @param ref_cds
-#' @param directory_path a string giving the name of the directory from which to read the model files
-#' @param transfer_type
-run_projection <- function(query_cds,
-                           ref_cds,
-                           directory_path,
-                           transfer_type = "cluster") {
-
-  query_cds <- load_transform_models(query_cds, directory_path)
-  query_cds <- preprocess_transform(query_cds, method="PCA")
-  query_cds <- align_beta_transform(query_cds)
-  query_cds <- reduce_dimension_transform(query_cds, method="UMAP")
-
-  umap_dims = reducedDims(query_cds)[["UMAP"]]
-  annoy_res = uwot:::annoy_search(umap_dims,
-                                  k = 10,
-                                  ann = query_cds@reduce_dim_aux$UMAP$nn_index$annoy_index)
-
-  labels  = get_nn_labels(umap_dims,
-                          annoy_res,
-                          as.data.frame(colData(ref_cds)),
-                          transfer_type = transfer_type)
-
-  query_cds = query_cds[,!is.na(colData(query_cds)[[transfer_type]])]
-
-  return(query_cds)
-}
 
 convert_cluster_to_cell_group = function(ccs, cell_group) {
 
@@ -368,31 +306,6 @@ collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
 }
 
 
-# contract_ccm <- function(ccm, group_nodes_by = "cell_type_broad") {
-#
-#   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
-#
-#   cell_group_metadata = colData(ccm@ccs@cds) %>%
-#     as.data.frame %>% select(!!sym(group_nodes_by))
-#
-#   cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
-#
-#   group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
-#     as.data.frame %>%
-#     dplyr::count(cell_group, !!sym(group_nodes_by)) %>%
-#     dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-#   colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
-#
-#   new_cell_groups = unique(group_by_metadata$group_nodes_by)
-#
-#   ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]] %>%
-#     left_join(group_by_metadata, by = "cell_group") %>%
-#     select(-cell_group) %>%
-#     dplyr::rename("cell_group" = group_nodes_by)
-#
-#   return(ccm)
-#
-# }
 
 #' filters a cds
 #' @param cds
@@ -464,56 +377,7 @@ contract_ccm <- function(ccm, cell_group = NULL, sample_group = NULL) {
 
 
 
-#' filters the gap data by major group
-subset_gap <- function(cds, major_group) {
 
-  sub_cds = cds[, colData(cds)$major_group == major_group]
-
-  reducedDims(sub_cds)[["UMAP"]] = sub_cds@colData %>% as.data.frame %>%
-    select(subumap3d_1, subumap3d_2, subumap3d_3) %>%
-    as.matrix
-
-  return(sub_cds)
-}
-
-# subset_ccs = function(ccs, col_name, col_value) {
-#
-#   ccs = ccs[, colData(ccs)[[col_name]] == col_value]
-#   ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] == col_value]
-#
-#   ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
-#   return(ccs)
-# }
-#
-# subset_ccm = function(ccm, col_name, col_values) {
-#
-#   ccs = ccm@ccs
-#   ccs = ccs[, colData(ccs)[[col_name]] %in% col_values]
-#   ccs@cds = ccs@cds[, ccs@cds@colData[[col_name]] %in% col_values]
-#
-#   ccs@metadata$cell_group_assignments = ccs@metadata$cell_group_assignments[colnames(ccs@cds),]
-#   ccm@ccs = ccs
-#   return(ccm)
-# }
-
-
-threshold_expression_matrix <- function(norm_expr_mat, relative_expr_thresh = 0.25, abs_expr_thresh = 1e-3, scale_tpc=1e6){
-  norm_expr_mat = norm_expr_mat %>% as.matrix
-  norm_expr_mat = norm_expr_mat #* scale_tpc
-  expression_max_values = norm_expr_mat %>% matrixStats::rowMaxs()
-  names(expression_max_values) = row.names(norm_expr_mat)
-  dynamic_range = expression_max_values # size of dynamic range of expression for each gene, in logs (assuming min is zero)
-
-  dynamic_range_thresh = relative_expr_thresh * dynamic_range
-  #abs_thresh = rep(abs_expr_thresh, nrow(norm_expr_mat))
-
-  expression_thresh_vec = dynamic_range_thresh
-  expression_thresh_vec[expression_thresh_vec < abs_expr_thresh] = Inf
-
-  names(expression_thresh_vec) = row.names(norm_expr_mat)
-  expr_over_thresh = norm_expr_mat > expression_thresh_vec
-  return(expr_over_thresh)
-}
 
 
 #' score DEGs on specificity
@@ -571,110 +435,10 @@ top_gene_pattern <- function(ccm,
 
 }
 
-#' code to plot a single gene nicely and save w a transparent background
-#' @param cds
-#' @param gene
-#' @param save_file
-#' @param file_path
-#'
-plot_single_gene <- function(cds,
-                             gene,
-                             save_file = F,
-                             file_path = NULL,
-                             x=1, y=2) {
-
-  monocle3::plot_cells(cds, x = x, y = y,  genes = c(gene), label_cell_groups = F, show_trajectory_graph = F,
-             cell_size = 0.5, cell_stroke = 0, alpha = 0.8, scale_to_range = F) +
-    scale_color_viridis_c() +
-    theme_void() +
-    theme(legend.position = "none")
-
-  if (is.null(file_path) == FALSE) {
-    ggsave(paste0(file_path, gene, ".png"),
-           dpi = 750,
-           height = 2,
-           width = 2.2,
-           bg = "transparent")
-  }
-
-}
 
 
-# edit_state_graph = function(state_graph,
-#                             nodes_to_add = list(),
-#                             nodes_to_delete = list(),
-#                             edges_to_add = list(),
-#                             edges_to_delete = list()) {
-#
-#   # make sure it is an igraph object
-#   if (is(state_graph, "igraph")){
-#     state_graph = state_graph
-#   }else{
-#     state_graph = state_graph %>% igraph::graph_from_data_frame()
-#   }
-#
-#
-#   if (length(nodes_to_add) > 0 ) {
-#
-#   }
-#
-#
-#   if (length(nodes_to_delete) > 0 ) {
-#
-#   }
-#
-#
-#   if (length(edges_to_add) > 0 ) {
-#
-#   }
-#
-#
-#   if (length(edges_to_delete) > 0 ) {
-#
-#   }
-#
-#
-# }
-#
-#
-# add_edges = function(state_graph) {
-#
-#   state_graph = igraph::add_edges(state_graph,
-#                     edge_list)
-#
-#   return(state_graph)
-#
-# }
-#
-# delete_edges = function(state_graph, edge_list) {
-#   chunk <- function(x,n) split(x, cut(seq_along(x), n, labels = FALSE))
-#   edges_to_del = sapply(chunk(edge_list, length(edge_list)/2), function(e) {
-#     paste0(e, collapse = "|")
-#   })
-#   state_graph = state_graph %>% igraph::delete_edges(edges_to_del)
-#   return(state_graph)
-# }
-#
-# edge_list = c(5,6,7,8,9,10)
-#
-#
-#
-#
-# g <- igraph::make_ring(10) #%>%
-# g %>% igraph::delete_edges(edge_list) %>% plot()
-# plot(g)
-# # g %>% igraph::delete_edges(seq(1, 9, by = 2)) %>% plot()
-#  %>% plot()
-# g
 
-# these are because i can't remember the right arguments to pass through these
 
-my_fread <- function(filename) {
- data.table::fread(file = filename, sep = ",", stringsAsFactors = F, data.table = F)
-}
 
-my_fwrite <- function(data, filename) {
-  data %>% data.table::fwrite(file = filename, sep = ",", na = "NA")
-}
 
 
