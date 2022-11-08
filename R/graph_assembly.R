@@ -447,8 +447,6 @@ get_perturbation_paths <- function(perturbation_ccm,
 
   lost_cell_groups = change_corr_tbl %>% pull(from) %>% unique
 
-  lost_cell_group_pathfinding_subgraph = igraph::subgraph(pathfinding_graph, lost_cell_groups)
-
   #print ("change corr tbl")
   #print (change_corr_tbl)
 
@@ -472,6 +470,20 @@ get_perturbation_paths <- function(perturbation_ccm,
     dplyr::filter((is.finite(from_peak_loss_time) & is.finite(to_peak_loss_time) & from_peak_loss_time <= to_peak_loss_time) |
                   (is.finite(from_largest_loss_time) & is.finite(to_largest_loss_time) & from_largest_loss_time <= to_largest_loss_time) |
                   (is.finite(from_earliest_time) & is.finite(to_earliest_time) & from_earliest_time < to_earliest_time))
+
+  message ("\tEstimating loss timing  (again)")
+  earliest_loss_tbl_no_sig_filter = hooke:::estimate_loss_timing(perturbation_ccm,
+                                                   start_time=start_time,
+                                                   stop_time=stop_time,
+                                                   interval_step = interval_step,
+                                                   interval_col=interval_col,
+                                                   log_abund_detection_thresh=log_abund_detection_thresh,
+                                                   q_val = 1,
+                                                   delta_log_abund_loss_thresh=min_pathfinding_lfc,
+                                                   ...)
+
+  lost_cell_group_pathfinding_subgraph = igraph::subgraph(pathfinding_graph,
+                                                          earliest_loss_tbl_no_sig_filter %>% filter (is.finite(earliest_time)) %>% pull(cell_group))
 
   message ("\tfinding shortest paths between loss pairs")
   #print (concordant_fwd_loss_pairs)
@@ -812,7 +824,7 @@ get_paths_between_recip_time_nodes <- function(ccm,
     #dplyr::filter(pcor < 0) %>% # do we just want negative again?
     dplyr::filter((from_delta_log_abund > min_pathfinding_lfc & to_delta_log_abund < min_pathfinding_lfc) |
                     (to_delta_log_abund > min_pathfinding_lfc & from_delta_log_abund < min_pathfinding_lfc)) %>%
-    dplyr::filter(from_delta_p_value < q_val & to_delta_p_value < q_val)
+    dplyr::filter(from_delta_q_value < q_val & to_delta_q_value < q_val)
 
   # recip_time_node_pairs %>% filter(from == "15") %>% select(from,
   #                                                           to,
@@ -1081,7 +1093,7 @@ estimate_loss_timing <- function(perturbation_ccm,
 
 
   earliest_loss_tbl =  perturb_vs_wt_nodes %>%
-    filter(delta_log_abund < delta_log_abund_loss_thresh & delta_p_value < q_val)
+    filter(delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val)
 
   #print (earliest_loss_tbl)
 
@@ -1089,14 +1101,14 @@ estimate_loss_timing <- function(perturbation_ccm,
   peak_wt_abundance = perturb_vs_wt_nodes %>% group_by(cell_group) %>% slice_max(log_abund_x, n=1)
   loss_at_peak_wt_abundance = peak_wt_abundance %>% mutate(cell_group,
                                                            peak_wt_time = !!sym(paste(interval_col, "_x", sep="")),
-                                                           lost_at_peak = delta_log_abund < delta_log_abund_loss_thresh & delta_p_value < q_val,
+                                                           lost_at_peak = delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val,
                                                            peak_loss_time = ifelse(lost_at_peak, peak_wt_time, NA))
   loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% select(cell_group, peak_wt_time, lost_at_peak, peak_loss_time)
 
   #loss_at_peak_wt_abundance %>% filter(cell_group == "1") %>% print()
 
   largest_losses = perturb_vs_wt_nodes %>%
-    filter(delta_log_abund < delta_log_abund_loss_thresh & delta_p_value < q_val) %>%
+    filter(delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val) %>%
     group_by(cell_group) %>%
     slice_min(delta_log_abund, n=1) %>% select(cell_group, largest_loss_time=!!sym(paste(interval_col, "_x", sep="")), largest_loss=delta_log_abund)
 
@@ -1148,7 +1160,7 @@ score_graph_edges_for_perturbations <- function(perturbation_ccm, state_transiti
   #print (perturb_vs_wt_nodes)
   #print(sym(paste(interval_col, "_x", sep="")))
   earliest_loss_tbl =  perturb_vs_wt_nodes %>%
-    filter(delta_log_abund < 0 & delta_p_value < q_val) %>%
+    filter(delta_log_abund < 0 & delta_q_value < q_val) %>%
     group_by(cell_group) %>% summarize(earliest_time = min(!!sym(paste(interval_col, "_x", sep=""))))
 
   #print (earliest_loss_tbl)
