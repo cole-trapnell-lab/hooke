@@ -1,5 +1,53 @@
 
 
+# Calculate the probability vector
+makeprobsvec <- function(p) {
+  phat <- p/sum(p)
+  phat[is.na(phat)] = 0
+  phat
+}
+
+# Calculate the probability matrix for a relative abundance matrix
+makeprobs <- function(a) {
+  colSums<-apply(a,2,sum)
+  b <- Matrix::t(Matrix::t(a)/colSums)
+  b[is.na(b)] = 0
+  b
+}
+
+# Calculate the Shannon entropy based on the probability vector
+# shannon.entropy <- function(p) {
+#   if (min(p) < 0 || (p) <=0)
+#     return(Inf)
+#   p.norm <- p[p>0]/sum(p)
+#   -sum(log2(p.norm)*p.norm)
+# }
+
+shannon_entropy <- function(p) {
+  #if (Matrix::rowMin(p) < 0 || (p) <=0)
+  #  return(Inf)
+  p.norm <- p / Matrix::rowSums(p)
+  lg_pnorm = log2(p.norm) * p.norm
+  lg_pnorm[p.norm == 0] = 0
+  SE = -Matrix::rowSums(lg_pnorm)
+  return (SE)
+}
+
+# Calculate the Jensen-Shannon distance for two probability distribution
+js_dist_to_pattern <- function (x, pattern)
+{
+  stopifnot(ncol(x) == length(pattern))
+  avg_x_pattern = sweep(x, 2, pattern, "+") / 2
+
+  JSdiv = shannon_entropy(avg_x_pattern) -
+    (shannon_entropy(x) + shannon_entropy(matrix(pattern, nrow=1))) * 0.5
+  JSdiv[is.infinite(JSdiv)] = 1
+  JSdiv[JSdiv < 0] = 0
+  JSdist <- sqrt(JSdiv)
+  pattern_match_score = 1 - JSdist
+  return(pattern_match_score)
+}
+
 score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_graph, estimate_matrix, state_term="cell_group", cores=1){
 
   parents = get_parents(state_graph, cell_state) #igraph::neighbors(state_graph, cell_state, mode="in")
@@ -14,6 +62,7 @@ score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_
   #states_in_contrast = c(cell_state, parents, children, siblings) %>% unique()
 
   expr_df = tibble(gene_id=row.names(estimate_matrix))
+
 
 
   self_and_parent = exp(estimate_matrix[gene_patterns$gene_id, c(cell_state, parents), drop=FALSE])
