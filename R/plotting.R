@@ -161,6 +161,7 @@ plot_contrast <- function(ccm,
       na.value = "white",
       limits = fc_limits
     )  +
+    guides(color=guide_colourbar(title="log(\u0394 Abundance)")) + # unicode for captital delta
     #theme_void() +
     #theme(legend.position = "none") +
     monocle3:::monocle_theme_opts()
@@ -976,11 +977,8 @@ plot_state_graph_annotations <- function(ccm,
                                          arrow_unit = 2,
                                          bar_unit = .075,
                                          node_size = 2,
-                                         num_layers=10,
                                          min_edge_size=0.1,
                                          max_edge_size=2,
-                                         fract_expr = 0.0,
-                                         mean_expr = 0.0,
                                          unlabeled_groups = c("Unknown"),
                                          label_groups=TRUE,
                                          hide_unlinked_nodes=TRUE,
@@ -1065,7 +1063,12 @@ plot_state_graph_annotations <- function(ccm,
                                           label = group_nodes_by,
                                           filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                       size=0.5,
+                                      expand = unit(2, "mm"),
+                                      label.buffer=unit(1, "mm"),
+                                      radius = unit(1.5, "mm"),
+                                      label.margin = margin(1, 1, 1, 1, "mm"),
                                       label.fontsize=group_label_font_size,
+                                      label.fontface="plain",
                                       con.linetype=label_conn_linetype,
                                       con.colour=con_colour,
                                       data=g)
@@ -1174,8 +1177,8 @@ plot_state_graph_annotations <- function(ccm,
   }
 
   p = p + scale_size_identity() +
-    monocle3:::monocle_theme_opts() +
     ggnetwork::theme_blank() +
+    hooke_theme_opts() +
     theme(legend.position=legend_position)
   return(p)
 }
@@ -1205,15 +1208,17 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                     arrow_unit = 2,
                                     bar_unit = .075,
                                     node_size = 2,
-                                    num_layers=10,
-                                    edge_size=2,
-                                    fract_expr = 0.0,
-                                    mean_expr = 0.0,
+                                    min_edge_size=0.1,
+                                    max_edge_size=2,
                                     unlabeled_groups = c("Unknown"),
+                                    label_subset = NULL,
+                                    label_groups=TRUE,
                                     hide_unlinked_nodes=TRUE,
-                                    label_font_size=6,
+                                    group_label_font_size=6,
+                                    edge_label_font_size=2,
                                     label_conn_linetype="dotted",
                                     legend_position = "none",
+                                    con_colour = "darkgrey",
                                     group_outline=FALSE,
                                     ...)
 {
@@ -1290,13 +1295,15 @@ plot_state_graph_losses <- function(perturbation_ccm,
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
-  print (g)
   p <- ggplot() +
     ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness), data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
 
-  # draw activator edges
-  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
-  #                     data = bezier_df)
+  if (is.null(label_subset)) {
+    label_subset = unique(node_metadata$group_nodes_by)
+  }
+
+  label_subset = label_subset[label_subset != unlabeled_groups]
+
   if (is.null(group_nodes_by) == FALSE){
 
 
@@ -1306,8 +1313,14 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                           label = group_nodes_by,
                                           filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                       size=0.5,
-                                      label.fontsize=label_font_size,
+                                      expand = unit(2, "mm"),
+                                      label.buffer=unit(1, "mm"),
+                                      radius = unit(1.5, "mm"),
+                                      label.margin = margin(1, 1, 1, 1, "mm"),
+                                      label.fontsize=group_label_font_size,
+                                      label.fontface="plain",
                                       con.linetype=label_conn_linetype,
+                                      con.colour=con_colour,
                                       data=g)
     } else {
       p = p + ggforce::geom_mark_rect(aes(x, y,
@@ -1315,8 +1328,14 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                           label = group_nodes_by,
                                           filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                       size=0,
-                                      label.fontsize=label_font_size,
+                                      expand = unit(2, "mm"),
+                                      label.buffer=unit(1, "mm"),
+                                      radius = unit(1.5, "mm"),
+                                      label.margin = margin(1, 1, 1, 1, "mm"),
+                                      label.fontsize=group_label_font_size,
+                                      label.fontface="plain",
                                       con.linetype=label_conn_linetype,
+                                      con.colour=con_colour,
                                       data=g)
     }
 
@@ -1344,8 +1363,8 @@ plot_state_graph_losses <- function(perturbation_ccm,
   # }
 
   p = p + scale_size_identity() +
-    monocle3:::monocle_theme_opts() +
     ggnetwork::theme_blank() +
+    hooke_theme_opts() +
     theme(legend.position=legend_position)
   return(p)
 }
@@ -1409,22 +1428,24 @@ plot_state_graph_abundance_changes <- function(ccm,
                                                contrast = "contrast",
                                                label_nodes_by=NULL,
                                                group_nodes_by=NULL,
-                                               edge_labels=NULL,
+                                               label_edges_by=NULL,
+                                               edge_weights=NULL,
                                                fc_limits=c(-3,3),
                                                arrow.gap=0.03,
                                                arrow_unit = 2,
                                                bar_unit = .075,
                                                node_size = 6,
-                                               num_layers=10,
-                                               edge_size=0.5,
-                                               fract_expr = 0.0,
-                                               mean_expr = 0.0,
+                                               min_edge_size=0.1,
+                                               max_edge_size=2,
                                                unlabeled_groups = c("Unknown"),
-                                               label_subset=NULL,
+                                               label_subset = NULL,
+                                               label_groups=TRUE,
                                                hide_unlinked_nodes=TRUE,
-                                               label_font_size=6,
+                                               group_label_font_size=6,
+                                               edge_label_font_size=2,
                                                label_conn_linetype="dotted",
                                                legend_position = "none",
+                                               con_colour = "darkgrey",
                                                group_outline=FALSE)
 {
 
@@ -1434,55 +1455,65 @@ plot_state_graph_abundance_changes <- function(ccm,
     edges = state_graph
   }
 
-  comp_abund_table[["contrast"]] = comp_abund_table[[contrast]]
-  comp_abund_table$contrast = as.factor(comp_abund_table$contrast)
-
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
 
-  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by=label_nodes_by, group_nodes_by=group_nodes_by)
+  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
 
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
   }
 
+  if (is.null(edge_weights)){
+    edges = edges %>% select(from, to)
+  }else{
+    edges = edges %>% select(from, to, weight=!!sym(edge_weights))
+  }
 
-  G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+  if (is.null(label_edges_by)){
+    edge_info = edges %>% select(from, to)
+  }else{
+    if (is(state_graph, "igraph")){
+      edge_info = state_graph %>% igraph::as_data_frame() %>% select(from, to, label=!!sym(label_edges_by))
+    }else{
+      edge_info = state_graph %>% select(from, to, label=!!sym(label_edges_by))
+    }
 
-  layout_info = layout_state_graph(G, node_metadata, edge_labels)
+    edges = edges %>% left_join(edge_info)
+    #print(edges)
+  }
+
+  G = edges %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  if (is.null(igraph::E(G)$label) == FALSE){
+    G_df = igraph::as_data_frame(G)
+    edge_names =  stringr::str_c(G_df$from, G_df$to, sep="~")
+    edge_labels = igraph::E(G)$label
+    names(edge_labels) = edge_names
+    #print(edge_labels)
+    #edge_labels = NULL
+  }else{
+    edge_labels=NULL
+  }
+
+  layout_info = layout_state_graph(G, node_metadata, NULL, weighted=FALSE)
+
+  comp_abund_table[["contrast"]] = comp_abund_table[[contrast]]
+  comp_abund_table$contrast = as.factor(comp_abund_table$contrast)
+
   gvizl_coords = layout_info$gvizl_coords
   bezier_df = layout_info$bezier_df
+  if (is.null(edge_weights) == FALSE){
+    bezier_df = left_join(bezier_df, edges)
+    bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
+                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size)
+  }else{
+    bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
+  }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
-
-
-  #gene_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
-
-  #gene_expr = aggregated_expr_data(ccm@ccs@cds[gene_ids,], group_cells_by = ccm@ccs@info$cell_group)
-  #sub_gene_expr = gene_expr %>%
-  #  filter(gene_short_name %in% genes)
-
-  #method = get(method)
-  # sub_gene_expr = sub_gene_expr %>%
-  #   group_by(cell_group) %>%
-  #   dplyr::summarise(fraction_expressing = method(fraction_expressing),
-  #                    mean_expression = method(mean_expression),
-  #                    specificity = method(specificity)) %>%
-  #   mutate(gene_short_name =  paste(genes, collapse = "-"))
-
-
-  #node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
-
   abund_fc_df = comp_abund_table
-
-  #sub_gene_expr = sub_gene_expr %>%
-  #  group_by(gene_short_name) %>%
-  #  mutate(
-  #    fraction_max = mean_expression / max(mean_expression),
-  #    gene_expr = case_when(
-  #      fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
-  #      TRUE ~ FALSE))
 
   if (is.null(fc_limits)) {
     fc_limits = range(abund_fc_df$delta_log_abund)
@@ -1506,9 +1537,8 @@ plot_state_graph_abundance_changes <- function(ccm,
   # group_outline = TRUE
 
   p <- ggplot(aes(x,y), data=g)
-  # draw activator edges
-  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
-  #                     data = bezier_df)
+  p = p +
+    ggplot2::geom_path(aes(x, y, group=edge_name), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
 
   if (is.null(label_subset)) {
     label_subset = unique(node_metadata$group_nodes_by)
@@ -1524,11 +1554,14 @@ plot_state_graph_abundance_changes <- function(ccm,
                                           color = group_nodes_by,
                                           filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                       size=0.5,
-                                      expand = unit(2.5, "mm"),
-                                      radius = unit(1, "mm"),
-                                      label.fontsize=label_font_size,
-                                      label.buffer = unit(1, "mm"),
+                                      expand = unit(2, "mm"),
+                                      label.buffer=unit(1, "mm"),
+                                      radius = unit(1.5, "mm"),
+                                      label.margin = margin(1, 1, 1, 1, "mm"),
+                                      label.fontsize=group_label_font_size,
+                                      label.fontface="plain",
                                       con.linetype=label_conn_linetype,
+                                      con.colour=con_colour,
                                       show.legend = F) +
         ggforce::geom_mark_rect(aes(x, y,
                                     fill = contrast,
@@ -1536,11 +1569,14 @@ plot_state_graph_abundance_changes <- function(ccm,
                                     label = group_nodes_by,
                                     filter = group_nodes_by %in% label_subset),
                                 size=0.5,
-                                expand = unit(2.5, "mm"),
-                                radius = unit(1, "mm"),
-                                label.fontsize=label_font_size,
-                                label.buffer = unit(1, "mm"),
+                                expand = unit(2, "mm"),
+                                label.buffer=unit(1, "mm"),
+                                radius = unit(1.5, "mm"),
+                                label.margin = margin(1, 1, 1, 1, "mm"),
+                                label.fontsize=group_label_font_size,
+                                label.fontface="plain",
                                 con.linetype=label_conn_linetype,
+                                con.colour=con_colour,
                                 show.legend = F)
     } else {
       # p = p + ggnetwork::geom_nodetext_repel(data = g %>% filter(group_nodes_by %in% label_subset),
@@ -1558,11 +1594,14 @@ plot_state_graph_abundance_changes <- function(ccm,
                                     label = group_nodes_by,
                                     filter = group_nodes_by %in% label_subset),
                                 size=0.5,
-                                expand = unit(2.5, "mm"),
-                                radius = unit(1, "mm"),
-                                label.fontsize=label_font_size,
-                                label.buffer = unit(1, "mm"),
+                                expand = unit(2, "mm"),
+                                label.buffer=unit(1, "mm"),
+                                radius = unit(1.5, "mm"),
+                                label.margin = margin(1, 1, 1, 1, "mm"),
+                                label.fontsize=group_label_font_size,
+                                label.fontface="plain",
                                 con.linetype=label_conn_linetype,
+                                con.colour=con_colour,
                                 show.legend = F) +
         scale_color_manual(values = c(values))
 
@@ -1598,14 +1637,14 @@ plot_state_graph_abundance_changes <- function(ccm,
                                       aes(x,y, label = label), size=3)
   }
 
-  p = p +
-    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
+  #p = p +
+  #  ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
 
   p = p + facet_wrap(~contrast)
 
   p = p + scale_size(range=c(1, node_size)) +
-    monocle3:::monocle_theme_opts() +
     ggnetwork::theme_blank() +
+    hooke_theme_opts() +
     theme(legend.position=legend_position) + guides(fill = "none", size="none")
   return(p)
 }
@@ -1617,24 +1656,28 @@ plot_state_graph_gene_expression <- function(ccm,
                                              genes,
                                              method = "min",
                                              gene_expr = NULL,
+                                             fract_expr=0.0,
+                                             mean_expr=0.0,
+                                             scale_to_range = FALSE,
                                              label_nodes_by=NULL,
                                              group_nodes_by=NULL,
-                                             edge_labels=NULL,
+                                             label_edges_by=NULL,
+                                             edge_weights=NULL,
                                              arrow.gap=0.03,
                                              arrow_unit = 2,
                                              bar_unit = .075,
                                              node_size = 6,
-                                             num_layers=10,
-                                             edge_size=0.5,
-                                             fract_expr = 0.0,
-                                             mean_expr = 0.0,
+                                             min_edge_size=0.1,
+                                             max_edge_size=2,
                                              unlabeled_groups = c("Unknown"),
-                                             scale_to_range = FALSE,
+                                             label_subset = NULL,
+                                             label_groups=TRUE,
                                              hide_unlinked_nodes=TRUE,
-                                             switch_label=NULL,
-                                             label_font_size=6,
+                                             group_label_font_size=6,
+                                             edge_label_font_size=2,
                                              label_conn_linetype="dotted",
                                              legend_position = "none",
+                                             con_colour = "darkgrey",
                                              group_outline=FALSE)
 {
 
@@ -1644,36 +1687,58 @@ plot_state_graph_gene_expression <- function(ccm,
     edges = state_graph
   }
 
-  # # check that the
-  # if (is.null(switch_label)) {
-  #   node_intersection = intersect(rownames(ccm@ccs), unique(edges$from, edges$to))
-  # } else {
-  #   node_intersection = intersect(ccm@ccs@colData[[switch_label]], unique(edges$from, edges$to))
-  # }
-  # assertthat::assert_that(
-  #
-  #   tryCatch(length(node_intersection) > 0,
-  #            error = function(e) FALSE),
-  #   msg = "specify a label switch, state_graph and ccm cell group do not match"
-  #
-  # )
-
-
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
 
-  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by=label_nodes_by, group_nodes_by=group_nodes_by)
+  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
 
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
   }
 
+  if (is.null(edge_weights)){
+    edges = edges %>% select(from, to)
+  }else{
+    edges = edges %>% select(from, to, weight=!!sym(edge_weights))
+  }
 
-  G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+  if (is.null(label_edges_by)){
+    edge_info = edges %>% select(from, to)
+  }else{
+    if (is(state_graph, "igraph")){
+      edge_info = state_graph %>% igraph::as_data_frame() %>% select(from, to, label=!!sym(label_edges_by))
+    }else{
+      edge_info = state_graph %>% select(from, to, label=!!sym(label_edges_by))
+    }
 
-  layout_info = layout_state_graph(G, node_metadata, edge_labels)
+    edges = edges %>% left_join(edge_info)
+    #print(edges)
+  }
+
+  G = edges %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
+
+  if (is.null(igraph::E(G)$label) == FALSE){
+    G_df = igraph::as_data_frame(G)
+    edge_names =  stringr::str_c(G_df$from, G_df$to, sep="~")
+    edge_labels = igraph::E(G)$label
+    names(edge_labels) = edge_names
+    #print(edge_labels)
+    #edge_labels = NULL
+  }else{
+    edge_labels=NULL
+  }
+
+  layout_info = layout_state_graph(G, node_metadata, NULL, weighted=FALSE)
+
   gvizl_coords = layout_info$gvizl_coords
   bezier_df = layout_info$bezier_df
+  if (is.null(edge_weights) == FALSE){
+    bezier_df = left_join(bezier_df, edges)
+    bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
+                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size)
+  }else{
+    bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
+  }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
@@ -1700,7 +1765,8 @@ plot_state_graph_gene_expression <- function(ccm,
   sub_gene_expr = sub_gene_expr %>%
     group_by(gene_short_name) %>%
     mutate(
-      fraction_max = mean_expression / max(mean_expression),
+      max_expr = max(mean_expression),
+      fraction_max = ifelse (max_expr > 0, mean_expression / max_expr, 0),
       gene_expr = case_when(
         fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
         TRUE ~ FALSE))
@@ -1726,21 +1792,60 @@ plot_state_graph_gene_expression <- function(ccm,
   # group_outline = TRUE
 
   p <- ggplot(aes(x,y), data=g)
-  # draw activator edges
-  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
-  #                     data = bezier_df)
+  p = p +
+    ggplot2::geom_path(aes(x, y, group=edge_name), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
+
+
+  if (is.null(label_subset)) {
+    label_subset = unique(node_metadata$group_nodes_by)
+  }
+
+  label_subset = label_subset[label_subset != unlabeled_groups]
+
   if (is.null(group_nodes_by) == FALSE){
     p = p + ggforce::geom_mark_rect(aes(x, y,
                                         fill = gene_short_name,
                                         color = group_nodes_by,
-                                        label = group_nodes_by,
                                         filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                     size=0.5,
-                                    expand = unit(2.5, "mm"),
-                                    radius = unit(1, "mm"),
-                                    label.fontsize=label_font_size,
-                                    label.buffer = unit(1, "mm"),
-                                    con.linetype=label_conn_linetype)
+                                    expand = unit(2, "mm"),
+                                    label.buffer=unit(1, "mm"),
+                                    radius = unit(1.5, "mm"),
+                                    label.margin = margin(1, 1, 1, 1, "mm"),
+                                    label.fontsize=group_label_font_size,
+                                    label.fontface="plain",
+                                    con.linetype=label_conn_linetype,
+                                    con.colour=con_colour,
+                                    show.legend = F) +
+      ggforce::geom_mark_rect(aes(x, y,
+                                  fill = gene_short_name,
+                                  color = group_nodes_by,
+                                  label = group_nodes_by,
+                                  filter = group_nodes_by %in% label_subset),
+                              size=0.5,
+                              expand = unit(2, "mm"),
+                              label.buffer=unit(1, "mm"),
+                              radius = unit(1.5, "mm"),
+                              label.margin = margin(1, 1, 1, 1, "mm"),
+                              label.fontsize=group_label_font_size,
+                              label.fontface="plain",
+                              con.linetype=label_conn_linetype,
+                              con.colour=con_colour,
+                              show.legend = F)
+    # p = p + ggforce::geom_mark_rect(aes(x, y,
+    #                                     fill = gene_short_name,
+    #                                     color = group_nodes_by,
+    #                                     label = group_nodes_by,
+    #                                     filter = group_nodes_by %in% unlabeled_groups == FALSE),
+    #                                 size=0.5,
+    #                                 expand = unit(2, "mm"),
+    #                                 label.buffer=unit(1, "mm"),
+    #                                 radius = unit(1.5, "mm"),
+    #                                 label.margin = margin(1, 1, 1, 1, "mm"),
+    #                                 label.fontsize=group_label_font_size,
+    #                                 label.fontface="plain",
+    #                                 con.linetype=label_conn_linetype,
+    #                                 con.colour=con_colour)
     p = p + scale_fill_manual(values=rep("white", length(unique(g$gene_short_name))))
 
   }
@@ -1749,541 +1854,29 @@ plot_state_graph_gene_expression <- function(ccm,
     ggnetwork::geom_nodes(data = g %>% filter(gene_expr),
                           aes(x, y,
                               size = fraction_max,
+                              color = I(con_colour))) +
+    ggnewscale::new_scale_color() +
+    ggnetwork::geom_nodes(data = g %>% filter(gene_expr & fraction_max > 0),
+                          aes(x, y,
+                              size = fraction_max,
                               color = get(color_nodes_by))) +
-    labs(color = expression_legend_label)
-
-  p = p + viridis::scale_color_viridis(option = "viridis")
+    labs(color = expression_legend_label) +
+    viridis::scale_color_viridis(option = "viridis")
 
   if (is.null(edge_labels) == FALSE) {
     p = p +  ggnetwork::geom_nodetext(data = label_df,
                                       aes(x,y, label = label), size=3)
   }
 
-  p = p +
-    ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-
   p = p + facet_wrap(~gene_short_name)
 
-  p = p + scale_size(labels = scales::percent, range=c(1, node_size)) +
-    monocle3:::monocle_theme_opts() +
+  p = p + scale_size_continuous(labels = scales::percent, range=c(1, node_size)) +
     ggnetwork::theme_blank() +
+    hooke_theme_opts() +
     theme(legend.position=legend_position) + guides(fill = "none")
   return(p)
 }
 
-#' Plot a graph that summarized an assembled state transition graph
-#'
-#' @export
-plot_state_transition_graph <- function(ccm,
-                                        edges,
-                                        # contract_nodes_by=NULL,
-                                        color_nodes_by=NULL,
-                                        label_nodes_by=NULL,
-                                        group_nodes_by=NULL,
-                                        layer_nodes_by=NULL,
-                                        cond_b_v_a_tbl = NULL,
-                                        fc_limits = NULL,
-                                        genotype_models_tbl = NULL,
-                                        concordant = TRUE,
-                                        genes = list(),
-                                        labels = NULL,
-                                        qval_threshold = 0.05,
-                                        arrow.gap=0.03,
-                                        arrow_unit = 2,
-                                        bar_unit = .075,
-                                        node_size = 2,
-                                        num_layers=10,
-                                        edge_size=0.5,
-                                        fract_expr = 0.0,
-                                        mean_expr = 0.0,
-                                        method = "min",
-                                        unlabeled_groups = c("Unknown"),
-                                        hide_unlinked_nodes=TRUE,
-                                        label_font_size=6,
-                                        label_conn_linetype="dotted",
-                                        legend_position = "none",
-                                        group_outline=FALSE){
-
-
-  # if (is.null(contract_nodes_by) == FALSE) {
-  #   state_graph = edges %>% igraph::graph_from_data_frame()
-  #   edges = contract_state_graph(ccm, state_graph, group_nodes_by = contract_nodes_by) %>%
-  #     igraph::as_data_frame()
-  #   ccm = contract_ccm(ccm, group_nodes_by = contract_nodes_by)
-  #
-  # }
-
-
-  #edges = hooke:::distance_to_root(edges)
-  edges = edges %>% dplyr::ungroup()
-
-  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
-  node_metadata = tibble(id=cell_groups)
-
-  #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = colData(ccm@ccs@cds)[,c(color_nodes_by,
-                                                label_nodes_by,
-                                                group_nodes_by,
-                                                layer_nodes_by), drop=F] %>%
-    as.data.frame
-  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
-
-  if (is.null(color_nodes_by) == FALSE){
-    color_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(color_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(color_by_metadata) = c("cell_group", "color_nodes_by")
-    node_metadata = left_join(node_metadata, color_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(group_nodes_by) == FALSE){
-    group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(group_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
-    node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(layer_nodes_by) == FALSE){
-    layer_by_metadata = cell_group_metadata[,c("cell_group", layer_nodes_by)] %>%
-      as.data.frame
-    if (is.numeric(cell_group_metadata[,c(layer_nodes_by)])){
-      layer_by_metadata = layer_by_metadata %>%
-        group_by(cell_group) %>%
-        summarize(mean_layer_var = mean(!!sym(layer_nodes_by), na.rm=TRUE)) %>%
-        mutate(layer = ntile(desc(mean_layer_var),num_layers)) %>% dplyr::select(-mean_layer_var)
-    }else{
-      layer_by_metadata = layer_by_metadata %>%
-        count(cell_group, !!sym(layer_nodes_by)) %>%
-        group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    }
-    colnames(layer_by_metadata) = c("cell_group", "layer_nodes_by")
-    node_metadata = left_join(node_metadata, layer_by_metadata, by=c("id"="cell_group"))
-  }
-  if (is.null(label_nodes_by) == FALSE){
-    label_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
-      as.data.frame %>%
-      count(cell_group, !!sym(label_nodes_by)) %>%
-      group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
-    colnames(label_by_metadata) = c("cell_group", "label_nodes_by")
-    node_metadata = left_join(node_metadata, label_by_metadata, by=c("id"="cell_group"))
-  }else{
-    node_metadata$label_nodes_by = node_metadata$id
-  }
-  node_metadata = node_metadata %>% distinct() %>% as.data.frame(stringsAsFactor=FALSE)
-  row.names(node_metadata) = node_metadata$id
-  if (hide_unlinked_nodes){
-    node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
-  }
-
-  if (is.null(cond_b_v_a_tbl) == FALSE) {
-    cond_b_v_a_tbl = cond_b_v_a_tbl %>%
-      mutate(delta_log_abund = ifelse(delta_q_value < qval_threshold, delta_log_abund, 0))
-
-    if (is.null(fc_limits) == FALSE) {
-      min = fc_limits[1]
-      max = fc_limits[2]
-      cond_b_v_a_tbl = cond_b_v_a_tbl %>%
-        mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
-        mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
-    }
-
-    node_metadata = node_metadata %>% left_join(cond_b_v_a_tbl, by = c("id" = "cell_group"))
-
-    # might be better way to do this
-    color_nodes_by = "delta_log_abund"
-    #idk what to do about this currently
-    group_outline = TRUE
-  }
-
-
-  if (length(genes) > 0) {
-
-    # ensembl_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
-
-    gene_expr = aggregated_expr_data(ccm@ccs@cds, group_cells_by = ccm@ccs@info$cell_group)
-    sub_gene_expr = gene_expr %>%
-      filter(gene_short_name %in% genes)
-
-    method = get(method)
-    sub_gene_expr = sub_gene_expr %>%
-      group_by(cell_group) %>%
-      dplyr::summarise(fraction_expressing = method(fraction_expressing),
-                       mean_expression = method(mean_expression),
-                       specificity = method(specificity)) %>%
-      mutate(gene_short_name =  paste(genes, collapse = "-"))
-
-    node_metadata = node_metadata %>% left_join(sub_gene_expr, by = c("id" = "cell_group"))
-
-    node_metadata = node_metadata %>%
-      mutate(gene_expr = case_when(
-        fraction_expressing >= fract_expr & mean_expression >= mean_expr ~ TRUE,
-        TRUE ~ FALSE))
-
-    color_nodes_by = "mean_expression"
-    group_outline = TRUE
-  }
-
-  G = edges %>% select(from, to) %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
-
-  # run sugiyama layout
-  layers = NULL
-  if (is.null(layer_nodes_by) == FALSE) {
-    layers=igraph::V(G)$layer_nodes_by
-  }
-
-
-  #lay1 <- igraph::layout_with_sugiyama(G, layers=layers, maxiter=1000)
-  #sg1 = test_graph %>% graph::subGraph(snodes=c("13", "9", "10", "1", "33"))
-  #subGList <- vector(mode="list", length=1)
-  #subGList[[1]] <- list(graph=sg1)
-  #subGList[[2]] <- list(graph=sg2, cluster=FALSE)
-  #subGList[[3]] <- list(graph=sg3)
-
-
-  G_nel = graph::graphAM(igraph::get.adjacency(G) %>% as.matrix(),
-                         edgemode = 'directed') %>%
-    as("graphNEL")
-
-  make_subgraphs_for_groups <- function(grouping_set, G_nel, node_meta_df){
-    nodes = node_meta_df %>% filter(group_nodes_by == grouping_set) %>% pull(id) %>% as.character
-    sg = list(graph=graph::subGraph(snodes=nodes, graph=G_nel))
-    return (sg)
-  }
-
-  subgraph_df = node_metadata %>% group_by(group_nodes_by) %>%
-    summarize(subgraph = purrr::map(.f = purrr::possibly(make_subgraphs_for_groups, NULL),
-                                    .x = group_nodes_by,
-                                    G_nel,
-                                    node_metadata))
-
-  if (is.null(labels)== FALSE) {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=labels))
-    label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
-      rownames_to_column("edge_name") %>%
-      left_join(data.frame("label" = labels) %>% rownames_to_column("edge_name"), by = "edge_name")
-
-  } else {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph)
-  }
-
-  gvizl_coords = cbind(gvizl@renderInfo@nodes$nodeX, gvizl@renderInfo@nodes$nodeY)
-
-
-  beziers = lapply(gvizl@renderInfo@edges$splines, function(bc) {
-    bc_segments = lapply(bc, Rgraphviz::bezierPoints)
-    bezier_cp_df = do.call(rbind, bc_segments) %>% as.data.frame
-    colnames(bezier_cp_df) = c("x", "y")
-    #bezier_cp_df$point = "control"
-    #bezier_cp_df$point[1] = "end"
-    #bezier_cp_df$point[nrow(bezier_cp_df)] = "end"
-    bezier_cp_df
-    #control_point_coords = lapply(bc, function(cp) Rgraphviz::getPoints)
-    #control_point_coords = rbind(control_point_coords)
-  })
-  bezier_df = do.call(rbind, beziers)
-  bezier_df$edge_name = stringr::str_split_fixed(row.names(bezier_df), "\\.", 2)[,1]
-  #bezier_df = bezier_df %>% mutate(x = ggnetwork:::scale_safely(x),
-  #                                 y = ggnetwork:::scale_safely(y))
-
-
-  if (is.null(genotype_models_tbl) == FALSE) {
-
-    state_transition_graph = edges %>% igraph::graph_from_data_frame()
-    if (concordant) {
-      edge_count = genotype_models_tbl %>%
-        mutate("concordant" = purrr::map(.f = is_concordant,
-                                         .x = genotype_eff,
-                                         state_transition_graph)) %>%
-        select(gene_target, concordant) %>%
-        tidyr::unnest(c(concordant)) %>%
-        select(gene_target, parent, child, concordant) %>%
-        group_by(parent, child, concordant) %>%
-        tally() %>% ungroup() %>%
-        filter(concordant) %>%
-        mutate(edge_name = paste(parent,child, sep="~"))
-    } else {
-      edge_count = genotype_models_tbl %>%
-        mutate("discordant" = purrr::map(.f = is_discordant,
-                                         .x = genotype_eff,
-                                         state_transition_graph)) %>%
-        select(gene_target, discordant) %>%
-        tidyr::unnest(c(discordant)) %>%
-        select(gene_target, parent, child, discordant) %>%
-        group_by(parent, child, discordant) %>%
-        tally() %>% ungroup() %>%
-        filter(discordant) %>%
-        mutate(edge_name = paste(parent,child, sep="~"))
-    }
-
-
-
-    bezier_df = left_join(bezier_df, edge_count, by = "edge_name")
-    bezier_df$n = tidyr::replace_na(bezier_df$n, -1)
-  }
-
-  # if (is.null(edge_count) == FALSE) {
-  #   bezier_df = left_join()
-  #   edge_weights = state_transition_graph %>%
-  #     igraph::as_data_frame() %>%
-  #     left_join(edge_count, by = c("from" = "parent", "to" = "child")) %>%
-  #     filter(concordant) %>%
-  #     mutate(edge_name = paste(from, to, sep="~"))
-  #
-  #   bezier_df = left_join(bezier_df, edge_weights, by = "edge_name")
-  #   bezier_df$n = replace_na(bezier_df$n, -1)
-  #
-  #   bezier_df %>% mutate("" = ifelse())
-  #
-  # }
-
-
-  g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
-
-
-  # add level information
-  #g = g %>% left_join(level_df %>% rownames_to_column("id"), by = c("vertex.names"="id"))
-  #g = g %>% left_join(regulator_score_df, by = c("vertex.names" = "gene_id") )
-
-
-  # p <- ggplot(mapping = aes(x, y, xend = xend, yend = yend)) +
-  #   # draw activator edges
-  #   ggnetwork::geom_edges(data = g,
-  #                         arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-
-
-  if (is.null(genotype_models_tbl) == FALSE) {
-
-    if (concordant) {
-      edge_colors = c("black", "orangered3")
-      names(edge_colors) = c(-1, 1) %>% as.factor()
-    } else {
-      edge_colors = c("black", "royalblue3")
-      names(edge_colors) = c(-1, 1) %>% as.factor()
-    }
-
-
-    p <- ggplot() +
-      ggplot2::geom_path(aes(x, y, group=edge_name,
-                             size = abs(n)/5, color = as.factor(sign(n))), data=bezier_df,
-                         arrow = arrow(length = unit(arrow_unit, "pt"), type="closed")) +
-      scale_color_manual(values = edge_colors)
-  }
-  else {
-    p <- ggplot() +
-      ggplot2::geom_path(aes(x, y, group=edge_name), data=bezier_df, arrow = arrow(length = unit(arrow_unit, "pt"), type="closed"))
-
-  }
-
-
-
-
-  # draw activator edges
-  #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
-  #                     data = bezier_df)
-  if (is.null(group_nodes_by) == FALSE){
-
-    if (group_outline) {
-      p = p + ggforce::geom_mark_rect(aes(x, y,
-                                          col = group_nodes_by,
-                                          label = group_nodes_by,
-                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                      size=0.5,
-                                      label.fontsize=label_font_size,
-                                      con.linetype=label_conn_linetype,
-                                      data=g)
-    } else {
-      p = p + ggforce::geom_mark_rect(aes(x, y,
-                                          fill = group_nodes_by,
-                                          label = group_nodes_by,
-                                          filter = group_nodes_by %in% unlabeled_groups == FALSE),
-                                      size=0,
-                                      label.fontsize=label_font_size,
-                                      con.linetype=label_conn_linetype,
-                                      data=g)
-    }
-
-  }
-
-  if (is.null(color_nodes_by) == FALSE) {
-
-    # if numerical
-    if (is.numeric(g[[color_nodes_by]])) {
-
-      if (color_nodes_by == "mean_expression") {
-
-        p = p + ggnewscale::new_scale_fill() +
-          ggnetwork::geom_nodelabel(data = g %>% filter(gene_expr),
-                                    aes(x, y,
-                                        fill = !!sym(color_nodes_by),
-                                        label = label_nodes_by),
-                                    size = node_size) +
-          ggnetwork::geom_nodelabel(data = g %>% filter(!gene_expr),
-                                    aes(x, y,
-                                        label = label_nodes_by),
-                                    fill="white",
-                                    size = node_size) +
-          labs(fill = color_nodes_by)
-
-        p = p + viridis::scale_fill_viridis(option = "viridis")
-      } else {
-
-        p = p + ggnewscale::new_scale_fill() +
-          ggnetwork::geom_nodelabel(data = g,
-                                    aes(x, y,
-                                        fill = !!sym(color_nodes_by),
-                                        label = label_nodes_by),
-                                    size = node_size) +
-          labs(fill = color_nodes_by)
-        p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
-      }
-
-    }
-    else {
-      # if categorical
-      p = p + ggnetwork::geom_nodelabel(data = g,
-                                        aes(x, y,
-                                            fill = color_nodes_by,
-                                            label = label_nodes_by),
-                                        size = node_size) +
-        labs(fill = color_nodes_by)
-
-    }
-
-  } else {
-    p = p + ggnetwork::geom_nodelabel(data = g,
-                                      aes(x, y, xend = xend, yend = yend,
-                                          label = label_nodes_by),
-                                      size = node_size)
-  }
-
-  if (is.null(labels) == FALSE) {
-    p = p +  ggnetwork::geom_nodetext(data = label_df,
-                                      aes(x,y, label = label), size=3)
-  }
-
-  p = p + scale_size_identity() +
-    monocle3:::monocle_theme_opts() +
-    ggnetwork::theme_blank() +
-    theme(legend.position=legend_position)
-  return(p)
-}
-
-#' Simple function for inspecting origins for each cell state
-#'
-#' @export
-plot_origins <- function(data,
-                         path_df = path_df,
-                         edge_size=2,
-                         path_color = "black",
-                         color_cells_by = "cluster",
-                         color_path_by = NULL,
-                         cond_b_vs_a_tbl = NULL) {
-
-
-
-  if (class(data) == "cell_count_set") {
-    umap_centers = centroids(data)
-  } else if (class(data) == "cell_count_model") {
-    umap_centers = centroids(data@ccs)
-  }
-
-  path_df = path_df %>% dplyr::select(destination=cell_group, origin, to, from, origin_score, weight, distance_from_root) %>%
-    hooke:::add_umap_coords(umap_centers)
-
-  print (path_df)
-  if (is.null(color_path_by) == FALSE) {
-
-    gp = ggplot(data=path_df) +
-      ggnewscale::new_scale_color() +
-      geom_segment(aes(x = umap_to_1,
-                       y = umap_to_2,
-                       xend=umap_from_1,
-                       yend = umap_from_2,
-                       color = get(color_path_by)),
-                   size=edge_size) +
-      geom_segment(aes(x = umap_from_1,
-                       y = umap_from_2,
-                       xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2,
-                       color = get(color_path_by)),
-                   size=edge_size,
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm"))) +
-      scale_color_gradient2(
-        low = "#122985",
-        mid = "white",
-        high = "red4",
-        na.value = "white"
-      )
-
-  } else {
-    gp = ggplot(data = path_df) +
-      geom_segment(aes(x = umap_to_1,
-                       y = umap_to_2,
-                       xend=umap_from_1,
-                       yend = umap_from_2),
-                   color = path_color,
-                   size = edge_size ) +
-      geom_segment(aes(x = umap_from_1,
-                       y = umap_from_2,
-                       xend = (umap_to_1+umap_from_1)/2,
-                       yend = (umap_to_2+umap_from_2)/2),
-                   size= edge_size,
-                   color=path_color,
-                   linejoin='mitre',
-                   arrow = arrow(type="closed", angle=30, length=unit(1, "mm")))+
-      geom_text(aes(umap_from_1, umap_from_2, label=from), color="blue", data=path_df %>% filter (from == origin)) +
-      geom_text(aes(umap_to_1, umap_to_2, label=to), color="red", data=path_df %>% filter (to == destination))
-  }
-
-  return(gp)
-
-}
-
-
-#' helper function for adding attributes to network node
-#' assumes gene id is in the dataframe
-# add_node_attribute <- function(n, df, colname) {
-#   df = df[match(network.vertex.names(n), df$gene_id),]
-#   n %v% colname = df[[colname]]
-#   return(n)
-# }
-#
-#
-# plot_regulators <- function(edges) {
-#
-#   n = network(edges, directed = F, loops = F)
-#
-#   # add regulator score to the nodes
-#
-#   add_node_attribute <- function(n, df, colname) {
-#     df = df[match(network.vertex.names(n), df$gene_id),]
-#     n %v% colname = reg_score_df[[colname]]
-#     return(n)
-#   }
-#
-#   n = add_node_attribute(n, reg_score_df, "regulator_score")
-#
-#   g = ggnetwork(n, arrow.gap=0.02)
-#
-#   ggplot(mapping=aes(x, y, xend = xend, yend = yend, size = scaled_weight)) +
-#     geom_edges(data = g %>% filter(edge_type == "undirected"), color="gray") +
-#
-#     # geom_edges(data = g %>% filter(edge_type != "undirected"),
-#     #            arrow = arrow(length = unit(3, "pt"), type="closed")) +
-#
-#     geom_edges(data = g %>% filter(edge_type != "undirected"),
-#                arrow = arrow(angle = 90, length = unit(.075, "cm"))) +
-#
-#     geom_nodes(data = g, aes(fill=regulator_score),
-#                # fill = "red4",
-#                size = 3, colour="black",shape=21) +
-#     scale_size_identity() +
-#     scale_fill_gradient2(low = "darkblue", mid = "white", high="red4") +
-#     monocle3:::monocle_theme_opts() + theme_blank()
-#
-# }
 
 # '
 #' @param ccs
@@ -2449,5 +2042,23 @@ plot_contrast_3d <- function(ccm,
 
 
 }
+
+#' Default plotting options for ggplot2
+#' @export
+hooke_theme_opts <- function(){
+  theme(strip.background = element_rect(colour = 'white', fill = 'white')) +
+    theme(panel.border = element_blank()) +
+    #theme(axis.line.x = element_line(size=0.25, color="black")) +
+    #theme(axis.line.y = element_line(size=0.25, color="black")) +
+    theme(panel.grid.minor.x = element_blank(),
+          panel.grid.minor.y = element_blank()) +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank()) +
+    theme(panel.background = element_rect(fill='white')) +
+    theme(legend.key=element_blank())
+}
+
+
+
 
 
