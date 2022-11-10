@@ -105,10 +105,12 @@ jobs:
     # _R_CHECK_TESTS_NLINES_: instruct the devtools::test scripts to output all
     # error lines rather than the last 13. See
     # https://yihui.org/en/2017/12/last-13-lines-of-output/
+    # GITHUB_PAT: required to read install Monocle3 using remotes::github_install()
+    # URL: https://github.com/r-lib/remotes/issues/641
     env:
       TRAVIS: true
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       _R_CHECK_TESTS_NLINES_: 0
-
     steps:
       # Get current repository contents.
       - uses: actions/checkout@v3
@@ -128,10 +130,10 @@ jobs:
       - name: Run R CMD build and R CMD check
         run: |
           export TORCH_INSTALL=1
-          R -e 'install.packages("torch", force=TRUE); remotes::install_github("cole-trapnell-lab/monocle3", ref="develop"); R CMD build; R CMD check hooke*tar.gz'
-#          R -e 'install.packages("torch", force=TRUE)'
-#          R -e 'remotes::install_github("cole-trapnell-lab/monocle3", ref="develop")'
-#          R CMD build .
-#          R CMD check hooke*tar.gz
+#          R -e 'install.packages("torch", force=TRUE); remotes::install_github("cole-trapnell-lab/monocle3", ref="develop"); R CMD build; R CMD check hooke*tar.gz'
+          R -e 'install.packages("torch", force=TRUE)'
+          R -e 'remotes::install_github("cole-trapnell-lab/monocle3", ref="develop")'
+          R CMD build .
+          R CMD check hooke*tar.gz
         shell: bash
 
