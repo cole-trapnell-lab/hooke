@@ -1,4 +1,5 @@
-#' adds umap coords to a data frame
+#' add umap coords to a data frame
+#' @noRd
 #' @import dplyr
 add_umap_coords <- function(df, umap_centers) {
 
@@ -13,6 +14,7 @@ add_umap_coords <- function(df, umap_centers) {
 }
 
 #' return the complementing edges
+#' @noRd
 #' @importFrom igraph graph_from_data_frame
 blacklist <- function(edges) {
   igraph::graph_from_data_frame(edges) %>%
@@ -20,6 +22,7 @@ blacklist <- function(edges) {
     igraph::as_data_frame()
 }
 
+#' @noRd
 #' returns edges based on pcor values
 get_pcor_edges <- function(ccm, selected_model=c("reduced", "full")) {
   model(ccm, selected_model)$latent_network() %>%
@@ -30,6 +33,7 @@ get_pcor_edges <- function(ccm, selected_model=c("reduced", "full")) {
     filter(from!=to, value!=0)
 }
 
+#' @noRd
 #' returns pairwise distances
 get_distances <- function(ccs, method="euclidean", matrix=T) {
   umap_centers = centroids(ccs)
@@ -58,6 +62,7 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 #' for each gene split by the specified group
 #' @param cds
 #' @param group_cells_by
+#' @noRd
 #'
 aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 
@@ -113,6 +118,7 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 #' this switches the umap space to the sub umap space
 #' @param cds
 #' @param sub_space
+#' @noRd
 switch_umap_space <- function(cds, sub_space = TRUE) {
   curr_umap_matrix = reducedDims(cds)[["UMAP"]]
 
@@ -140,6 +146,7 @@ switch_umap_space <- function(cds, sub_space = TRUE) {
 #' @param cond_b_vs_a_tbl
 #' @param cell_group
 #' @param facet_group
+#' @noRd
 #'
 plot_sub_contrast <- function (ccm,
                                cond_b_vs_a_tbl,
@@ -196,6 +203,7 @@ plot_sub_contrast <- function (ccm,
 
 
 
+#' @noRd
 convert_cluster_to_cell_group = function(ccs, cell_group) {
 
   colData(ccs@cds)[["cell_group"]] = colData(ccs@cds)[[cell_group]]
@@ -210,6 +218,7 @@ convert_cluster_to_cell_group = function(ccs, cell_group) {
 
 }
 
+#' @noRd
 convert_to_col = function(ccs, df, colname) {
 
   df %>%
@@ -227,6 +236,7 @@ convert_to_col = function(ccs, df, colname) {
 #' @param ctrl_ids
 #' @param col_name column name to select for perturbations
 #' @param interaction boolean whether to include an additive model or interaction term
+#' @noRd
 #'
 fit_perturb_ccm = function(perturbation,
                                 ccs,
@@ -299,6 +309,7 @@ fit_perturb_ccm = function(perturbation,
   return(perturb_ccm)
 }
 
+#' @noRd
 collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
   control_abund = estimate_abundances(ccm, tibble(knockout=FALSE, timepoint=timepoint, expt=expt))
   knockout_abund = estimate_abundances(ccm, tibble(knockout=TRUE, timepoint=timepoint, expt=expt))
@@ -310,6 +321,7 @@ collect_genotype_effects = function(ccm, timepoint=24, expt="GAP16"){
 #' filters a cds
 #' @param cds
 #' @param ... expressions that return a logical value
+#' @noRd
 #' @return a cell data set object
 filter_cds <- function(cds, ...) {
   cell_names = as.data.frame(cds@colData) %>% filter(...) %>% rownames()
@@ -322,6 +334,7 @@ filter_cds <- function(cds, ...) {
 #'
 #' @param ccs
 #' @param ... expressions that return a logical value
+#' @noRd
 #' @return a cell count set object
 filter_ccs <- function(ccs,
                        # recompute_sf = TRUE,
@@ -350,6 +363,7 @@ filter_ccs <- function(ccs,
 #'
 #' @param ccm
 #' @param ... expressions that return a logical value
+#' @noRd
 #' @return a cell count model object
 filter_ccm <- function(ccm, ...) {
   ccm@ccs = filter_ccs(ccm@ccs, ...)
@@ -359,6 +373,7 @@ filter_ccm <- function(ccm, ...) {
 #' change cell count set grouping
 #' @param ccm a cell count model
 #' @param cell_group string specifying how to aggregate the cell counts
+#' @noRd
 contract_ccm <- function(ccm, cell_group = NULL, sample_group = NULL) {
 
   if (is.null(sample_group)) {
@@ -384,6 +399,7 @@ contract_ccm <- function(ccm, cell_group = NULL, sample_group = NULL) {
 #' @param gene_patterns_over_cell_graph
 #' @param pattern
 #' @param cell_group
+#' @noRd
 #'
 top_gene_pattern <- function(ccm,
                              gene_patterns_over_cell_graph,

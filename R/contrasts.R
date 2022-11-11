@@ -1,5 +1,6 @@
 
 # NOTE: This ignores offsets. DO NOT USE TO RECOVER FITTED VALUES FROM THE ORIGINAL DATA
+#' @noRd
 my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), envir = parent.frame())
 {
   type = match.arg(type)
@@ -148,6 +149,7 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = "BH"){
   return(contrast_tbl)
 }
 
+#' @noRd
 correlate_abundance_changes <- function(pln_model, cond_b_vs_a_tbl){
 
   cov_graph <- return_igraph(pln_model)

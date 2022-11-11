@@ -233,6 +233,7 @@ new_cell_count_set <- function(cds,
 #' resamples the ccs counts using a multinomial distribution
 #' @param ccs
 #' @param random.seed
+#' @noRd
 bootstrap_ccs = function(ccs, random.seed=NULL) {
   count_mat = counts(ccs)
   num_cols = dim(count_mat)[2]
@@ -260,6 +261,7 @@ bootstrap_ccs = function(ccs, random.seed=NULL) {
 #' @param pln_min_ratio
 #' @param pln_num_penalties
 #' @param random.seed
+#' @noRd
 bootstrap_model = function(ccs,
                            full_model_formula_str,
                            best_full_model,
@@ -313,6 +315,7 @@ bootstrap_model = function(ccs,
 }
 
 
+#' @noRd
 compute_vhat = function(model, model_family, type) {
 
     if (model$d > 0) {
@@ -375,6 +378,7 @@ compute_vhat = function(model, model_family, type) {
 #' computes the avg vhat across n bootstraps
 #' @param ccm
 #' @param num_bootstraps
+#' @noRd
 bootstrap_vhat = function(ccs,
                           full_model_formula_str,
                           best_full_model,
@@ -690,6 +694,7 @@ select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to
 #' @param whitelist a data frame with two columns corresponding to (undirected) edges that should receive no penalty
 #' @param blacklist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
+#' @noRd
 init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
   cell_group_centroids = centroids(ccs)
   dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))

@@ -1,4 +1,5 @@
 #' Calculate max flow between two points
+#' @noRd
 calc_max_flow <- function(edges, source, target) {
   
   G <- igraph::graph_from_data_frame(edges, directed=FALSE)
@@ -26,6 +27,7 @@ calc_max_flow <- function(edges, source, target) {
 }
 
 #' Calculate a minimum spanning tree
+#' @noRd
 calc_mst <- function(edges, weight = "pcor") {
   G <- igraph::graph_from_data_frame(edges, directed=FALSE)
   
@@ -78,6 +80,7 @@ calc_shortest_path <- function(G, from, to) {
 #' @param edges
 #' @import tidygraph
 #'
+#' @noRd
 distance_to_root <- function(edges) {
   
   g = edges %>% select(from,to) %>% distinct() %>% igraph::graph_from_data_frame()
@@ -113,6 +116,7 @@ distance_to_root <- function(edges) {
 #' @param beta
 #' @param gamma
 #' @param sum_weights
+#' @noRd
 get_weighted_edges <- function(ccm,
                                edges,
                                alpha= 1,
@@ -145,6 +149,7 @@ get_weighted_edges <- function(ccm,
 #' @param source
 #' @param target
 #'
+#' @noRd
 get_shortest_path <- function(from, to, traversal_graph) {
   # print(paste0(from, "-",to))
   shortest_path_df = calc_shortest_path(traversal_graph, from, to) %>%
@@ -158,6 +163,7 @@ get_shortest_path <- function(from, to, traversal_graph) {
 
 #'
 #' @param shortest_path
+#' @noRd
 get_path_order <- function(shortest_path) {
   state_order = shortest_path %>%
     mutate(order = paste(from, to, sep="_")) %>%
@@ -168,6 +174,7 @@ get_path_order <- function(shortest_path) {
 }
 
 # select adjacent states
+#' @noRd
 select_states <- function(ordered_path, start , n = 3) {
   i = which(ordered_path == start)
   j = i + n - 1
@@ -179,6 +186,7 @@ select_states <- function(ordered_path, start , n = 3) {
 #' @param cond_a_vs_tbl
 #' @param p_value_threshold
 #'
+#' @noRd
 get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   
   pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
@@ -223,6 +231,7 @@ get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
 #' @param cond_b_vs_a_tbl
 #' @param p_value_threshold p_value threshold for inclusion of edges
 #' @param adj_pairs If TRUE, does the DEG testing between adjacent pairs. If FALSE, includes all states in the deg testing.
+#' @noRd
 find_deg_path = function(ccm,
                          cond_b_vs_a_tbl,
                          p_value_threshold = 1.0,
@@ -297,6 +306,7 @@ find_deg_path = function(ccm,
 }
 
 
+#' @noRd
 get_neg_dir_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
@@ -306,6 +316,7 @@ get_neg_dir_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   
 }
 
+#' @noRd
 get_positive_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%

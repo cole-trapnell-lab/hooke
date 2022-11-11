@@ -6,6 +6,7 @@
 #' @export
 #' @import ggplot2
 #' @import dplyr
+#' @noRd
 plot_contrast <- function(ccm,
                           cond_b_vs_a_tbl,
                           log_abundance_thresh = -5,
@@ -279,6 +280,7 @@ plot_contrast <- function(ccm,
 #' returns different color palettes
 #' @param num_colors the number of colors needed
 #' @param
+#' @noRd
 get_colors <- function(num_colors, type = "rainbow") {
 
 
@@ -318,6 +320,7 @@ get_colors <- function(num_colors, type = "rainbow") {
 }
 
 
+#' @noRd
 my_plot_cells <- function(data,
                           color_cells_by = NULL,
                           cell_size=1,
@@ -610,6 +613,7 @@ my_plot_cells <- function(data,
 #' @param color_cells_by
 #' @param residuals
 #' @param cond_b_vs_a_tbl
+#' @noRd
 plot_path <- function(data,
                       state_graph,
                       edge_size = 1,
@@ -751,6 +755,7 @@ plot_path <- function(data,
 }
 
 
+#' @noRd
 add_path_edge <- function(gp,
                           path_df,
                           umap_centers,
@@ -788,6 +793,7 @@ add_path_edge <- function(gp,
 #' @param color_nodes_by
 #' @param arrow.gap
 #' @param scale
+#' @noRd
 plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale = F) {
 
   if (class(data) == "cell_count_set") {
@@ -829,6 +835,7 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 
 }
 
+#' @noRd
 is_concordant <- function(cond_b_v_a_tbl, state_transition_graph) {
 
   parent_child_foldchanges(state_transition_graph, cond_b_v_a_tbl) %>%
@@ -840,6 +847,7 @@ is_concordant <- function(cond_b_v_a_tbl, state_transition_graph) {
 
 }
 
+#' @noRd
 is_discordant <- function(cond_b_v_a_tbl, state_transition_graph) {
 
   parent_child_foldchanges(state_transition_graph, cond_b_v_a_tbl) %>%
@@ -851,6 +859,7 @@ is_discordant <- function(cond_b_v_a_tbl, state_transition_graph) {
 
 }
 
+#' @noRd
 collect_psg_node_metadata <- function(ccm,
                                       color_nodes_by,
                                       label_nodes_by,
@@ -902,6 +911,7 @@ collect_psg_node_metadata <- function(ccm,
   return(node_metadata)
 }
 
+#' @noRd
 layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
 {
 
@@ -1370,6 +1380,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
 }
 
 
+#' @noRd
 num_extract <- function(string, as_char = TRUE){
 
   if (as_char)
@@ -1390,6 +1401,7 @@ num_extract <- function(string, as_char = TRUE){
 
 }
 
+#' @noRd
 calc_sig_ind <- function(p_value, html = TRUE) {
 
   #p_value <- suppressWarnings(
@@ -1887,6 +1899,7 @@ plot_state_graph_gene_expression <- function(ccm,
 #' @param log_scale
 #' @param nrow
 #' @param legend_position
+#' @noRd
 plot_cells_per_sample = function(ccs,
                                  x_col,
                                  normalize = F,
@@ -1935,6 +1948,7 @@ plot_cells_per_sample = function(ccs,
 }
 
 
+#' @noRd
 plot_cells_highlight = function(ccs, group_to_highlight, colname) {
 
   plot_df = as.data.frame(colData(cds))
@@ -1974,6 +1988,7 @@ plot_cells_highlight = function(ccs, group_to_highlight, colname) {
 }
 
 
+#' @noRd
 plot_contrast_3d <- function(ccm,
                              cond_b_vs_a_tbl,
                              log_abundance_thresh = -5,
