@@ -303,9 +303,9 @@ bootstrap_model = function(ccs,
                                                               data = sub_pln_data,
                                                               penalties = reduced_pln_model$penalties,
                                                               control_init=list(min.ratio=pln_min_ratio,
-                                                                                nPenalties=pln_num_penalties),
-                                                              control_main=list(penalty_weights=initial_penalties,
-                                                                                trace = ifelse(FALSE, 2, 0))))
+                                                                                nPenalties=pln_num_penalties,
+                                                                                penalty_weights=initial_penalties),
+                                                              control_main=list(trace = ifelse(FALSE, 2, 0))))
   }
 
   return(sub_full_model)
@@ -584,9 +584,9 @@ new_cell_count_model <- function(ccs,
   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                 data=pln_data,
                                                                 control_init=list(min.ratio=pln_min_ratio,
-                                                                                  nPenalties=pln_num_penalties),
-                                                                control_main=list(penalty_weights=initial_penalties,
-                                                                                  trace = ifelse(verbose, 2, 0)),
+                                                                                  nPenalties=pln_num_penalties,
+                                                                                  penalty_weights=initial_penalties),
+                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
                                                                 ...),)
 
 
@@ -594,9 +594,9 @@ new_cell_count_model <- function(ccs,
                                                                data=pln_data,
                                                                penalties = reduced_pln_model$penalties,
                                                                control_init=list(min.ratio=pln_min_ratio,
-                                                                                 nPenalties=pln_num_penalties),
-                                                               control_main=list(penalty_weights=initial_penalties,
-                                                                                 trace = ifelse(verbose, 2, 0)),
+                                                                                 nPenalties=pln_num_penalties,
+                                                                                 penalty_weights=initial_penalties),
+                                                               control_main=list(trace = ifelse(verbose, 2, 0)),
                                                                ...),)
 
   model_frame = model.frame(full_model_formula[-2], pln_data)
@@ -700,12 +700,12 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
   # TODO: do I need this? Probably the caller can and should do this.
   #dist_matrix = dist_matrix[colnames(data$Abundance), colnames(data$Abundance)]
 
-  get_rho_mat <- function(DM, distance_parameter = 1, s=1, xmin = NULL) {
+  get_rho_mat <- function(DM, s=2, xmin = NULL) {
     if (is.null(xmin)){
       xmin = min(DM[DM > 0]) / 2
     }
     #out <- (1-(xmin/DM)^s) * distance_parameter
-    out = min_penalty + (DM / max(DM))^2
+    out = min_penalty + (DM / max(DM))^s
     #out =  1 + DM^s
     # penalties have to be > 0
     out[!is.finite(out)] <- min_penalty
