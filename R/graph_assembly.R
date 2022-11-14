@@ -684,7 +684,7 @@ build_timeseries_transition_graph <- function(ccm,
   time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
     filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
 
-  message(paste("Comparing abundances at",  dim(time_contrasts), "timepoints"))
+  message(paste("Comparing abundances at",  dim(time_contrasts)[1], "timepoints"))
   relevant_comparisons = time_contrasts %>%
     mutate(comp_abund = purrr::map2(.f = select_timepoints,
                                     .x = t1,
@@ -1403,7 +1403,7 @@ assemble_timeseries_transitions <- function(ccm,
   # that we will find shortest paths over this graph between destination states and their plausible
   # origin states, then choose the best origins for each destination.
 
-  message("initializing pathfinding graph")
+  message("Initializing pathfinding graph")
   pathfinding_graph = init_pathfinding_graph(ccm,
                                              extant_cell_type_df,
                                              links_between_components=links_between_components)
