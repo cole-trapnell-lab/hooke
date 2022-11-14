@@ -1,7 +1,8 @@
 #' Orient graph edges from a PLNnetwork using a contrast between conditions
 #'
-#'@param ccm A cell_count_model
-#'@param cond_b_vs_a_tbl A contrast between two conditions as returned by compare_abundances()
+#' @param ccm A cell_count_model
+#' @param cond_b_vs_a_tbl A contrast between two conditions as returned by compare_abundances()
+#' @noRd
 collect_pln_graph_edges <- function(ccm,
                                     cond_b_vs_a_tbl,
                                     log_abundance_thresh = 1-5,
@@ -50,6 +51,7 @@ collect_pln_graph_edges <- function(ccm,
   return (corr_edge_coords_umap_delta_abund)
 }
 
+#' @noRd
 return_igraph <- function(model, type = "partial_cor", remove.isolated=FALSE,
                           edge.color = c("#F8766D", "#00BFC4"),
                           output = "igraph"){
@@ -178,6 +180,7 @@ get_extant_cell_types <- function(ccm,
            present_flag = ifelse(above_log_abund_thresh, TRUE, NA)) %>%
     ungroup()
 
+#' @noRd
   longest_present_interval <- function(tps_df){
     tryCatch(
       {
@@ -225,6 +228,7 @@ get_extant_cell_types <- function(ccm,
 #get_extant_cell_types(wt_ccm_wl, 72, 96) %>% filter(cell_group == "21")
 
 
+#' @noRd
 weigh_edges_by_umap_dist <- function(ccm, edges) {
 
   # get weighted path
@@ -238,6 +242,7 @@ weigh_edges_by_umap_dist <- function(ccm, edges) {
 
 }
 
+#' @noRd
 weigh_edges <- function(ccm, edges) {
   # get weighted path
   dist_df = hooke:::get_distances(ccm@ccs, matrix = F)
@@ -245,6 +250,7 @@ weigh_edges <- function(ccm, edges) {
 
 }
 
+#' @noRd
 add_cross_component_pathfinding_links = function(ccm,
                                                  pathfinding_graph,
                                                  type=c("strongest-pcor", "strong-pcor"),
@@ -404,6 +410,7 @@ init_pathfinding_graph <- function(ccm,
   return (pathfinding_graph)
 }
 
+#' @noRd
 get_perturbation_paths <- function(perturbation_ccm,
                                                   time_window,
                                                   pathfinding_graph,
@@ -536,6 +543,7 @@ find_cycles = function(g) {
 #' score a path based on fitting a linear model of time ~ geodeisic distance
 #' @param ccs
 #' @param path_df
+#' @noRd
 measure_time_delta_along_path <- function(path_df, ccs, cells_along_path_df, interval_col="timepoint") {
 
 
@@ -584,6 +592,7 @@ measure_time_delta_along_path <- function(path_df, ccs, cells_along_path_df, int
 #' score a path based on fitting a linear model of perturbation ~ geodesic distance
 #' @param ccs
 #' @param path_df
+#' @noRd
 measure_perturbation_freq_along_path <- function(path_df, ccs, cells_along_path_df, perturbation_col="knockout", interval_col="timepoint") {
 
 
@@ -647,6 +656,7 @@ measure_perturbation_freq_along_path <- function(path_df, ccs, cells_along_path_
 
 #' Identify the possible origins for each destination
 #'
+#' @noRd
 build_timeseries_transition_graph <- function(ccm,
                                               extant_cell_type_df,
                                               pathfinding_graph,
@@ -675,6 +685,7 @@ build_timeseries_transition_graph <- function(ccm,
   message("Estimating abundances over time interval")
   timepoint_pred_df = estimate_abundances_over_interval(ccm, start_time, stop_time, interval_col=interval_col, interval_step=interval_step, ...)
 
+#' @noRd
   select_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
     cond_x = timepoint_pred_df %>% filter(!!sym(interval_col) == t1)
     cond_y = timepoint_pred_df %>% filter(!!sym(interval_col) == t2)
@@ -786,6 +797,7 @@ build_timeseries_transition_graph <- function(ccm,
   return(G)
 }
 
+#' @noRd
 get_paths_between_recip_time_nodes <- function(ccm,
                                                pathfinding_graph,
                                                timepoint_pred_df,
@@ -876,6 +888,7 @@ get_paths_between_recip_time_nodes <- function(ccm,
 
 
 
+#' @noRd
 get_timeseries_paths <- function(ccm,
                                  extant_cell_type_df,
                                  pathfinding_graph,
@@ -923,6 +936,7 @@ get_timeseries_paths <- function(ccm,
   return (paths_between_recip_time_nodes)
 }
 
+#' @noRd
 select_paths_from_pathfinding_graph <- function(pathfinding_graph, selected_paths, allow_cycles=FALSE)
 {
 
@@ -995,6 +1009,7 @@ break_cycles_in_state_transition_graph <- function(state_graph, support_attribut
   return(state_graph)
 }
 
+#' @noRd
 get_pcor_between_pair <- function(perturb_model_pcor_matrix, from, to){
   #edges_to_test = mapply(function(x, y) { return(c(x,y))}, from, to)
   pcor_vals = mapply(function(x, y) { return(perturb_model_pcor_matrix[x,y])}, from, to)
@@ -1003,6 +1018,7 @@ get_pcor_between_pair <- function(perturb_model_pcor_matrix, from, to){
   return(pcor_vals)
 }
 
+#' @noRd
 score_paths_for_perturbations <- function(perturbation_ccm, paths_between_recip_time_nodes, perturbation_col="knockout", interval_col="timepoint")
 {
   #net <- model$latent_network(type = type)
@@ -1045,12 +1061,14 @@ score_paths_for_perturbations <- function(perturbation_ccm, paths_between_recip_
   return(paths_between_perturb_vs_wt_node_pairs)
 }
 
+#' @noRd
 compare_ko_to_wt_at_timepoint <- function(tp, perturbation_ccm, wt_pred_df, ko_pred_df, interval_col)  {
   cond_wt = wt_pred_df %>% filter(!!sym(interval_col) == tp)
   cond_ko = ko_pred_df %>% filter(!!sym(interval_col) == tp)
   return(compare_abundances(perturbation_ccm, cond_wt, cond_ko))
 }
 
+#' @noRd
 estimate_loss_timing <- function(perturbation_ccm,
                                  start_time,
                                  stop_time,
@@ -1130,6 +1148,7 @@ estimate_loss_timing <- function(perturbation_ccm,
   return(loss_tbl)
 }
 
+#' @noRd
 score_graph_edges_for_perturbations <- function(perturbation_ccm, state_transition_graph, start_time, stop_time, interval_step, interval_col="timepoint", q_val=0.01, ...)
 {
 
@@ -1193,6 +1212,7 @@ score_graph_edges_for_perturbations <- function(perturbation_ccm, state_transiti
 
 #' Identify the possible origins for each destination
 #'
+#' @noRd
 build_perturbation_transition_dag <- function(ccm,
                                               extant_cell_type_df,
                                               pathfinding_graph,
@@ -1243,6 +1263,7 @@ build_perturbation_transition_dag <- function(ccm,
 }
 
 
+#' @noRd
 compute_min_path_cover <- function(ccm, G, weight_attribute="weight"){
 
   igraph::edge_attr(G, "weight") = igraph::edge_attr(G, weight_attribute)
@@ -1362,6 +1383,7 @@ compute_min_path_cover <- function(ccm, G, weight_attribute="weight"){
 #' returns nodes not in paga graph
 #' @param  ccm
 #'
+#' @noRd
 not_in_paga_graph <- function(ccm) {
   cov_graph = hooke:::return_igraph(model(ccm, "reduced"))
   paga_graph = hooke:::get_paga_graph(ccm@ccs@cds)

@@ -1,6 +1,7 @@
 
 
 # Calculate the probability vector
+#' @noRd
 makeprobsvec <- function(p) {
   phat <- p/sum(p)
   phat[is.na(phat)] = 0
@@ -8,6 +9,7 @@ makeprobsvec <- function(p) {
 }
 
 # Calculate the probability matrix for a relative abundance matrix
+#' @noRd
 makeprobs <- function(a) {
   colSums<-apply(a,2,sum)
   b <- Matrix::t(Matrix::t(a)/colSums)
@@ -23,6 +25,7 @@ makeprobs <- function(a) {
 #   -sum(log2(p.norm)*p.norm)
 # }
 
+#' @noRd
 shannon_entropy <- function(p) {
   #if (Matrix::rowMin(p) < 0 || (p) <=0)
   #  return(Inf)
@@ -34,6 +37,7 @@ shannon_entropy <- function(p) {
 }
 
 # Calculate the Jensen-Shannon distance for two probability distribution
+#' @noRd
 js_dist_to_pattern <- function (x, pattern)
 {
   stopifnot(ncol(x) == length(pattern))
@@ -48,6 +52,7 @@ js_dist_to_pattern <- function (x, pattern)
   return(pattern_match_score)
 }
 
+#' @noRd
 score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_graph, estimate_matrix, state_term="cell_group", cores=1){
 
   parents = get_parents(state_graph, cell_state) #igraph::neighbors(state_graph, cell_state, mode="in")
@@ -87,6 +92,7 @@ score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_
 }
 
 
+#' @noRd
 classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matrix, stderr_matrix, state_term="cell_group", log_fc_thresh=1, abs_expr_thresh = 1e-3, sig_thresh=0.05, cores=1){
   #expr_self = expr_mat[,cell_state]
 
@@ -488,6 +494,7 @@ classify_genes_over_graph <- function(ccm,
 }
 
 #' get the parent(s) of a state in a state transition graph
+#' @noRd
 get_parents = function(state_graph, cell_state){
   parents = igraph::neighbors(state_graph, cell_state, mode="in")
   if (length(parents) > 0)
@@ -497,6 +504,7 @@ get_parents = function(state_graph, cell_state){
 }
 
 #' get the children of a state in a state transition graph
+#' @noRd
 get_children = function(state_graph, cell_state){
   children = igraph::neighbors(state_graph, cell_state, mode="out")
   if (length(children) > 0)
@@ -506,6 +514,7 @@ get_children = function(state_graph, cell_state){
 }
 
 #' get the siblings of a state in a state transition graph
+#' @noRd
 get_siblings = function(state_graph, cell_state){
   parents = get_parents(state_graph, cell_state)
   siblings = igraph::neighbors(state_graph, parents, mode="out")
@@ -514,6 +523,7 @@ get_siblings = function(state_graph, cell_state){
 }
 
 #' Compute a pseudobulk expression matrix for a model
+#' @noRd
 pseudobulk_cds_for_states <- function(ccm, state_col=NULL, collapse_samples=FALSE){
 
   if (is.null(state_col)){
