@@ -718,7 +718,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     return(out)
   }
 
-  penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, distance_parameter=1, s=2))
+  penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, s=2))
 
   # TODO: add support for whitelisting and blacklisting
   #qplot(as.numeric(dist_matrix), as.numeric(out))
