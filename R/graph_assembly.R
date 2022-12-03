@@ -180,7 +180,6 @@ get_extant_cell_types <- function(ccm,
            present_flag = ifelse(above_log_abund_thresh, TRUE, NA)) %>%
     ungroup()
 
-#' @noRd
   longest_present_interval <- function(tps_df){
     tryCatch(
       {

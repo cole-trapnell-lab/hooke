@@ -103,22 +103,23 @@ new_cell_count_set <- function(cds,
   # coldata_df$cluster = monocle3::clusters(cds)
   # coldata_df$partition = partitions(cds)
 
-  coldata_df = coldata_df %>% dplyr::rename_("sample" = sample_group, "cell_group" = as.character(cell_group))
+  coldata_df = coldata_df %>% dplyr::rename("sample" = sample_group, "cell_group" = as.character(cell_group))
   #coldata_df$cell_group = factor(coldata_df$cell_group, levels=unique(colData(cds)[,cell_group]))
 
   coldata_df$group_id = coldata_df %>%
-    dplyr::group_indices_("sample", "cell_group") %>% as.character
+    dplyr::group_by(sample, cell_group) %>%
+    dplyr::group_indices() %>% as.character
 
   # add to cds
   colData(cds)$group_id = coldata_df$group_id
 
   cds_summary = coldata_df %>%
-    dplyr::group_by_("sample", "cell_group") %>%
+    dplyr::group_by(sample, cell_group) %>%
     dplyr::summarize(cells = dplyr::n())
 
   cds_covariates_df = coldata_df %>%
     dplyr::select(-cell_group) %>%
-    dplyr::group_by_("sample") %>%
+    dplyr::group_by(sample) %>%
     dplyr::summarize(across(where(is.numeric), mean),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
                      across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) } ))
