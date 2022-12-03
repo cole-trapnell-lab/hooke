@@ -127,11 +127,14 @@ jobs:
       #        https://cran.r-project.org/web/packages/torch/vignettes/installation.html
       #      says that I can alternatively run torch::install_torch() in R
       #      in order to avoid the dialog but it didn't work for me.
+      #   o  PLNmodels is in active development and we need the master branch
+      #      rather than CRAN
       - name: Run R CMD build and R CMD check
         run: |
           export TORCH_INSTALL=1
           R -e 'install.packages("torch", force=TRUE)'
           R -e 'remotes::install_github("cole-trapnell-lab/monocle3", ref="develop")'
+          R -e 'remotes::install_github("PLN-team/PLNmodels", ref="master")
           R CMD build .
           R CMD check hooke*tar.gz
         shell: bash
