@@ -17,14 +17,19 @@ new_cell_count_set(
 \arguments{
 \item{cds}{A Monocle cell data set object.}
 
-\item{sample_group}{A column in colData(cds) that specifes how cells are grouped into samples}
+\item{sample_group}{A column in colData(cds) that specifes how cells are grouped into samples.}
 
-\item{cell_group}{A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster)}
+\item{cell_group}{A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster).}
 
-\item{sample_metadata}{data frame containing attributes of individual samples, where}
+\item{sample_metadata}{Data frame containing attributes of individual samples, where
+the column named 'sample' has entries in \code{sample_group}.}
 
-\item{cell_metadata}{data frame containing attributes of individual cell groups, where
+\item{cell_metadata}{Data frame containing attributes of individual cell groups, where
 \code{row.names(cell_metadata)} are entries in \code{cell_group}}
+
+\item{lower_threshold}{numeric Minimum number of cells in retained cell_groups.}
+
+\item{upper_threshold}{numeric Maximum number of cells in retained cell_groups.}
 }
 \value{
 a new cell_data_set object

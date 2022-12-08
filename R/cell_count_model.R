@@ -66,7 +66,7 @@ setClass("cell_count_model",
 #' @param sample_group A column in colData(cds) that specifes how cells are grouped into samples.
 #' @param cell_group A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster).
 #' @param sample_metadata Data frame containing attributes of individual samples, where
-#'   \code{row.names(sample_metadata)} are entries in \code{sample_group}.
+#'   the column named 'sample' has entries in \code{sample_group}.
 #' @param cell_metadata Data frame containing attributes of individual cell groups, where
 #'   \code{row.names(cell_metadata)} are entries in \code{cell_group}
 #' @param lower_threshold numeric Minimum number of cells in retained cell_groups.
@@ -117,9 +117,6 @@ new_cell_count_set <- function(cds,
 
   assertthat::assert_that(is.null(upper_threshold) || is.numeric(upper_threshold),
                           msg = paste('Argument upper_threshold must be numeric.'))
-
-#  assertthat::assert_that(is.null(sample_metadata) || is_equal(rownames(), rownames)),
-#                          msg = paste('
 
   if(sample_group != 'sample')
     colData(cds)$sample = NULL
