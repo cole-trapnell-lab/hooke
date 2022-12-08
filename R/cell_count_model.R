@@ -63,11 +63,14 @@ setClass("cell_count_model",
 #' Create a new cell_data_set object.
 #'
 #' @param cds A Monocle cell data set object.
-#' @param sample_group A column in colData(cds) that specifes how cells are grouped into samples
-#' @param cell_group A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster)
-#' @param sample_metadata data frame containing attributes of individual samples, where
-#' @param cell_metadata data frame containing attributes of individual cell groups, where
+#' @param sample_group A column in colData(cds) that specifes how cells are grouped into samples.
+#' @param cell_group A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster).
+#' @param sample_metadata Data frame containing attributes of individual samples, where
+#'   \code{row.names(sample_metadata)} are entries in \code{sample_group}.
+#' @param cell_metadata Data frame containing attributes of individual cell groups, where
 #'   \code{row.names(cell_metadata)} are entries in \code{cell_group}
+#' @param lower_threshold numeric Minimum number of cells in retained cell_groups.
+#' @param upper_threshold numeric Maximum number of cells in retained cell_groups.
 #' @return a new cell_data_set object
 #' @importFrom dplyr summarize
 #' @importFrom dplyr %>%
@@ -80,7 +83,46 @@ new_cell_count_set <- function(cds,
                                lower_threshold = NULL,
                                upper_threshold = NULL) {
 
-  colData(cds)$sample = NULL
+  assertthat::assert_that(is(cds, 'cell_data_set'),
+                          msg = paste('Argument cds must be a cell_data_set.'))
+
+  assertthat::assert_that(is.null(sample_metadata) || is.data.frame(sample_metadata),
+                          msg = paste('Argument sample_metadata must be a data frame.'))
+
+  sample_group_names_cds <- unique(colData(cds)[[sample_group]])
+  assertthat::assert_that(is.null(sample_metadata) || nrow(sample_metadata) == length(sample_group_names_cds),
+                          msg = paste('Argument sample_metadata must have the same',
+                                      'number of rows as there are distinct sample',
+                                      'names in the cds column data.'))
+
+  assertthat::assert_that(is.null(sample_metadata) || all(sample_group_names_cds %in% sample_metadata[['sample']]),
+                          msg = paste('Argument sample_metadata must have sample group names in',
+                                       'a column called \'sample\'.'))
+
+  assertthat::assert_that(is.null(cell_metadata) || is.data.frame(cell_metadata),
+                          msg = paste('Argument cell_metadata must be a data frame.'))
+
+  cell_group_names_cds <- unique(colData(cds)[[cell_group]])
+  assertthat::assert_that(is.null(cell_metadata) || nrow(cell_metadata) == length(cell_group_names_cds),
+                          msg = paste('Argument cell_metadata must have the same',
+                                      'number of rows as there are distinct cell_group',
+                                      'names in the cds column data.'))
+
+  assertthat::assert_that(is.null(cell_metadata) || all(cell_group_names_cds %in% rownames(cell_metadata)),
+                          msg = paste('Argument cell_metadata row names must contain the cell_group',
+                                       'names.'))
+
+  assertthat::assert_that(is.null(lower_threshold) || is.numeric(lower_threshold),
+                          msg = paste('Argument lower_threshold must be numeric.'))
+
+  assertthat::assert_that(is.null(upper_threshold) || is.numeric(upper_threshold),
+                          msg = paste('Argument upper_threshold must be numeric.'))
+
+#  assertthat::assert_that(is.null(sample_metadata) || is_equal(rownames(), rownames)),
+#                          msg = paste('
+
+  if(sample_group != 'sample')
+    colData(cds)$sample = NULL
 
   # check if anything contains NAs in it
   # if so drop them
@@ -152,28 +194,22 @@ new_cell_count_set <- function(cds,
 
   cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
 
-  # This is super confusing because of the way the arguments are named in new_cell_data_set.
-  # We are making a matrix of dimension MxN, where M are cell types and N are samples (e.g. embryos, replicates, etc).
-  # The "gene" metadata monocle normally expects will actually be used to hold
+  # This is super confusing because of the way the arguments are
+  # named in new_cell_data_set. We are making a matrix of
+  # dimension MxN, where M are cell types and N are samples
+  # (e.g. embryos, replicates, etc). The "gene" metadata monocle
+  # normally expects will actually be used to hold cell group
+  # metadata.
+  cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide),,drop=FALSE]
   ccs = methods::new("cell_count_set",
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
-                                           gene_metadata=cell_metadata),
+                                           gene_metadata=cell_metadata_subset),
                cds=cds[, !colData(cds)[[cell_group]] %in% removed_cell_states],
                info=SimpleList(sample_group=sample_group,
                                cell_group=cell_group))
 
-
-  # assertthat::assert_that(class(expression_data) == "matrix" ||
-  #                           is_sparse_matrix(expression_data),
-  #                         msg = paste("Argument expression_data must be a",
-  #                                     "matrix - either sparse from the",
-  #                                     "Matrix package or dense"))
   # if (!is.null(cell_metadata)) {
-  #   assertthat::assert_that(nrow(cell_metadata) == ncol(expression_data),
-  #                           msg = paste("cell_metadata must be NULL or have",
-  #                                       "the same number of rows as columns",
-  #                                       "in expression_data"))
   #   assertthat::assert_that(!is.null(row.names(cell_metadata)) &
   #                             all(row.names(cell_metadata) == colnames(expression_data)),
   #                           msg = paste("row.names of cell_metadata must be equal to colnames of",
@@ -181,10 +217,6 @@ new_cell_count_set <- function(cds,
   # }
   #
   # if (!is.null(gene_metadata)) {
-  #   assertthat::assert_that(nrow(gene_metadata) == nrow(expression_data),
-  #                           msg = paste("gene_metadata must be NULL or have",
-  #                                       "the same number of rows as rows",
-  #                                       "in expression_data"))
   #   assertthat::assert_that(!is.null(row.names(gene_metadata)) & all(
   #     row.names(gene_metadata) == row.names(expression_data)),
   #     msg = paste("row.names of gene_metadata must be equal to row.names of",
@@ -196,33 +228,6 @@ new_cell_count_set <- function(cds,
   #                               row.names = colnames(expression_data))
   # }
   #
-  # if(!('gene_short_name' %in% colnames(gene_metadata))) {
-  #   warning(paste("Warning: gene_metadata must contain a column verbatim",
-  #                 "named 'gene_short_name' for certain functions."))
-  # }
-  #
-  # sce <- SingleCellExperiment(list(counts=methods::as(expression_data, "dgCMatrix")),
-  #                             rowData = gene_metadata,
-  #                             colData = cell_metadata)
-  #
-  # cds <- methods::new("cell_data_set",
-  #                     assays = SummarizedExperiment::Assays(
-  #                       list(counts=methods::as(expression_data, "dgCMatrix"))),
-  #                     colData = colData(sce),
-  #                     int_elementMetadata =int_elementMetadata(sce),
-  #                     int_colData = int_colData(sce),
-  #                     int_metadata = int_metadata(sce),
-  #                     metadata = metadata(sce),
-  #                     NAMES = NULL,
-  #                     elementMetadata = elementMetadata(sce)[,0],
-  #                     rowRanges = rowRanges(sce))
-  #
-  # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
-  # clusters <- stats::setNames(SimpleList(), character(0))
-  # cds <- estimate_size_factors(cds)
-  # cds
-
-
 
   ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
   row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(cds)
