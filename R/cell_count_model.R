@@ -57,9 +57,6 @@ setClass("cell_count_model",
 )
 
 
-
-
-
 #' Create a new cell_data_set object.
 #'
 #' @param cds A Monocle cell data set object.
@@ -233,6 +230,7 @@ new_cell_count_set <- function(cds,
   return (ccs)
 }
 
+
 #' resamples the ccs counts using a multinomial distribution
 #' @param ccs
 #' @param random.seed
@@ -253,6 +251,7 @@ bootstrap_ccs = function(ccs, random.seed=NULL) {
   counts(ccs) = new_count_mat
   return(ccs)
 }
+
 
 #'
 #' @param ccs
@@ -377,7 +376,6 @@ compute_vhat = function(model, model_family, type) {
 }
 
 
-
 #' computes the avg vhat across n bootstraps
 #' @param ccm
 #' @param num_bootstraps
@@ -484,12 +482,31 @@ bootstrap_vhat = function(ccs,
 #'
 #' @param ccs A Hooke cell_count_set object.
 #' @param main_model_formula_str A character string specifying the model of cell abundances across samples,
-#' where terms refer to columns in\code{colData(ccs)}. Put main effects here.
+#'   where terms refer to columns in\code{colData(ccs)}. Put main effects here.
 #' @param nuisance_model_formula_str A character string specifying the model of cell abundances across samples. Put nuisance effects here.
 #' @param penalty_matrix A numeric NxN symmetric matrix specifying penalties for
 #'   the PLN model, where N is the number of cell types. Entries must be
 #'   positive. Use to specify an undirected graph prior for the PLN model.
+#' @param whitelist list A data frame with two columns corresponding to (undirected)
+#'    edges that should receive min_penalty. The columns are integers that refer to
+#'    cell clusters.
+#' @param blacklist list A data frame with two columns corresponding to (undirected) 
+#'    edges that should receive max_penalty. The columns are integers that refer to
+#'    cell clusters.
 #' @param sparsity_factor A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
+#' @param base_penalty numeric A factor that scales the penalty matrix.
+#' @param min_penalty numeric
+#' @param max_penalty numeric
+#' @param verbose logical
+#' @param pseudocount non-negative integer
+#' @param pln_min_ratio numeric
+#' @param pln_num_penalties integer number of penalty values for the internally generated penalty grid
+#' @param norm_method string
+#' @param vhat_method string
+#' @param size_factors
+#' @param num_bootstraps non-negative integer
+#' @param inception ??
+#' @param backend ??
 #' @return a new cell_count_model object
 #' @importFrom PLNmodels prepare_data
 #' @importFrom PLNmodels PLNnetwork
@@ -516,18 +533,52 @@ new_cell_count_model <- function(ccs,
                                  size_factors = NULL,
                                  num_bootstraps = 10,
                                  inception = NULL,
-                                 backend = "nlopt",
+                                 backend = c("nlopt", "torch"),
                                  ...) {
 
+  assertthat::assert_that(assertthat::is.string(main_model_formula_str))
+  assertthat::assert_that(assertthat::is.string(nuisance_model_formula_str))
+
+  assertthat::assert_that(assertthat::is.number(sparsity_factor))
+  assertthat::assert_that(assertthat::is.number(base_penalty))
+  assertthat::assert_that(assertthat::is.number(min_penalty))
+  assertthat::assert_that(assertthat::is.number(max_penalty))
+  assertthat::assert_that(assertthat::is.number(pseudocount))
+  assertthat::assert_that(assertthat::is.number(pln_min_ratio))
+  assertthat::assert_that(assertthat::is.count(pln_num_penalties))
+  assertthat::assert_that(assertthat::is.count(num_bootstraps))
+
+  # Check that penalty matrix dimensions are N x N where N is the number of cell types.
+  assertthat::assert_that(is.null(penalty_matrix) || ( is.matrix(penalty_matrix) && is.numeric(penalty_matrix[1][1])))
+  assertthat::assert_that(assertthat::is.flag(verbose))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument norm_method must be one of "size_factors",',
+                '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
   norm_method <- match.arg(norm_method)
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste( 'Argument vhat_method must be one of "wald", "sandwich",',
+                 '"louis", or "bootstrap".'))
   vhat_method <- match.arg(vhat_method)
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(backend) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste( 'Argument backend must be one of "nlopt" or "torch".'))
+  backend <- match.arg(backend)
+
   if (norm_method == "size_factors") {
     if (!is.null(size_factors)) {
 
       assertthat::assert_that(
         tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
                  error = function(e) FALSE),
-        msg = "size factors don't match")
+        msg = "Argument size factor names must match ccs column names.")
 
       pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
                                           covariates = colData(ccs) %>% as.data.frame,
@@ -547,23 +598,42 @@ new_cell_count_model <- function(ccs,
     }
   }
 
-
-
   main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
   nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
 
   full_model_formula_str = paste("Abundance~", main_model_formula_str, "+", nuisance_model_formula_str, " + offset(log(Offset))")
-  full_model_formula = as.formula(full_model_formula_str)
+  # full_model_formula = as.formula(full_model_formula_str)
+  full_model_formula <- tryCatch(
+                          {
+                            as.formula(full_model_formula_str)
+                          },
+                          error = function(condition) {
+                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condtiton, '.')
+                          },
+                          warn = function(condition) {
+                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condtiton, '.')
+                          })
 
   reduced_model_formula_str = paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
-  reduced_model_formula = as.formula(reduced_model_formula_str)
+#  reduced_model_formula = as.formula(reduced_model_formula_str)
+  reduced_model_formula <- tryCatch(
+                          {
+                            as.formula(reduced_model_formula_str)
+                          },
+                          error = function(condition) {
+                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condtiton, '.')
+                          },
+                          warn = function(condition) {
+                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condtiton, '.')
+                          })
+
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
   if (is.null(penalty_matrix)){
     initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
-    # TODO: check and validate dimensions of the user-provided penaties
+    # TODO: check and validate dimensions of the user-provided penalties
     initial_penalties = penalty_matrix
   }
 
@@ -573,7 +643,6 @@ new_cell_count_model <- function(ccs,
   if (is.null(whitelist) == FALSE){
     initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
     initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
-
   }
 
   if (is.null(blacklist) == FALSE){
@@ -595,7 +664,6 @@ new_cell_count_model <- function(ccs,
                                                                                   penalty_weights=initial_penalties),
                                                                 control_main=list(trace = ifelse(verbose, 2, 0)),
                                                                 ...),)
-
 
   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                                                data=pln_data,
@@ -633,7 +701,6 @@ new_cell_count_model <- function(ccs,
                           backend)
   } else {
     vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
-
   }
 
   ccm <- methods::new("cell_count_model",
@@ -657,9 +724,9 @@ new_cell_count_model <- function(ccs,
   #ccm@model_aux[["best_model"]] = best_model
   #ccm@model_aux[["model_family"]] = pln_model
 
-
   ccm
 }
+
 
 #' Select the model a cell_count_model should use
 #'
