@@ -373,7 +373,7 @@ my_plot_cells <- function(data,
 
   # could be an vector that corresponds to a label
   if (!is.null(coefficients)) {
-    res_df = data.frame("coefficients" = coefficients) %>% rownames_to_column("cell_group")
+    res_df = data.frame("coefficients" = coefficients) %>% tibble::rownames_to_column("cell_group")
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
 
     if (is.null(color_cells_by))
@@ -941,8 +941,8 @@ layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
   if (is.null(edge_labels)== FALSE) {
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=edge_labels), recipEdges="distinct")
     label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
-      rownames_to_column("edge_name") %>%
-      left_join(tibble("edge_name" = names(edge_labels), label=edge_labels))# %>% rownames_to_column("edge_name"), by = "edge_name")
+      tibble::rownames_to_column("edge_name") %>%
+      left_join(tibble("edge_name" = names(edge_labels), label=edge_labels))
 
   } else {
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, recipEdges="distinct")
@@ -1914,7 +1914,7 @@ plot_cells_per_sample = function(ccs,
   count_df = counts(ccs) %>%
     as.matrix %>%
     as.data.frame() %>%
-    rownames_to_column("cell_group") %>%
+    tibble::rownames_to_column("cell_group") %>%
     tidyr::pivot_longer(-cell_group, names_to = "sample", values_to = "count") %>%
     left_join(ccs_coldata, by = "sample")
 

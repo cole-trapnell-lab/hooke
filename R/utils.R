@@ -28,7 +28,7 @@ get_pcor_edges <- function(ccm, selected_model=c("reduced", "full")) {
   model(ccm, selected_model)$latent_network() %>%
     as.matrix() %>%
     as.data.frame() %>%
-    rownames_to_column("from") %>%
+    tibble::rownames_to_column("from") %>%
     pivot_longer(-c("from"), names_to = "to") %>%
     filter(from!=to, value!=0)
 }
@@ -47,7 +47,7 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
     dist_df =  dist_matrix %>%
       as.matrix() %>%
       as.data.frame() %>%
-      rownames_to_column("from") %>%
+      tibble::rownames_to_column("from") %>%
       tidyr::pivot_longer(-from, names_to = "to", values_to = "dist")
     return(dist_df)
   }
