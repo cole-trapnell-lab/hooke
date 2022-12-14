@@ -345,7 +345,9 @@ add_cross_component_pathfinding_links = function(ccm,
 init_pathfinding_graph <- function(ccm,
                                    extant_cell_type_df,
                                    links_between_components=c("none", "strongest-pcor", "strong-pcor"),
-                                   weigh_by_pcor=F){
+                                   weigh_by_pcor=F,
+                                   edge_whitelist=NULL,
+                                   edge_blacklist=NULL){
 
   # There are a number of different ways we could set up this "pathfinding graph" but for now
   # Let's just use the PAGA (weighed by distance in UMAP space), subtracting edges between which
@@ -356,35 +358,32 @@ init_pathfinding_graph <- function(ccm,
   cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   node_metadata = data.frame(id=cell_groups)
 
-  paga_graph = initial_pcor_graph(ccm@ccs) %>% igraph::graph_from_data_frame(directed = FALSE, vertices=node_metadata) %>% igraph::as.directed()
-  cov_graph = hooke:::return_igraph(model(ccm, "reduced"))
-  cov_graph_edges = igraph::as_data_frame(cov_graph, what="edges") %>% dplyr::rename(pcor=weight) %>% dplyr::filter(pcor != 0.00)
+  if (is.null(edge_whitelist)){
+    message("Initializing pathfinding graph from partially correlated pairs linked in PAGA")
+    paga_graph = initial_pcor_graph(ccm@ccs) %>% igraph::graph_from_data_frame(directed = FALSE, vertices=node_metadata) %>% igraph::as.directed()
+    cov_graph = hooke:::return_igraph(model(ccm, "reduced"))
+    cov_graph_edges = igraph::as_data_frame(cov_graph, what="edges") %>% dplyr::rename(pcor=weight) %>% dplyr::filter(pcor != 0.00)
 
-  # FIXME: While we should consider this more sophisticated weighting function, let's test just using UMAP distance for now:
-  #weighted_edges = hooke:::get_weighted_edges(ccm, all_edges)
-  weighted_edges = hooke:::weigh_edges_by_umap_dist(ccm, cov_graph_edges)
+    weighted_edges = hooke:::weigh_edges_by_umap_dist(ccm, cov_graph_edges)
 
-  # if (weigh_by_pcor) {
-  #   weighted_edges = weighted_edges %>%
-  #     mutate(weight = 1/pcor)
-  #     # mutate(y = 1/pcor, z=dist,
-  #     #        y_z = (y-min(y))/(max(y)-min(y)),
-  #     #        z_z = (z-min(z))/(max(z)-min(z)),
-  #     #        weight = y_z + z_z) %>% select(-c(y,z,y_z,z_z))
-  # }
+    paga_components = igraph::components(paga_graph)
+    same_partition_mat = outer(paga_components$membership, paga_components$membership, FUN="==")
+    weighted_edges = weighted_edges %>% group_by(from, to) %>%
+      mutate(adjacent_in_paga = igraph::are_adjacent(paga_graph, from, to),
+             same_partition = same_partition_mat[from, to]) %>% ungroup()
 
-  paga_components = igraph::components(paga_graph)
-  same_partition_mat = outer(paga_components$membership, paga_components$membership, FUN="==")
-  weighted_edges = weighted_edges %>% group_by(from, to) %>%
-    mutate(adjacent_in_paga = igraph::are_adjacent(paga_graph, from, to),
-           same_partition = same_partition_mat[from, to]) %>% ungroup()
+    weighted_edges = weighted_edges %>% filter(adjacent_in_paga)
+    pathfinding_graph = weighted_edges %>% select(from, to, weight) %>%
+      igraph::graph_from_data_frame(directed=FALSE, vertices=node_metadata) %>%
+      igraph::as.directed()
+
+  }else{
+    weighted_edges = hooke:::weigh_edges_by_umap_dist(ccm, edge_whitelist)
+    pathfinding_graph = weighted_edges %>% select(from, to, weight) %>%
+      igraph::graph_from_data_frame(directed=TRUE, vertices=node_metadata)
+  }
 
 
-  weighted_edges = weighted_edges %>% filter(adjacent_in_paga)
-
-  pathfinding_graph = weighted_edges %>% select(from, to, weight) %>%
-    igraph::graph_from_data_frame(directed=FALSE, vertices=node_metadata) %>%
-    igraph::as.directed()
 
   if (links_between_components != "none"){
     pathfinding_graph = add_cross_component_pathfinding_links(ccm, pathfinding_graph, type=links_between_components)
@@ -394,19 +393,15 @@ init_pathfinding_graph <- function(ccm,
       igraph::as.directed() %>% igraph::simplify()
   }
 
-  # edges_between_concurrent_states = left_join(pathfinding_graph %>% igraph::as_data_frame(what="edges"),
-  #                                             extant_cell_type_df, by=c("from"="cell_group")) %>%
-  #   select(from, to, from_start=longest_contig_start, from_end=longest_contig_end)
-  # edges_between_concurrent_states = left_join(edges_between_concurrent_states, extant_cell_type_df, by=c("to"="cell_group")) %>%
-  #   select(from, to, from_start, from_end, to_start=longest_contig_start, to_end=longest_contig_end)
-  # edges_between_concurrent_states = edges_between_concurrent_states %>%
-  #   filter(from_start <= to_start & from_end >= to_start) %>% select(from, to) %>% distinct()
+  # if (is.null(edge_whitelist) == FALSE){
+  #   # Ensuring whitelisted edges remain in pathfinding graph
+  #   edge_whitelist = edge_whitelist[,c(1,2)] %>% as_tibble()
+  #   colnames(edge_whitelist) = c("from", "to")
+  #   pathfinding_graph = igraph::as_data_frame(pathfinding_graph) %>%  select(from, to)
+  #   pathfinding_graph = pathfinding_graph %>% bind_rows(edge_whitelist) %>% distinct()
+  #   pathfinding_graph = hooke:::weigh_edges_by_umap_dist(ccm, pathfinding_graph)
+  # }
 
-  #if (require_presence_at_all_timepoints){
-  #pathfinding_graph = igraph::intersection(pathfinding_graph,
-  #                                         edges_between_concurrent_states %>%
-  #                                         igraph::graph_from_data_frame(directed=TRUE, vertices=node_metadata))
-  #}
   return (pathfinding_graph)
 }
 
@@ -425,8 +420,8 @@ get_perturbation_paths <- function(perturbation_ccm,
   #print ("getting perturbation paths")
   #print (time_window)
 
-  start_time = min(time_window$start_time)
-  stop_time = min(time_window$stop_time)
+  start_time = min(as.numeric(time_window$start_time))
+  stop_time = min(as.numeric(time_window$stop_time))
 
   #print (start_time)
   #print (stop_time)
@@ -575,7 +570,7 @@ measure_time_delta_along_path <- function(path_df, ccs, cells_along_path_df, int
 
   cells_along_path_df$y = cells_along_path_df[[interval_col]]
 
-  path_model = speedglm::speedlm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
+  path_model = lm(y ~ geodesic_dist, data=cells_along_path_df, weights=cells_along_path_df$num_cells)
 
   path_model_tidied = broom::tidy(path_model)
   path_model_glanced = broom::glance(path_model)
@@ -619,7 +614,7 @@ measure_perturbation_freq_along_path <- function(path_df, ccs, cells_along_path_
   cells_along_path_df$perturb = cells_along_path_df[[perturbation_col]]
   cells_along_path_df$timepoint = cells_along_path_df[[interval_col]]
 
-  path_model = speedglm::speedglm(#perturb ~ timepoint + geodesic_dist,
+  path_model = glm(#perturb ~ timepoint + geodesic_dist,
     perturb ~ geodesic_dist,
                    data=cells_along_path_df,
                    weights=cells_along_path_df$num_cells,
@@ -639,7 +634,7 @@ measure_perturbation_freq_along_path <- function(path_df, ccs, cells_along_path_
   #   print (summary(path_model))
   # }
 
-  if (path_model$convergence == FALSE | unlist(path_model_glanced[1, "pseudo.r.squared"]) < 0)
+  if (path_model$converged == FALSE | unlist(path_model_glanced[1, "pseudo.r.squared"]) < 0)
   {
     return(tibble(perturb_dist_effect = 0,
                   perturb_dist_effect_pval = 1,
@@ -1410,6 +1405,8 @@ assemble_timeseries_transitions <- function(ccm,
                                             min_pathfinding_lfc=1,
                                             make_dag=FALSE,
                                             links_between_components=c("none", "strongest-pcor", "strong-pcor"),
+                                            edge_whitelist=NULL,
+                                            edge_blacklist=NULL,
                                             ...){
 
   message("Determining extant cell types")
@@ -1428,7 +1425,9 @@ assemble_timeseries_transitions <- function(ccm,
   message("Initializing pathfinding graph")
   pathfinding_graph = init_pathfinding_graph(ccm,
                                              extant_cell_type_df,
-                                             links_between_components=links_between_components)
+                                             links_between_components=links_between_components,
+                                             edge_whitelist=edge_whitelist,
+                                             edge_blacklist=edge_blacklist)
 
 
   G = build_timeseries_transition_graph(ccm,
@@ -1444,9 +1443,6 @@ assemble_timeseries_transitions <- function(ccm,
                                       min_pathfinding_lfc=min_pathfinding_lfc,
                                       make_dag=make_dag,
                                       ...)
-  if (make_dag) {
-
-  }
 
   igraph::V(G)$cell_group = ccm@ccs@info$cell_group
 
@@ -1477,6 +1473,8 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
                                                          min_pathfinding_lfc=1,
                                                          links_between_components=c("none", "strongest-pcor", "strong-pcor"),
                                                          verbose=FALSE,
+                                                         edge_whitelist=NULL,
+                                                         edge_blacklist=NULL,
                                                          ...)
 {
 
@@ -1500,7 +1498,9 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
   # origin states, then choose the best origins for each destination.
   pathfinding_graph = init_pathfinding_graph(control_timeseries_ccm,
                                              extant_cell_type_df,
-                                             links_between_components=links_between_components)
+                                             links_between_components=links_between_components,
+                                             edge_whitelist=edge_whitelist,
+                                             edge_blacklist=edge_blacklist)
 
   timeseries_graph = assemble_timeseries_transitions(control_timeseries_ccm,
                                                      q_val=q_val,
@@ -1514,6 +1514,8 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
                                                      log_abund_detection_thresh=log_abund_detection_thresh,
                                                      min_pathfinding_lfc=min_pathfinding_lfc,
                                                      links_between_components=links_between_components,
+                                                     edge_whitelist=edge_whitelist,
+                                                     edge_blacklist=edge_blacklist,
                                                      ...)
 
   pathfinding_graph = igraph::intersection(pathfinding_graph, timeseries_graph)
