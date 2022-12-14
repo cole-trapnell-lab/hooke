@@ -28,47 +28,47 @@ plot_cells(pap_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE) +
         axis.text.y=element_blank(),
         axis.ticks=element_blank(),
         axis.title.x=element_blank(),
-        axis.title.y=element_blank()) +
+        axis.title.y=element_blank())
   ggsave("pap_cell_types.png", width=3, height=3)
 
-plot_cells(pap_cds, color_cells_by="Genotype", show_trajectory_graph=FALSE) + facet_wrap(~Genotype)
+  plot_cells(pap_cds, color_cells_by="Genotype", show_trajectory_graph=FALSE) + facet_wrap(~Genotype)
 
 
-plot_cells(pap_cds, genes=c("Csf2",
-                            "Csf2ra",
-                            "Csf2rb",
-                            "Chil3",
-                            "Lpl",
-                            "Car4",
-                            "Apoe",
-                            "Fabp4",
-                            "Fabp5",
-                            "F13a1"),
-           show_trajectory_graph=FALSE)
+  plot_cells(pap_cds, genes=c("Csf2",
+                              "Csf2ra",
+                              "Csf2rb",
+                              "Chil3",
+                              "Lpl",
+                              "Car4",
+                              "Apoe",
+                              "Fabp4",
+                              "Fabp5",
+                              "F13a1"),
+             show_trajectory_graph=FALSE)
 
-#plot_cells(cds)
+  #plot_cells(cds)
 
-ccs = new_cell_count_set(pap_cds,
-                         sample_group = "sampleName",
-                         cell_group = "cell_type")
+  ccs = new_cell_count_set(pap_cds,
+                           sample_group = "sampleName",
+                           cell_group = "cell_type")
 
 
-ccm  = new_cell_count_model(ccs,
-                            main_model_formula_str = "Genotype",
-                            nuisance_model_formula_str = "batch")
+  ccm  = new_cell_count_model(ccs,
+                              main_model_formula_str = "Genotype",
+                              nuisance_model_formula_str = "batch")
 
-ccm = select_model(ccm, criterion="StARS", sparsity_factor=10)
-plot(model(ccm, "reduced"), output="corrplot")
+  ccm = select_model(ccm, criterion="StARS", sparsity_factor=6)
+  plot(model(ccm, "reduced"), output="corrplot")
 
-cond_csf2ra = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2ra-/-", Age="12-13 weeks", batch="A", experiment=1))
-cond_wt = estimate_abundances(ccm, tibble::tibble(Genotype="WT", Age="12-13 weeks", batch="A", experiment=1))
-cond_csf2rb = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2rb-/-", Age="12-13 weeks", batch="A", experiment=1))
+  cond_csf2ra = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2ra-/-", Age="12-13 weeks", batch="A", experiment=1))
+  cond_wt = estimate_abundances(ccm, tibble::tibble(Genotype="WT", Age="12-13 weeks", batch="A", experiment=1))
+  cond_csf2rb = estimate_abundances(ccm, tibble::tibble(Genotype="Csf2rb-/-", Age="12-13 weeks", batch="A", experiment=1))
 
 
 cond_ra_vs_wt_tbl = compare_abundances(ccm, cond_wt, cond_csf2ra)
 
 plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="sender", q_value_thresh=0.01) +
-  theme_minimal() + monocle3:::monocle_theme_opts() +
+  theme_minimal() + monocle3:::monocle_theme_opts()
   ggsave("pap_mac_shift.png", width=7, height=6)
 
 
@@ -149,5 +149,86 @@ mac_pseudo_coefs = coefficient_table(mac_pseudo_fit)
 
 mac_gene_modules = monocle3::find_gene_modules(heathy_vs_pap_macs)
 qplot(dim_1, dim_2, color=module, data=mac_gene_modules)
+
+
+#------------------------------------------------------------------------------
+# Plots for presentations:
+
+
+plot_cells(pap_cds, color_cells_by="cell_type", show_trajectory_graph=FALSE) +
+  hooke_theme_opts() +
+  theme(axis.line.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave("pap_cells_by_cell_type_UMAP.png",  width=4, height=4, dpi=600)
+
+
+plot_cells(pap_cds, color_cells_by="cell_type", label_cell_groups=FALSE, show_trajectory_graph=FALSE) +
+  facet_wrap(~Genotype)+
+  hooke_theme_opts() +
+  theme(legend.position="none",
+        axis.line.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank())
+ggsave("pap_cells_by_genotype_UMAP.png",  width=6, height=6, dpi=600)
+
+
+plot_contrast(ccm, cond_ra_vs_wt_tbl, plot_edges="none", q_value_thresh=0.01) +
+  hooke_theme_opts() +
+  theme(axis.line.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position=c(1, 0.1),
+        legend.justification = "right",
+        legend.direction="horizontal")
+ggsave("pap_mac_fcs.png", width=6, height=6, dpi=600)
+
+
+norm_cell_counts = normalized_counts(ccs)
+qplot(norm_cell_counts["Healthy alveolar macrophages",],
+      norm_cell_counts["hPAP alveolar macrophages",]) +
+  geom_smooth(method="lm", se=F) + xlab("Healthy Macrophages") + ylab("PAP macrophages") +
+  monocle3:::monocle_theme_opts()
+ggsave("pap_mac_corr.png", width=3, height=3, dpi=600)
+
+
+norm_cell_counts = normalized_counts(ccs)
+qplot(norm_cell_counts["Healthy alveolar macrophages",],
+      norm_cell_counts["Alveolar cells type 2",]) +
+  geom_smooth(method="lm", se=F) + xlab("Healthy Macrophages") + ylab("AT2 Cells") +
+  monocle3:::monocle_theme_opts()
+ggsave("pap_mac_vs_AT2_corr.png", width=3, height=3, dpi=600)
+
+plot_contrast(ccm, cond_ra_vs_wt_tbl, scale_shifts_by="sender", q_value_thresh=0.01) +
+  hooke_theme_opts() +
+  theme(axis.line.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position=c(1, 0.1),
+        legend.justification = "right",
+        legend.direction="horizontal")
+ggsave("pap_mac_shift.png", width=6, height=6, dpi=600)
+
+
 
 
