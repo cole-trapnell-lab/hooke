@@ -500,7 +500,7 @@ bootstrap_vhat = function(ccs,
 #'    edges that should receive max_penalty. The columns are either cell_group
 #'    names or integers that refer to cell_groups.
 #' @param sparsity_factor A positive number to control how sparse the PLN network
-#'    is. Larger values make the network more sparse.
+#'    is. Larger values make the network sparser.
 #' @param base_penalty numeric A factor that scales the penalty matrix.
 #' @param min_penalty numeric A positive value that is assigned to whitelisted
 #'    penalty matrix elements, which over-write existing values.
@@ -549,6 +549,8 @@ new_cell_count_model <- function(ccs,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
                                  ...) {
+
+  assertthat::assert_that(is(ccs, 'cell_count_set'))
 
   assertthat::assert_that(assertthat::is.string(main_model_formula_str))
   assertthat::assert_that(assertthat::is.string(nuisance_model_formula_str))
@@ -796,12 +798,29 @@ new_cell_count_model <- function(ccs,
 #'
 #' @param ccm A cell_count_model object.
 #' @param criterion a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".
+#' @param sparsity_factor A positive number to control how sparse the PLN network
+#'    is. Larger values make the network sparser.
+#' @param models_to_update string The model to update. Must be one of "both", "full", "reduced".
 #' @return an updated cell_count_model object
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
-select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
+select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
 {
+
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(assertthat::is.number(sparsity_factor) && sparsity_factor >= 0.0)
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(criterion) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument criterion must be one of "BIC","EBIC", or "StARS".'))
+  criterion <- match.arg(criterion)
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(models_to_update) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument models_to_update must be one of "both","full", or "reduced".'))
   models_to_update = match.arg(models_to_update)
 
   #if (models_to_update == "reduced" || models_to_update == "both"){

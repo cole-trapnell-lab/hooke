@@ -20,10 +20,16 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 
 #' Predict cell type abundances given a PLN model and a set of inputs for its covariates
 #'
-#' @param newdata needs to be suitable input to pln_model
+#' @param ccm A cell_count_model
+#' @param newdata tibble Needs to be suitable input to pln_model
+#' @param min_log_abund numeric
+#' @return tibble Cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
 estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
+
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(is.numeric(min_log_abund))
 
   # check that all terms in new data have been specified
   missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
@@ -36,8 +42,6 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
     tryCatch(expr = length(missing_terms) == 0,
              error = function(e) FALSE),
     msg = paste0(missing_terms, " missing from newdata columns"))
-
-
 
   #stopifnot(nrow(newdata) == 1)
   newdata$Offset = 1
@@ -124,14 +128,29 @@ estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="ti
 }
 
 
-#' Compare two estimates of cell abundances from a Hooke model
-#' @param ccm A cell_count_model
-#' @param cond_x An estimate from estimate_abundances()
-#' @param cond_y An estimate from estimate_abundances()
-#' @return A table contrasting cond_x and cond_y (interpret as Y/X)
+#' Compare two estimates of cell abundances from a Hooke model.
+#'
+#' @param ccm A cell_count_model.
+#' @param cond_x tibble An estimate from estimate_abundances().
+#' @param cond_y tibble An estimate from estimate_abundances().
+#' @param method string A method for correcting P-value multiple comparisons.
+#'    This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
+#'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
+#' @return A table contrasting cond_x and cond_y (interpret as Y/X).
 #' @importFrom dplyr full_join
 #' @export
-compare_abundances <- function(ccm, cond_x, cond_y, method = "BH"){
+compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni", "hochberg", "hommel", "BY")){
+
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(is.data.frame(cond_x))
+  assertthat::assert_that(is.data.frame(cond_y))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(method) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument method must be one of "size_factors",',
+                '"BH", "bonferroni", "hochberg", "hommel", or "BY".'))
+  method <- match.arg(method)
 
   contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by="cell_group")
 
@@ -148,6 +167,7 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = "BH"){
                                                 delta_q_value = p.adjust(delta_p_value, method = method)) %>% select(-tvalue)
   return(contrast_tbl)
 }
+
 
 #' @noRd
 correlate_abundance_changes <- function(pln_model, cond_b_vs_a_tbl){
