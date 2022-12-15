@@ -1,12 +1,30 @@
 #' Plot a UMAP colored by how cells shift in a given contrast
 #'
 #' @param ccm A cell_count_model object.
-#' @param criterion a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".
-#' @return an updated cell_count_model object
-#' @export
+#' @param cond_b_vs_a_tbl data.frame A data frame from compare_abundances.
+#' @param log_abundance_thresh
+#' @param scale_shifts_by
+#' @param edge_size
+#' @param cell_size
+#' @param q_value_thresh
+#' @param group_label_size
+#' @param plot_labels
+#' @param fc_limits
+#' @param sender_cell_groups
+#' @param receiver_cell_groups
+#' @param plot_edges
+#' @param label_cell_groups
+#' @param repel_labels
+#' @param model_for_pcors
+#' @param switch_label
+#' @param sub_cds
+#' @param alpha
+#' @param x
+#' @param y
+#' @return A ggplot2 plot object.
 #' @import ggplot2
 #' @import dplyr
-#' @noRd
+#' @export
 plot_contrast <- function(ccm,
                           cond_b_vs_a_tbl,
                           log_abundance_thresh = -5,
@@ -28,6 +46,44 @@ plot_contrast <- function(ccm,
                           alpha = 1.0,
                           x=1,
                           y=2){
+
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(is.data.frame(cond_b_vs_a_tbl))
+  assertthat::assert_that(is.numeric(log_abundance_thresh))
+  assertthat::assert_that(is.numeric(edge_size) && edge_size > 0.0)
+  assertthat::assert_that(is.numeric(cell_size) && cell_size > 0.0)
+  assertthat::assert_that(is.numeric(q_value_thresh) && q_value_thresh> 0.0)
+  assertthat::assert_that(is.numeric(group_label_size) && group_label_size > 0.0)
+  assertthat::assert_that(is.vector(fc_limits) && length(fc_limits) == 2 && fc_limits[[1]] < fc_limits[[2]])
+  assertthat::assert_that(is.list(label_cell_groups))
+  assertthat::assert_that(is.logical(repel_labels))
+  assertthat::assert_that(is.character(model_for_pcors))
+  assertthat::assert_that(is.numeric(alpha))
+  assertthat::assert_that(is.numeric(x))
+  assertthat::assert_that(is.numeric(y))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(scale_shifts_by) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument scale_shifts_by must be one of "receiver",',
+                '"sender", or "none".'))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(plot_labels) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument plot_labels must be one of "significant",',
+                '"all", or "none".'))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(plot_edges) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument plot_edges must be one of "all",',
+                '"directed", "undirected", or "none".'))
+
+#sender_cell_groups
+#receiver_cell_groups
+#switch_label
+#sub_cds
 
   scale_shifts_by = match.arg(scale_shifts_by)
   plot_labels = match.arg(plot_labels)
@@ -974,7 +1030,31 @@ layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
   return(list(gvizl_coords=gvizl_coords, bezier_df=bezier_df, label_df=label_df))
 }
 
-#' Plot the state graph with annotations
+#' Plot the state graph with annotations.
+#'
+#' @param ccm cell_count_model A cell_count_model.
+#' @param state_graph
+#' @param color_nodes_by
+#' @param label_nodes_by
+#' @param group_nodes_by
+#' @param label_edges_by
+#' @param edge_weights
+#' @param arrow.gap
+#' @param arrow_unit
+#' @param bar_unit
+#' @param node_size
+#' @param min_edge_size
+#' @param max_edge_size
+#' @param unlabeled_groups
+#' @param label_groups
+#' @param hide_unlinked_nodes
+#' @param group_label_font_size
+#' @param edge_label_font_size
+#' @param label_conn_linetype
+#' @param legend_position
+#' @param con_colour
+#' @param group_outline
+#' @return A ggplot2 plot object.
 #' @export
 plot_state_graph_annotations <- function(ccm,
                                          state_graph,
@@ -2059,6 +2139,8 @@ plot_contrast_3d <- function(ccm,
 }
 
 #' Default plotting options for ggplot2
+#'
+#' return A ggplot2 theme object.
 #' @export
 hooke_theme_opts <- function(){
   theme(strip.background = element_rect(colour = 'white', fill = 'white')) +

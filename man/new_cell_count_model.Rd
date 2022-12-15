@@ -52,7 +52,7 @@ edges that should receive max_penalty. The columns are either cell_group
 names or integers that refer to cell_groups.}
 
 \item{sparsity_factor}{A positive number to control how sparse the PLN network
-is. Larger values make the network more sparse.}
+is. Larger values make the network sparser.}
 
 \item{base_penalty}{numeric A factor that scales the penalty matrix.}
 

@@ -31,10 +31,10 @@ plot_contrast(
 \arguments{
 \item{ccm}{A cell_count_model object.}
 
-\item{criterion}{a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".}
+\item{cond_b_vs_a_tbl}{data.frame A data frame from compare_abundances.}
 }
 \value{
-an updated cell_count_model object
+A ggplot2 plot object.
 }
 \description{
 Plot a UMAP colored by how cells shift in a given contrast
