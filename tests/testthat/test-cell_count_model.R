@@ -43,14 +43,14 @@ test_that('new_cell_count_model works', {
 
   # Full cell_count_model
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 37)
+  expect_equal(model_list$nb_param, 38)
   expect_equivalent(model_list$loglik, -384.21, tol=1.0e-2)
   expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
   expect_equivalent(model_list$ICL, -501.212, tol=1.0e-2)
-  expect_equal(model_list$n_edges, 7)
+  expect_equal(model_list$n_edges, 8)
   expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-2)
   expect_equivalent(model_list$pen_loglik, -389.001, tol=1.0e-2)
-  expect_equivalent(model_list$density, 0.389, tol=1.0e-2)
+  expect_equivalent(model_list$density, 0.444, tol=1.0e-2)
 
   expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-2)
   expect_equivalent(vcov(model_list)[1,1], 0.356, tol=1.0e-2)
@@ -163,7 +163,7 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 37)
+  expect_equal(model_list$nb_param, 38)
   expect_equivalent(model_list$loglik, -384.210, tol=1.0e-2)
   expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
 
