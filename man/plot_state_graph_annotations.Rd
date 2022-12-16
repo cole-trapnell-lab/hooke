@@ -2,7 +2,7 @@
 % Please edit documentation in R/plotting.R
 \name{plot_state_graph_annotations}
 \alias{plot_state_graph_annotations}
-\title{Plot the state graph with annotations}
+\title{Plot the state graph with annotations.}
 \usage{
 plot_state_graph_annotations(
   ccm,
@@ -29,6 +29,12 @@ plot_state_graph_annotations(
   group_outline = FALSE
 )
 }
+\arguments{
+\item{ccm}{cell_count_model A cell_count_model.}
+}
+\value{
+A ggplot2 plot object.
+}
 \description{
-Plot the state graph with annotations
+Plot the state graph with annotations.
 }

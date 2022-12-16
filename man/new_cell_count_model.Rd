@@ -24,23 +24,68 @@ new_cell_count_model(
   size_factors = NULL,
   num_bootstraps = 10,
   inception = NULL,
-  backend = "nlopt",
+  backend = c("nlopt", "torch"),
   ...
 )
 }
 \arguments{
 \item{ccs}{A Hooke cell_count_set object.}
 
-\item{main_model_formula_str}{A character string specifying the model of cell abundances across samples,
+\item{main_model_formula_str}{A character string specifying the model of cell
+abundances across samples,
 where terms refer to columns in\code{colData(ccs)}. Put main effects here.}
 
-\item{nuisance_model_formula_str}{A character string specifying the model of cell abundances across samples. Put nuisance effects here.}
+\item{nuisance_model_formula_str}{A character string specifying the model of cell
+abundances across samples. Put nuisance effects here.}
 
 \item{penalty_matrix}{A numeric NxN symmetric matrix specifying penalties for
 the PLN model, where N is the number of cell types. Entries must be
-positive. Use to specify an undirected graph prior for the PLN model.}
+positive and the rows and columns must be named with the cell_group names.
+Use to specify an undirected graph prior for the PLN model.}
 
-\item{sparsity_factor}{A positive number to control how sparse the PLN network is. Larger values make the network more sparse.}
+\item{whitelist}{list A data frame with two columns corresponding to (undirected)
+edges that should receive min_penalty. The columns are either cell_group
+names or integers that refer to cell_groups in penalty_matrix.}
+
+\item{blacklist}{list A data frame with two columns corresponding to (undirected)
+edges that should receive max_penalty. The columns are either cell_group
+names or integers that refer to cell_groups.}
+
+\item{sparsity_factor}{A positive number to control how sparse the PLN network
+is. Larger values make the network sparser.}
+
+\item{base_penalty}{numeric A factor that scales the penalty matrix.}
+
+\item{min_penalty}{numeric A positive value that is assigned to whitelisted
+penalty matrix elements, which over-write existing values.}
+
+\item{max_penalty}{numeric A positive value that is assigned to blacklisted
+penalty matrix elements. which over-write existing values.}
+
+\item{verbose}{logical Whether to emit verbose output.}
+
+\item{pseudocount}{integer A value added to the elements of the initial
+cell_count_set matrix.}
+
+\item{pln_min_ratio}{numeric Used in the definition of the sparsity penalty grid.}
+
+\item{pln_num_penalties}{integer Number of penalty values for the internally
+generated penalty grid.}
+
+\item{norm_method}{string Normalization method used to compute scaling
+factors used as offset during PLN inference.}
+
+\item{vhat_method}{string Method used to compute covariance matrix?}
+
+\item{size_factors}{numeric vector or matrix User supplied vector or matrix of
+offsets passed the PLNmodels::prepare_data() method.}
+
+\item{num_bootstraps}{positive integer Number of iterations used with the
+bootstrap vhat_method.}
+
+\item{inception}{Not used.}
+
+\item{backend}{Method used to run bootstrap iterations.}
 }
 \value{
 a new cell_count_model object

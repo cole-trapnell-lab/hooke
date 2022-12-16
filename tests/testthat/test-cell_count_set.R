@@ -18,7 +18,8 @@ test_that('new_cell_count_set works', {
 
   expect_is(ccs <- new_cell_count_set(cds,
                                       sample_group = 'sampleName',
-                                      cell_group = 'cell_type'), 'cell_data_set')
+                                      cell_group = 'cell_type'),
+            'cell_data_set')
 
   expected_group_id <- c('19', '32', '59', '81', '22', '84', '27', '68')
   expected_sample <- c('15.pap.RBCKO.3_cds.RDS', '17.pap.GMKO.2_cds.RDS',
