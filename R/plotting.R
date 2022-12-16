@@ -69,7 +69,7 @@ plot_contrast <- function(ccm,
   assertthat::assert_that(is.null(sender_cell_groups) || is.vector(sender_cell_groups))
   assertthat::assert_that(is.null(receiver_cell_groups) || is.vector(receiver_cell_groups))
 
-  assertthat::assert_that(is(sub_cds, 'cell_data_set'))
+  assertthat::assert_that(is.null(sub_cds) || is(sub_cds, 'cell_data_set'))
 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(model_for_pcors) == "", TRUE, TRUE),
