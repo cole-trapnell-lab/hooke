@@ -2,25 +2,29 @@
 #'
 #' @param ccm A cell_count_model object.
 #' @param cond_b_vs_a_tbl data.frame A data frame from compare_abundances.
-#' @param log_abundance_thresh
-#' @param scale_shifts_by
-#' @param edge_size
-#' @param cell_size
-#' @param q_value_thresh
-#' @param group_label_size
-#' @param plot_labels
-#' @param fc_limits
-#' @param sender_cell_groups
-#' @param receiver_cell_groups
-#' @param plot_edges
-#' @param label_cell_groups
-#' @param repel_labels
-#' @param model_for_pcors
-#' @param switch_label
-#' @param sub_cds
-#' @param alpha
-#' @param x
-#' @param y
+#' @param log_abundance_thresh numeric Select cell groups by log abundance.
+#' @param scale_shifts_by string A scale directed graph edges by "sender",
+#'    "receiver", or "none".
+#' @param edge_size numeric The size of edges in the plot.
+#' @param cell_size numeric The size of cells in the plot.
+#' @param q_value_thresh numeric Remove contrasts whose change in
+#'    q-value exceeds q_value_thresh.
+#' @param group_label_size numeric The size of group labels in the plot.
+#' @param plot_labels string Choose cell groups to label.
+#' @param fc_limits vector The range of cell abundance changes to
+#'    include in the plot.
+#' @param sender_cell_groups list Sender cell groups of directed graph.
+#' @param receiver_cell_groups list Receiver cell groups of directed graph.
+#' @param plot_edges string Type of edges to plot.
+#' @param label_cell_groups list The cell_group labels to include in the plot.
+#' @param repel_labels logical Repel overlapping plot labels.
+#' @param model_for_pcors string The model to use for orienting graph
+#'    edges from the PLNnetwork.
+#' @param switch_label string The name of the cell_data_set column with cell_group identifiers.
+#' @param sub_cds string A cell_data_set.
+#' @param alpha numeric A the ggplot opacity. A value between 0 and 1.
+#' @param x numeric The column number for the UMAP x coordinate.
+#' @param y numeric The column number for the UMAP y coordinate.
 #' @return A ggplot2 plot object.
 #' @import ggplot2
 #' @import dplyr
@@ -40,7 +44,7 @@ plot_contrast <- function(ccm,
                           plot_edges = c("all", "directed", "undirected", "none"),
                           label_cell_groups = list(),
                           repel_labels = TRUE,
-                          model_for_pcors="reduced",
+                          model_for_pcors=c("reduced", "full"),
                           switch_label = NULL,
                           sub_cds = NULL,
                           alpha = 1.0,
@@ -57,36 +61,42 @@ plot_contrast <- function(ccm,
   assertthat::assert_that(is.vector(fc_limits) && length(fc_limits) == 2 && fc_limits[[1]] < fc_limits[[2]])
   assertthat::assert_that(is.list(label_cell_groups))
   assertthat::assert_that(is.logical(repel_labels))
-  assertthat::assert_that(is.character(model_for_pcors))
-  assertthat::assert_that(is.numeric(alpha))
-  assertthat::assert_that(is.numeric(x))
-  assertthat::assert_that(is.numeric(y))
+  assertthat::assert_that(is.numeric(alpha) && alpha >= 0.0 && alpha <= 1.0)
+  assertthat::assert_that(is.numeric(x) && x >= 1)
+  assertthat::assert_that(is.numeric(y) && y >= 1)
+
+  # Check that sender_cell_group and receiver_cell_group names are in cell_group names.
+  assertthat::assert_that(is.null(sender_cell_groups) || is.vector(sender_cell_groups))
+  assertthat::assert_that(is.null(receiver_cell_groups) || is.vector(receiver_cell_groups))
+
+  assertthat::assert_that(is(sub_cds, 'cell_data_set'))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(model_for_pcors) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument model_for_pcors must be one of "reduced",',
+                ' or "full".'))
+  model_for_pcors = match.arg(model_for_pcors)
 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(scale_shifts_by) == "", TRUE, TRUE),
              error = function(e) FALSE),
     msg = paste('Argument scale_shifts_by must be one of "receiver",',
                 '"sender", or "none".'))
+  scale_shifts_by = match.arg(scale_shifts_by)
 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(plot_labels) == "", TRUE, TRUE),
              error = function(e) FALSE),
     msg = paste('Argument plot_labels must be one of "significant",',
                 '"all", or "none".'))
+  plot_labels = match.arg(plot_labels)
 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(plot_edges) == "", TRUE, TRUE),
              error = function(e) FALSE),
     msg = paste('Argument plot_edges must be one of "all",',
                 '"directed", "undirected", or "none".'))
-
-#sender_cell_groups
-#receiver_cell_groups
-#switch_label
-#sub_cds
-
-  scale_shifts_by = match.arg(scale_shifts_by)
-  plot_labels = match.arg(plot_labels)
   plot_edges = match.arg(plot_edges)
 
   if (!is.null(sub_cds)) {
@@ -429,7 +439,7 @@ my_plot_cells <- function(data,
 
   # could be an vector that corresponds to a label
   if (!is.null(coefficients)) {
-    res_df = data.frame("coefficients" = coefficients) %>% rownames_to_column("cell_group")
+    res_df = data.frame("coefficients" = coefficients) %>% tibble::rownames_to_column("cell_group")
     plot_df = plot_df %>% left_join(res_df, by="cell_group")
 
     if (is.null(color_cells_by))
@@ -997,8 +1007,8 @@ layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
   if (is.null(edge_labels)== FALSE) {
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=edge_labels), recipEdges="distinct")
     label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
-      rownames_to_column("edge_name") %>%
-      left_join(tibble("edge_name" = names(edge_labels), label=edge_labels))# %>% rownames_to_column("edge_name"), by = "edge_name")
+      tibble::rownames_to_column("edge_name") %>%
+      left_join(tibble("edge_name" = names(edge_labels), label=edge_labels))
 
   } else {
     gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, recipEdges="distinct")
@@ -1994,7 +2004,7 @@ plot_cells_per_sample = function(ccs,
   count_df = counts(ccs) %>%
     as.matrix %>%
     as.data.frame() %>%
-    rownames_to_column("cell_group") %>%
+    tibble::rownames_to_column("cell_group") %>%
     tidyr::pivot_longer(-cell_group, names_to = "sample", values_to = "count") %>%
     left_join(ccs_coldata, by = "sample")
 

@@ -2,11 +2,11 @@
 #'
 #' @param ccm A cell_count_model object.
 #' @return An updated cell_count_model object
-#' @export
 #' @examples
 #' \dontrun{
 #' model(ccm)
 #' }
+#' @export
 model <- function( ccm, model_to_return=c("full", "reduced") ) {
   model_to_return = match.arg(model_to_return)
   stopifnot( methods::is( ccm, "cell_count_model" ) )
@@ -23,11 +23,11 @@ model <- function( ccm, model_to_return=c("full", "reduced") ) {
 #'
 #' @param ccm A cell_count_model object.
 #' @return A cell_data_set object
-#' @export
 #' @examples
 #' \dontrun{
 #' cds(ccm)
 #' }
+#' @export
 cds <- function( ccm ) {
   stopifnot( methods::is( ccm, "cell_count_model" ) )
   ccm@ccs@cds
