@@ -86,14 +86,20 @@ empty_sparse_matrix = function (nrow = 0L, ncol = 0L, format = "R", dtype = "d")
 #' Create a new cell_data_set object.
 #'
 #' @param cds A Monocle cell data set object.
-#' @param sample_group A column in colData(cds) that specifes how cells are grouped into samples.
-#' @param cell_group A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster).
-#' @param sample_metadata Data frame containing attributes of individual samples, where
-#'   the column named 'sample' has entries in \code{sample_group}.
-#' @param cell_metadata Data frame containing attributes of individual cell groups, where
-#'   \code{row.names(cell_metadata)} are entries in \code{cell_group}
-#' @param lower_threshold numeric Minimum number of cells in retained cell_groups.
-#' @param upper_threshold numeric Maximum number of cells in retained cell_groups.
+#' @param sample_group A column in colData(cds) that specifes how
+#'    cells are grouped into samples.
+#' @param cell_group A column in colData(cds) that specifies how
+#'    cells are grouped into types or states (e.g. cluster).
+#' @param sample_metadata Data frame containing attributes of
+#'    individual samples, where the column named 'sample' has
+#'    entries in \code{sample_group}.
+#' @param cell_metadata Data frame containing attributes of
+#'    individual cell groups, where \code{row.names(cell_metadata)}
+#'    are entries in \code{cell_group}
+#' @param lower_threshold numeric Minimum number of cells in
+#'    retained cell_groups.
+#' @param upper_threshold numeric Maximum number of cells in
+#'    retained cell_groups.
 #' @return a new cell_data_set object
 #' @importFrom dplyr summarize
 #' @importFrom dplyr %>%
@@ -132,7 +138,7 @@ new_cell_count_set <- function(cds,
                                       'number of rows as there are distinct cell_group',
                                       'names in the cds column data.'))
 
-  assertthat::assert_that(is.null(cell_metadata) || all(cell_group_names_cds %in% rownames(cell_metadata)),
+  assertthat::assert_that(is.null(cell_metadata) || all(cell_group_names_cds %in% row.names(cell_metadata)),
                           msg = paste('Argument cell_metadata row names must contain the cell_group',
                                        'names.'))
 
@@ -355,7 +361,6 @@ bootstrap_model = function(ccs,
   }
 
   return(sub_full_model)
-
 }
 
 
@@ -473,7 +478,6 @@ bootstrap_vhat = function(ccs,
     }
   }
 
-
   coef_df = data.frame(seed = seq(1, num_bootstraps)) %>%
     mutate(coef = purrr::map(.f = purrr::possibly(get_bootstrap_coef, NA_character_),
                              .x = seed,
@@ -496,7 +500,6 @@ bootstrap_vhat = function(ccs,
     rownames(cov_matrix) = paste0(cell_group, "_", rownames(cov_matrix))
     colnames(cov_matrix) = paste0(cell_group, "_", colnames(cov_matrix))
     return(cov_matrix)
-
   }
 
   bootstrapped_df = do.call(rbind, coef_df$coef) %>%
@@ -523,12 +526,15 @@ bootstrap_vhat = function(ccs,
 #' allows user to update it.
 #'
 #' @param ccs A Hooke cell_count_set object.
-#' @param main_model_formula_str A character string specifying the model of cell abundances across samples,
+#' @param main_model_formula_str A character string specifying the model of cell
+#'    abundances across samples,
 #'   where terms refer to columns in\code{colData(ccs)}. Put main effects here.
-#' @param nuisance_model_formula_str A character string specifying the model of cell abundances across samples. Put nuisance effects here.
+#' @param nuisance_model_formula_str A character string specifying the model of cell
+#'    abundances across samples. Put nuisance effects here.
 #' @param penalty_matrix A numeric NxN symmetric matrix specifying penalties for
 #'   the PLN model, where N is the number of cell types. Entries must be
-#'   positive. Use to specify an undirected graph prior for the PLN model.
+#'   positive and the rows and columns must be named with the cell_group names.
+#'   Use to specify an undirected graph prior for the PLN model.
 #' @param whitelist list A data frame with two columns corresponding to (undirected)
 #'    edges that should receive min_penalty. The columns are integers that refer to
 #'    cell clusters.
@@ -536,19 +542,28 @@ bootstrap_vhat = function(ccs,
 #'    edges that should receive max_penalty. The columns are integers that refer to
 #'    cell clusters.
 #' @param sparsity_factor A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
+#'    edges that should receive min_penalty. The columns are either cell_group
+#'    names or integers that refer to cell_groups in penalty_matrix.
 #' @param base_penalty numeric A factor that scales the penalty matrix.
-#' @param min_penalty numeric
-#' @param max_penalty numeric
-#' @param verbose logical
-#' @param pseudocount non-negative integer
-#' @param pln_min_ratio numeric
-#' @param pln_num_penalties integer number of penalty values for the internally generated penalty grid
-#' @param norm_method string
-#' @param vhat_method string
-#' @param size_factors
-#' @param num_bootstraps non-negative integer
-#' @param inception ??
-#' @param backend ??
+#' @param min_penalty numeric A positive value that is assigned to whitelisted
+#'    penalty matrix elements, which over-write existing values.
+#' @param max_penalty numeric A positive value that is assigned to blacklisted
+#'    penalty matrix elements. which over-write existing values.
+#' @param verbose logical Whether to emit verbose output.
+#' @param pseudocount integer A value added to the elements of the initial
+#'    cell_count_set matrix.
+#' @param pln_min_ratio numeric Used in the definition of the sparsity penalty grid.
+#' @param pln_num_penalties integer Number of penalty values for the internally
+#'    generated penalty grid.
+#' @param norm_method string Normalization method used to compute scaling
+#'    factors used as offset during PLN inference.
+#' @param vhat_method string Method used to compute covariance matrix?
+#' @param size_factors numeric vector or matrix User supplied vector or matrix of
+#'    offsets passed the PLNmodels::prepare_data() method.
+#' @param num_bootstraps positive integer Number of iterations used with the
+#'    bootstrap vhat_method.
+#' @param inception Not used.
+#' @param backend Method used to run bootstrap iterations.
 #' @return a new cell_count_model object
 #' @importFrom PLNmodels prepare_data
 #' @importFrom PLNmodels PLNnetwork
@@ -578,20 +593,60 @@ new_cell_count_model <- function(ccs,
                                  backend = c("nlopt", "torch"),
                                  ...) {
 
+  assertthat::assert_that(is(ccs, 'cell_count_set'))
+
   assertthat::assert_that(assertthat::is.string(main_model_formula_str))
   assertthat::assert_that(assertthat::is.string(nuisance_model_formula_str))
 
-  assertthat::assert_that(assertthat::is.number(sparsity_factor))
-  assertthat::assert_that(assertthat::is.number(base_penalty))
-  assertthat::assert_that(assertthat::is.number(min_penalty))
-  assertthat::assert_that(assertthat::is.number(max_penalty))
-  assertthat::assert_that(assertthat::is.number(pseudocount))
-  assertthat::assert_that(assertthat::is.number(pln_min_ratio))
-  assertthat::assert_that(assertthat::is.count(pln_num_penalties))
-  assertthat::assert_that(assertthat::is.count(num_bootstraps))
+  assertthat::assert_that(assertthat::is.number(sparsity_factor) && sparsity_factor >= 0.0)
+  assertthat::assert_that(assertthat::is.number(base_penalty) && base_penalty >= 0.0)
+  assertthat::assert_that(assertthat::is.number(min_penalty) && min_penalty >= 0.0)
+  assertthat::assert_that(assertthat::is.number(max_penalty) && max_penalty > 0.0)
+  assertthat::assert_that(min_penalty <= max_penalty)
+  assertthat::assert_that(assertthat::is.number(pseudocount) && pseudocount >= 0)
+  assertthat::assert_that(assertthat::is.number(pln_min_ratio) && pln_min_ratio > 0.0)
+  assertthat::assert_that(assertthat::is.count(pln_num_penalties) && pln_num_penalties >= 0)
+  assertthat::assert_that(assertthat::is.count(num_bootstraps) && num_bootstraps >= 0)
 
   # Check that penalty matrix dimensions are N x N where N is the number of cell types.
+  # Check that the penalty matrix has row/columm names that belong to the cell_groups,
+  # which may be used for the whitelist and blacklist, and for ordering the matrix rows
+  # and columns. See the line:
+  #   initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+  #
+  ccs_num_cell_group <- dim(counts(ccs))[[1]]
+  ccs_cell_group_names <- rownames(counts(ccs))
+
   assertthat::assert_that(is.null(penalty_matrix) || ( is.matrix(penalty_matrix) && is.numeric(penalty_matrix[1][1])))
+  assertthat::assert_that(is.null(penalty_matrix) || identical(dim(penalty_matrix), c(ccs_num_cell_group, ccs_num_cell_group)))
+  assertthat::assert_that(is.null(penalty_matrix) || (!is.null(rownames(penalty_matrix)) && all(rownames(penalty_matrix) %in% ccs_cell_group_names)))
+  assertthat::assert_that(is.null(penalty_matrix) || (!is.null(rownames(penalty_matrix)) && all(colnames(penalty_matrix) %in% ccs_cell_group_names)))
+
+  # Check the whitelist and blacklist for expected values.
+  assertthat::assert_that(is.null(whitelist) || (is.numeric(whitelist[[1]][[1]]) &&
+                                                 range(whitelist[[1]])[[1]] >= 0 &&
+                                                 range(whitelist[[1]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(whitelist[[1]][[1]]) &&
+                                                 all(whitelist[[1]] %in% ccs_cell_group_names)))
+
+  assertthat::assert_that(is.null(whitelist) || (is.numeric(whitelist[[2]][[1]]) &&
+                                                 range(whitelist[[2]])[[1]] >= 0 &&
+                                                 range(whitelist[[2]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(whitelist[[2]][[1]]) &&
+                                                 all(whitelist[[2]] %in% ccs_cell_group_names)))
+
+  assertthat::assert_that(is.null(blacklist) || (is.numeric(blacklist[[1]][[1]]) &&
+                                                 range(blacklist[[1]])[[1]] >= 0 &&
+                                                 range(blacklist[[1]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(blacklist[[1]][[1]]) &&
+                                                 all(blacklist[[1]] %in% ccs_cell_group_names)))
+
+  assertthat::assert_that(is.null(blacklist) || (is.numeric(blacklist[[2]][[1]]) &&
+                                                 range(blacklist[[2]])[[1]] >= 0 &&
+                                                 range(blacklist[[2]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(blacklist[[2]][[1]]) &&
+                                                 all(blacklist[[2]] %in% ccs_cell_group_names)))
+
   assertthat::assert_that(assertthat::is.flag(verbose))
 
   assertthat::assert_that(
@@ -614,6 +669,12 @@ new_cell_count_model <- function(ccs,
     msg = paste( 'Argument backend must be one of "nlopt" or "torch".'))
   backend <- match.arg(backend)
 
+  #
+  # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
+  # which were calculate in new_cell_count_set() where rows are
+  # sample groups and the columns are cell groups, (2) covariates,
+  # where is a copy of colData(cds), and (3) offsets, which are
+  # calculated by PLNmodels::prepare_data.
   if (norm_method == "size_factors") {
     if (!is.null(size_factors)) {
 
@@ -671,17 +732,23 @@ new_cell_count_model <- function(ccs,
 
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
+  # Note: the whitelist and blacklist are applied later in this function
+  #       (new_cell_count_model), not in init_penalty_matrix() so the
+  #       arguments in the call to init_penalty_matrix() are unused there.
+  #       This is so that the whitelist and blacklist penalties are applied
+  #       to the user supplied penalty matrix.
   if (is.null(penalty_matrix)){
     initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
     initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }else{
-    # TODO: check and validate dimensions of the user-provided penalties
     initial_penalties = penalty_matrix
   }
 
   # FIXME: This might only actually work when grouping cells by clusters and cluster names are
   # integers. We should make sure this generalizes when making white/black lists of cell groups
-  # by type or other groupings
+  # by type or other groupings.
+  # Note: this appears to work when the cell contents are character strings of cell.
+  #       group names.
   if (is.null(whitelist) == FALSE){
     initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
     initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
@@ -774,12 +841,29 @@ new_cell_count_model <- function(ccs,
 #'
 #' @param ccm A cell_count_model object.
 #' @param criterion a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".
+#' @param sparsity_factor A positive number to control how sparse the PLN network
+#'    is. Larger values make the network sparser.
+#' @param models_to_update string The model to update. Must be one of "both", "full", "reduced".
 #' @return an updated cell_count_model object
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
-select_model <- function(ccm, criterion = "EBIC", sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
+select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
 {
+
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(assertthat::is.number(sparsity_factor) && sparsity_factor >= 0.0)
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(criterion) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument criterion must be one of "BIC","EBIC", or "StARS".'))
+  criterion <- match.arg(criterion)
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(models_to_update) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument models_to_update must be one of "both","full", or "reduced".'))
   models_to_update = match.arg(models_to_update)
 
   #if (models_to_update == "reduced" || models_to_update == "both"){

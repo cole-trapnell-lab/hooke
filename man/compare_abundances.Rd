@@ -2,20 +2,29 @@
 % Please edit documentation in R/contrasts.R
 \name{compare_abundances}
 \alias{compare_abundances}
-\title{Compare two estimates of cell abundances from a Hooke model}
+\title{Compare two estimates of cell abundances from a Hooke model.}
 \usage{
-compare_abundances(ccm, cond_x, cond_y, method = "BH")
+compare_abundances(
+  ccm,
+  cond_x,
+  cond_y,
+  method = c("BH", "bonferroni", "hochberg", "hommel", "BY")
+)
 }
 \arguments{
-\item{ccm}{A cell_count_model}
+\item{ccm}{A cell_count_model.}
 
-\item{cond_x}{An estimate from estimate_abundances()}
+\item{cond_x}{tibble An estimate from estimate_abundances().}
 
-\item{cond_y}{An estimate from estimate_abundances()}
+\item{cond_y}{tibble An estimate from estimate_abundances().}
+
+\item{method}{string A method for correcting P-value multiple comparisons.
+This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
+"hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).}
 }
 \value{
-A table contrasting cond_x and cond_y (interpret as Y/X)
+A table contrasting cond_x and cond_y (interpret as Y/X).
 }
 \description{
-Compare two estimates of cell abundances from a Hooke model
+Compare two estimates of cell abundances from a Hooke model.
 }

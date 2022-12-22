@@ -7,5 +7,5 @@
 hooke_theme_opts()
 }
 \description{
-Default plotting options for ggplot2
+return A ggplot2 theme object.
 }
