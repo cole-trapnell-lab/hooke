@@ -798,7 +798,7 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 
   if (class(data) == "cell_count_set") {
     ccs = data
-    plot_df = as.data.frame(colData(cds))
+    plot_df = as.data.frame(ccs@cds_coldata)
   } else if (class(data) == "cell_count_model") {
     ccs = data@ccs
   } else {
@@ -874,7 +874,7 @@ collect_psg_node_metadata <- function(ccm,
     metadata_cols = c(metadata_cols, label_nodes_by)
 
   #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = colData(ccm@ccs@cds)[,metadata_cols, drop=F] %>%
+  cell_group_metadata = ccm@ccs@cds_coldata[,metadata_cols, drop=F] %>%
     as.data.frame
   cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
 
@@ -1951,12 +1951,12 @@ plot_cells_per_sample = function(ccs,
 #' @noRd
 plot_cells_highlight = function(ccs, group_to_highlight, colname) {
 
-  plot_df = as.data.frame(colData(cds))
-  plot_df$cell_group = colData(cds)[[colname]]
+  plot_df = as.data.frame(ccs@cds_coldata)
+  plot_df$cell_group = ccs@cds_coldata[[colname]]
 
   plot_df$cell = row.names(plot_df)
-  plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
-  plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
+  plot_df$umap2D_1 <- ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,x]
+  plot_df$umap2D_2 <- ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,y]
 
   gp = ggplot() +
     geom_point(
@@ -2015,9 +2015,9 @@ plot_contrast_3d <- function(ccm,
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
   plot_df$cell = row.names(plot_df)
 
-  plot_df$umap3D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,1]
-  plot_df$umap3D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,2]
-  plot_df$umap3D_3 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,3]
+  plot_df$umap3D_1 <- ccm@ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,1]
+  plot_df$umap3D_2 <- ccm@ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,2]
+  plot_df$umap3D_3 <- ccm@ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,3]
 
   cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
 

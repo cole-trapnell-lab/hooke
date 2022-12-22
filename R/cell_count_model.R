@@ -19,6 +19,8 @@ setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit
 setClass("cell_count_set",
          contains = "cell_data_set",
          slots = c(cds = "cell_data_set",
+                   cds_coldata = "tbl_df",
+                   cds_reduced_dims = "SimpleList",
                    info = "SimpleList")
 )
 
@@ -57,6 +59,30 @@ setClass("cell_count_model",
 )
 
 
+empty_sparse_matrix = function (nrow = 0L, ncol = 0L, format = "R", dtype = "d")
+{
+  if (NROW(format) != 1L || !(format %in% c("R", "C", "T")))
+    stop("'format' must be one of 'R', 'C', 'T'.")
+  if (NROW(dtype) != 1L || !(dtype %in% c("d", "l", "n")))
+    stop("'dtype' must be one of 'd', 'l', 'n'.")
+  nrow <- as.integer(nrow)
+  ncol <- as.integer(ncol)
+  if (NROW(nrow) != 1L || is.na(nrow) || nrow < 0)
+    stop("'nrow' must be a non-negative integer.")
+  if (NROW(ncol) != 1L || is.na(ncol) || ncol < 0)
+    stop("'ncol' must be a non-negative integer.")
+  target_class <- sprintf("%sg%sMatrix", dtype, format)
+  out <- new(target_class)
+  out@Dim <- as.integer(c(nrow, ncol))
+  if (format == "R") {
+    out@p <- integer(nrow + 1L)
+  }
+  else if (format == "C") {
+    out@p <- integer(ncol + 1L)
+  }
+  return(out)
+}
+
 #' Create a new cell_data_set object.
 #'
 #' @param cds A Monocle cell data set object.
@@ -78,7 +104,8 @@ new_cell_count_set <- function(cds,
                                sample_metadata = NULL,
                                cell_metadata = NULL,
                                lower_threshold = NULL,
-                               upper_threshold = NULL) {
+                               upper_threshold = NULL,
+                               keep_cds=TRUE) {
 
   assertthat::assert_that(is(cds, 'cell_data_set'),
                           msg = paste('Argument cds must be a cell_data_set.'))
@@ -194,14 +221,29 @@ new_cell_count_set <- function(cds,
   # (e.g. embryos, replicates, etc). The "gene" metadata monocle
   # normally expects will actually be used to hold cell group
   # metadata.
+
+  ccs_cds = cds[, !colData(cds)[[cell_group]] %in% removed_cell_states]
+
+  # TODO: We could probably avoid duplicating this info if keep_cds == TRUE, providing it
+  # through accessor functions directly from the cds
+
+  # FIXME: potentially we should be using the filtered one above? Potentially rename cell_group, sample, etc?
+  cds_coldata = colData(ccs_cds) %>% as_tibble
+  cds_reducedDims = reducedDims(ccs_cds)
+
   cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide),,drop=FALSE]
   ccs = methods::new("cell_count_set",
                monocle3::new_cell_data_set(cell_counts_wide,
                                            cell_metadata=cds_covariates_df,
                                            gene_metadata=cell_metadata_subset),
-               cds=cds[, !colData(cds)[[cell_group]] %in% removed_cell_states],
+               cds=ccs_cds,
+               cds_coldata=cds_coldata,
+               cds_reduced_dims=cds_reducedDims,
                info=SimpleList(sample_group=sample_group,
                                cell_group=cell_group))
+
+  if (keep_cds == FALSE)
+    ccs@cds = new_cell_data_set(empty_sparse_matrix(format="C"))
 
   # if (!is.null(cell_metadata)) {
   #   assertthat::assert_that(!is.null(row.names(cell_metadata)) &
@@ -224,7 +266,7 @@ new_cell_count_set <- function(cds,
   #
 
   ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
-  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(cds)
+  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
   ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
 
   return (ccs)
@@ -490,7 +532,7 @@ bootstrap_vhat = function(ccs,
 #' @param whitelist list A data frame with two columns corresponding to (undirected)
 #'    edges that should receive min_penalty. The columns are integers that refer to
 #'    cell clusters.
-#' @param blacklist list A data frame with two columns corresponding to (undirected) 
+#' @param blacklist list A data frame with two columns corresponding to (undirected)
 #'    edges that should receive max_penalty. The columns are integers that refer to
 #'    cell clusters.
 #' @param sparsity_factor A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
