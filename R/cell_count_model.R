@@ -272,8 +272,8 @@ new_cell_count_set <- function(cds,
   #
 
   ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
-  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
   ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
+  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
 
   return (ccs)
 }
