@@ -392,6 +392,11 @@ init_pathfinding_graph <- function(ccm,
       igraph::as.directed() %>% igraph::simplify()
   }
 
+  if (is.null(edge_blacklist) == FALSE){
+    blacklist_graph = igraph::graph_from_data_frame(edge_blacklist, directed=TRUE, vertices=node_metadata)
+    pathfinding_graph = pathfinding_graph - blacklist_graph
+  }
+
   # if (is.null(edge_whitelist) == FALSE){
   #   # Ensuring whitelisted edges remain in pathfinding graph
   #   edge_whitelist = edge_whitelist[,c(1,2)] %>% as_tibble()
@@ -404,6 +409,83 @@ init_pathfinding_graph <- function(ccm,
   return (pathfinding_graph)
 }
 
+
+#' Generate a blacklist of state transition relationships based on a perturbation
+#' experiment.
+#'
+#' This function generates a blacklist of edges between cell states based on
+#' the idea that if cell state X is lost, and Y is not ever lost in the experiment
+#' Y can't come from X. This function is very simplistic right now. We could get
+#' more sophisticated by looking at the relative timing of losses, etc. We are
+#' also not accounting for power at all. We should be asking whether we have
+#' power to detect a change in state Y, and if not, exclude (X,Y) from the
+#' blacklist
+#'
+#' @export
+get_discordant_loss_pairs <- function(perturbation_ccm,
+                                      perturb_time_window,
+                                      control_timeseries_ccm,
+                                      control_time_window,
+                                      interval_step,
+                                      interval_col,
+                                      log_abund_detection_thresh,
+                                      q_val,
+                                      model_for_pcors="reduced",
+                                      min_pathfinding_lfc=0,
+                                      ...){
+
+  #print ("getting perturbation paths")
+  #print (time_window)
+  if (is.null(perturbation_ccm) || is.na(perturbation_ccm)){
+    message("Error: no perturbation model")
+    return(NA)
+  }
+
+  perturb_start_time = min(as.numeric(perturb_time_window$start_time))
+  perturb_stop_time = min(as.numeric(perturb_time_window$stop_time))
+
+  control_start_time = min(as.numeric(control_time_window$start_time))
+  control_stop_time = min(as.numeric(control_time_window$stop_time))
+
+  # If the perturbation experiment model covers a winder time interval than the
+  # control timeseries, just limit testing to the perturbation experiment's
+  # time interval
+  if (perturb_start_time < control_start_time)
+    perturb_start_time = control_start_time
+
+  if (perturb_stop_time < control_stop_time)
+    perturb_stop_time = control_stop_time
+
+  wt_timepoint_pred_df = estimate_abundances_over_interval(control_timeseries_ccm, control_start_time, control_stop_time, knockout=FALSE, interval_col=interval_col, interval_step=interval_step, ...)
+  peak_wt_abundance = wt_timepoint_pred_df %>% group_by(cell_group) %>% slice_max(log_abund, n=1)
+  peak_outside_perturbation_window = peak_wt_abundance %>%
+    filter(!!sym(interval_col) > perturb_stop_time | !!sym(interval_col) < perturb_start_time) %>%
+    pull(cell_group)
+
+  message ("\tEstimating loss timing")
+  earliest_loss_tbl = hooke:::estimate_loss_timing(perturbation_ccm,
+                                                   start_time=perturb_start_time,
+                                                   stop_time=perturb_stop_time,
+                                                   interval_step = interval_step,
+                                                   interval_col=interval_col,
+                                                   log_abund_detection_thresh=log_abund_detection_thresh,
+                                                   q_val = q_val,
+                                                   delta_log_abund_loss_thresh=min_pathfinding_lfc,
+                                                   ...)
+
+  lost_cell_groups = earliest_loss_tbl %>% filter (is.finite(earliest_time)) %>% pull(cell_group) %>% unique
+
+  unaffected_cell_groups = setdiff(row.names(rowData(global_wt_ccm@ccs)), lost_cell_groups)
+
+  # Exclude states that peak outside the window of this perturbation experiment,
+  # as we may simply have not yet seen their loss.
+  unaffected_cell_groups = setdiff(unaffected_cell_groups, peak_outside_perturbation_window)
+
+  discordant_loss_pairs = tidyr::expand_grid(lost_cell_groups, unaffected_cell_groups)
+
+  return (discordant_loss_pairs)
+}
+
 #' @noRd
 get_perturbation_paths <- function(perturbation_ccm,
                                                   time_window,
@@ -413,7 +495,7 @@ get_perturbation_paths <- function(perturbation_ccm,
                                                   log_abund_detection_thresh,
                                                   q_val,
                                                   model_for_pcors="reduced",
-                                                  min_pathfinding_lfc=min_pathfinding_lfc,
+                                                  min_pathfinding_lfc=1,
                                                   ...){
 
   #print ("getting perturbation paths")
@@ -437,75 +519,90 @@ get_perturbation_paths <- function(perturbation_ccm,
                                                    ...)
   #print (earliest_loss_tbl)
 
+  # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
+  old_omp_num_threads = single_thread_omp()
+  old_blas_num_threads = single_thread_blas()
 
-  pln_model = model(perturbation_ccm, model_for_pcors)
+  tryCatch({
+    pln_model = model(perturbation_ccm, model_for_pcors)
+
+    change_corr_tbl = earliest_loss_tbl %>% filter (is.finite(earliest_time)) %>% select(cell_group)
+    change_corr_tbl = change_corr_tbl %>% select(cell_group) %>% tidyr::expand(cell_group, cell_group)
+    colnames(change_corr_tbl) = c("from", "to")
+    change_corr_tbl = change_corr_tbl %>% filter(from != to)
+
+    lost_cell_groups = change_corr_tbl %>% pull(from) %>% unique
+
+    #print ("change corr tbl")
+    #print (change_corr_tbl)
+
+    #corr_edge_coords_umap_delta_abund = corr_edge_coords_umap
+    change_corr_tbl = dplyr::left_join(change_corr_tbl, earliest_loss_tbl %>% setNames(paste0('to_', names(.))), by=c("to"="to_cell_group")) #%>%
+    #dplyr::rename(log_abund_x,
+    #              to_delta_log_abund = delta_log_abund)
+    change_corr_tbl = dplyr::left_join(change_corr_tbl, earliest_loss_tbl %>% setNames(paste0('from_', names(.))), by=c("from"="from_cell_group"))# %>%
+
+    change_corr_tbl = change_corr_tbl %>% mutate_if(is.numeric, tidyr::replace_na, replace = -Inf)
+
+    #print (change_corr_tbl)
+
+    #print ("possible loss pairs")
+    #print (change_corr_tbl)
+
+    #print ("debug pairs")
+    #change_corr_tbl %>% filter(from == "24") %>% print
+    concordant_fwd_loss_pairs = change_corr_tbl %>%
+      #dplyr::filter(pcor < 0) %>% # do we just want negative again?
+      dplyr::filter((is.finite(from_peak_loss_time) & is.finite(to_peak_loss_time) & from_peak_loss_time <= to_peak_loss_time) |
+                      (is.finite(from_largest_loss_time) & is.finite(to_largest_loss_time) & from_largest_loss_time <= to_largest_loss_time) |
+                      (is.finite(from_earliest_time) & is.finite(to_earliest_time) & from_earliest_time < to_earliest_time))
+
+    message ("\tEstimating loss timing  (again)")
+    earliest_loss_tbl_no_sig_filter = hooke:::estimate_loss_timing(perturbation_ccm,
+                                                                   start_time=start_time,
+                                                                   stop_time=stop_time,
+                                                                   interval_step = interval_step,
+                                                                   interval_col=interval_col,
+                                                                   log_abund_detection_thresh=log_abund_detection_thresh,
+                                                                   q_val = 1,
+                                                                   delta_log_abund_loss_thresh=min_pathfinding_lfc,
+                                                                   ...)
+
+    lost_cell_group_pathfinding_subgraph = igraph::subgraph(pathfinding_graph,
+                                                            earliest_loss_tbl_no_sig_filter %>% filter (is.finite(earliest_time)) %>% pull(cell_group))
+
+    # Compute the shortest paths between each of those node pairs in the pathfinding graph
+    concordant_fwd_loss_pairs = concordant_fwd_loss_pairs %>% select(from, to) %>% distinct()
+
+    message (paste("\tfinding shortest paths between", nrow(concordant_fwd_loss_pairs), "loss pairs"))
+    #print (concordant_fwd_loss_pairs)
+
+    paths_between_concordant_fwd_loss_pairs = concordant_fwd_loss_pairs %>%
+      mutate(path = furrr::future_map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
+                                       .x = from, .y = to,
+                                       lost_cell_group_pathfinding_subgraph,
+                                       .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                       .progress=TRUE))
+
+    #print ("loss pair paths")
+    #print (paths_between_concordant_fwd_loss_pairs)
+
+    #print ("debug pair paths")
+    #paths_between_concordant_fwd_loss_pairs %>% filter(is.na(path) == FALSE) %>% rename(origin=from, destination=to) %>% tidyr::unnest(path) %>% print(n=1000)
+    #print (paths_between_concordant_fwd_loss_pairs)#  %>% tidyr::unnest(path) %>% filter(from == "24") %>% print
+
+    message ("\tscoring paths between loss pairs")
+    paths_between_concordant_fwd_loss_pairs = score_paths_for_perturbations(perturbation_ccm, paths_between_concordant_fwd_loss_pairs, perturbation_col="knockout", interval_col)
+    return (paths_between_concordant_fwd_loss_pairs)
+  }, error = function(e) {
+    print (e)
+    return (NA)
+  }, finally = {
+    #RhpcBLASctl::omp_set_num_threads(old_omp_num_threads)
+    #RhpcBLASctl::blas_set_num_threads(old_blas_num_threads)
+  })
 
 
-  change_corr_tbl = earliest_loss_tbl %>% filter (is.finite(earliest_time)) %>% select(cell_group)
-  change_corr_tbl = change_corr_tbl %>% select(cell_group) %>% tidyr::expand(cell_group, cell_group)
-  colnames(change_corr_tbl) = c("from", "to")
-  change_corr_tbl = change_corr_tbl %>% filter(from != to)
-
-  lost_cell_groups = change_corr_tbl %>% pull(from) %>% unique
-
-  #print ("change corr tbl")
-  #print (change_corr_tbl)
-
-  #corr_edge_coords_umap_delta_abund = corr_edge_coords_umap
-  change_corr_tbl = dplyr::left_join(change_corr_tbl, earliest_loss_tbl %>% setNames(paste0('to_', names(.))), by=c("to"="to_cell_group")) #%>%
-  #dplyr::rename(log_abund_x,
-  #              to_delta_log_abund = delta_log_abund)
-  change_corr_tbl = dplyr::left_join(change_corr_tbl, earliest_loss_tbl %>% setNames(paste0('from_', names(.))), by=c("from"="from_cell_group"))# %>%
-
-  change_corr_tbl = change_corr_tbl %>% mutate_if(is.numeric, tidyr::replace_na, replace = -Inf)
-
-  #print (change_corr_tbl)
-
-  #print ("possible loss pairs")
-  #print (change_corr_tbl)
-
-  #print ("debug pairs")
-  #change_corr_tbl %>% filter(from == "24") %>% print
-  concordant_fwd_loss_pairs = change_corr_tbl %>%
-    #dplyr::filter(pcor < 0) %>% # do we just want negative again?
-    dplyr::filter((is.finite(from_peak_loss_time) & is.finite(to_peak_loss_time) & from_peak_loss_time <= to_peak_loss_time) |
-                  (is.finite(from_largest_loss_time) & is.finite(to_largest_loss_time) & from_largest_loss_time <= to_largest_loss_time) |
-                  (is.finite(from_earliest_time) & is.finite(to_earliest_time) & from_earliest_time < to_earliest_time))
-
-  message ("\tEstimating loss timing  (again)")
-  earliest_loss_tbl_no_sig_filter = hooke:::estimate_loss_timing(perturbation_ccm,
-                                                   start_time=start_time,
-                                                   stop_time=stop_time,
-                                                   interval_step = interval_step,
-                                                   interval_col=interval_col,
-                                                   log_abund_detection_thresh=log_abund_detection_thresh,
-                                                   q_val = 1,
-                                                   delta_log_abund_loss_thresh=min_pathfinding_lfc,
-                                                   ...)
-
-  lost_cell_group_pathfinding_subgraph = igraph::subgraph(pathfinding_graph,
-                                                          earliest_loss_tbl_no_sig_filter %>% filter (is.finite(earliest_time)) %>% pull(cell_group))
-
-  message ("\tfinding shortest paths between loss pairs")
-  #print (concordant_fwd_loss_pairs)
-
-  # Compute the shortest paths between each of those node pairs in the pathfinding graph
-  concordant_fwd_loss_pairs = concordant_fwd_loss_pairs %>% select(from, to) %>% distinct()
-  paths_between_concordant_fwd_loss_pairs = concordant_fwd_loss_pairs %>%
-    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
-                              .x = from, .y = to,
-                              lost_cell_group_pathfinding_subgraph))
-
-  #print ("loss pair paths")
-  #print (paths_between_concordant_fwd_loss_pairs)
-
-  #print ("debug pair paths")
-  #paths_between_concordant_fwd_loss_pairs %>% filter(is.na(path) == FALSE) %>% rename(origin=from, destination=to) %>% tidyr::unnest(path) %>% print(n=1000)
-  #print (paths_between_concordant_fwd_loss_pairs)#  %>% tidyr::unnest(path) %>% filter(from == "24") %>% print
-
-  message ("\tscoring paths between loss pairs")
-  paths_between_concordant_fwd_loss_pairs = score_paths_for_perturbations(perturbation_ccm, paths_between_concordant_fwd_loss_pairs, perturbation_col="knockout", interval_col)
-  return (paths_between_concordant_fwd_loss_pairs)
 }
 
 
@@ -664,131 +761,171 @@ build_timeseries_transition_graph <- function(ccm,
                                               min_pathfinding_lfc=1,
                                               make_dag=FALSE,
                                               ...) {
+  # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
+  #old_omp_num_threads = single_thread_omp()
+  #old_blas_num_threads = single_thread_blas()
 
-  # First, let's figure out when each cell type is present and
-  # which ones emerge over the course of the caller's time interval
-  if (is.null(start_time)){
-    start_time = min(colData(ccm@ccs)[,interval_col])
-  }
-  if (is.null(stop_time)){
-    stop_time = max(colData(ccm@ccs)[,interval_col])
-  }
+  tryCatch({
+    # First, let's figure out when each cell type is present and
+    # which ones emerge over the course of the caller's time interval
+    if (is.null(start_time)){
+      start_time = min(colData(ccm@ccs)[,interval_col])
+    }
+    if (is.null(stop_time)){
+      stop_time = max(colData(ccm@ccs)[,interval_col])
+    }
 
-  timepoints = seq(start_time, stop_time, interval_step)
+    timepoints = seq(start_time, stop_time, interval_step)
 
-  message("Estimating abundances over time interval")
-  timepoint_pred_df = estimate_abundances_over_interval(ccm, start_time, stop_time, interval_col=interval_col, interval_step=interval_step, ...)
+    message("Estimating abundances over time interval")
+    timepoint_pred_df = estimate_abundances_over_interval(ccm, start_time, stop_time, interval_col=interval_col, interval_step=interval_step, ...)
 
-#' @noRd
-  select_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
-    cond_x = timepoint_pred_df %>% filter(!!sym(interval_col) == t1)
-    cond_y = timepoint_pred_df %>% filter(!!sym(interval_col) == t2)
-    return(compare_abundances(ccm, cond_x, cond_y))
-  }
+    #' @noRd
+    select_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
+      cond_x = timepoint_pred_df %>% filter(!!sym(interval_col) == t1)
+      cond_y = timepoint_pred_df %>% filter(!!sym(interval_col) == t2)
+      return(compare_abundances(ccm, cond_x, cond_y))
+    }
 
-  time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
-    filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
+    time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
+      filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
 
-  message(paste("Comparing abundances at",  dim(time_contrasts)[1], "timepoints"))
-  relevant_comparisons = time_contrasts %>%
-    mutate(comp_abund = purrr::map2(.f = select_timepoints,
-                                    .x = t1,
-                                    .y = t2,
-                                    interval_col=interval_col,
-                                    timepoint_pred_df = timepoint_pred_df)) %>%
-    mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
-                                  .x = comp_abund,
-                                  ccm = ccm))
+    message(paste("Comparing abundances over",  nrow(time_contrasts), "timepoint contrasts"))
+    relevant_comparisons = time_contrasts %>%
+      mutate(comp_abund = furrr::future_map2(.f = select_timepoints,
+                                             .x = t1,
+                                             .y = t2,
+                                             interval_col=interval_col,
+                                             timepoint_pred_df = timepoint_pred_df,
+                                             .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                             .progress=TRUE))
 
-  message(paste("Finding reciprocal pairs"))
-  relevant_comparisons = relevant_comparisons %>%
-    tidyr::unnest(rec_edges) %>%
-    #dplyr::filter(pcor < 0) %>% # do we just want negative again?
-    dplyr::filter((from_delta_log_abund > min_pathfinding_lfc & to_delta_log_abund < min_pathfinding_lfc) |
-                    (to_delta_log_abund > min_pathfinding_lfc & from_delta_log_abund < min_pathfinding_lfc)) %>%
-    dplyr::filter(from_delta_q_value < q_val & to_delta_q_value < q_val)
+    message(paste("Collecting relevant PLN network graph edges"))
+    relevant_comparisons = relevant_comparisons %>%
+      mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
+                                           .x = comp_abund,
+                                           ccm = ccm))
 
-  edge_union = relevant_comparisons %>% select(from, to) %>% distinct()
+      # mutate(rec_edges = furrr::future_map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
+      #                                      .x = comp_abund,
+      #                                      ccm = ccm,
+      #                                      .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+      #                                      .progress=TRUE))
+
+    message(paste("Finding reciprocal pairs"))
+    relevant_comparisons = relevant_comparisons %>%
+      tidyr::unnest(rec_edges) %>%
+      #dplyr::filter(pcor < 0) %>% # do we just want negative again?
+      dplyr::filter((from_delta_log_abund > min_pathfinding_lfc & to_delta_log_abund < min_pathfinding_lfc) |
+                      (to_delta_log_abund > min_pathfinding_lfc & from_delta_log_abund < min_pathfinding_lfc)) %>%
+      dplyr::filter(from_delta_q_value < q_val & to_delta_q_value < q_val)
+
+    if (nrow(relevant_comparisons) == 0){
+      print ("No reciprocal pairs of nodes found")
+      return (NA)
+    }
+
+    edge_union = relevant_comparisons %>% select(from, to) %>% distinct()
+
+    print (paste("finding shortest paths between ", nrow(edge_union), "pairs of nodes"))
+    #print(head(relevant_comparisons))
+    paths_for_relevant_edges = edge_union %>%
+      mutate(path = furrr::future_map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
+                                       .x = from, .y = to,
+                                       pathfinding_graph,
+                                       .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                       .progress=TRUE))
+
+    cells_along_path_df = normalized_counts(ccm@ccs, "size_only", pseudocount = 0) %>%
+      as.matrix() %>%
+      Matrix::t() %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column() %>%
+      tidyr::pivot_longer(!matches("rowname")) %>%
+      rename(sample=rowname, cell_group=name, num_cells=value)
+
+    paths_for_relevant_edges = paths_for_relevant_edges %>%
+      filter(!is.na(path))
+
+    if (nrow(paths_for_relevant_edges) == 0){
+      print ("No time-forward paths found")
+      return (NA)
+    }
+
+    print (paste("scoring", nrow(paths_for_relevant_edges), "paths for time flow..."))
+    #print(head(paths_for_relevant_edges))
+
+    paths_for_relevant_edges = paths_for_relevant_edges %>%
+      mutate(time_vs_distance_model_stats = furrr::future_map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
+                                                              .x = path,
+                                                              ccs=ccm@ccs,
+                                                              cells_along_path_df=cells_along_path_df,
+                                                              interval_col=interval_col,
+                                                              .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                                              .progress=TRUE)) %>%
+      tidyr::unnest(time_vs_distance_model_stats)
+    #cells_along_path(ccs, paths_for_relevant_edges$path[[1]] %>% dplyr::select(from, to))
 
 
-  print (paste("finding shortest paths between ", nrow(edge_union), "pairs of nodes"))
-  #print(head(relevant_comparisons))
-  paths_for_relevant_edges = edge_union %>%
-    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
-                              .x = from, .y = to,
-                              pathfinding_graph))
+    print ("tabulating model stats...")
+    #print(head(paths_for_relevant_edges))
+    paths_for_relevant_edges = paths_for_relevant_edges %>% mutate(#time_dist_model_score = time_dist_effect * time_dist_model_adj_rsq,
+      time_dist_model_score = time_dist_model_ncells * time_dist_model_adj_rsq,
+      path_score = time_dist_model_score)
+    paths_for_relevant_edges = paths_for_relevant_edges %>% mutate(time_dist_effect_q_val = p.adjust(time_dist_effect_pval, method="BH"))
 
-  cells_along_path_df = normalized_counts(ccm@ccs, "size_only", pseudocount = 0) %>%
-    as.matrix() %>%
-    Matrix::t() %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column() %>%
-    tidyr::pivot_longer(!matches("rowname")) %>%
-    rename(sample=rowname, cell_group=name, num_cells=value)
+    #print (paths_for_relevant_edges)
+    selected_paths = paths_for_relevant_edges %>% filter (time_dist_effect > 0 &
+                                                            time_dist_effect_pval < q_val &
+                                                            time_dist_model_adj_rsq > 0) %>%
+      group_by(to) %>%
+      #slice_max(dist_model_score, n=3) %>%
+      ungroup() %>% arrange(desc(time_dist_model_score)) %>%
+      dplyr::mutate(path_contrast="time")
 
-  print ("scoring paths for time flow...")
-  #print(head(paths_for_relevant_edges))
-  paths_for_relevant_edges = paths_for_relevant_edges %>%
-    filter(!is.na(path)) %>%
-    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
-                                                     .x = path,
-                                                     ccs=ccm@ccs,
-                                                     cells_along_path_df=cells_along_path_df,
-                                                     interval_col=interval_col)) %>%
-    tidyr::unnest(time_vs_distance_model_stats)
-  #cells_along_path(ccs, paths_for_relevant_edges$path[[1]] %>% dplyr::select(from, to))
+    #selected_paths %>% select(origin=from, destination=to, path, path_score) %>% tidyr::unnest(path) %>% arrange(origin, destination) %>% filter(from %in% c("20", "38") & to %in% c("20", "38"))  %>% print(n=1000)
 
+    #G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = FALSE)
 
-  print ("tabulating model stats...")
-  #print(head(paths_for_relevant_edges))
-  paths_for_relevant_edges = paths_for_relevant_edges %>% mutate(#time_dist_model_score = time_dist_effect * time_dist_model_adj_rsq,
-    time_dist_model_score = time_dist_model_ncells * time_dist_model_adj_rsq,
-    path_score = time_dist_model_score)
-  paths_for_relevant_edges = paths_for_relevant_edges %>% mutate(time_dist_effect_q_val = p.adjust(time_dist_effect_pval, method="BH"))
+    print ("combining paths...")
+    G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = TRUE)
 
-  #print (paths_for_relevant_edges)
-  selected_paths = paths_for_relevant_edges %>% filter (time_dist_effect > 0 &
-                                                          time_dist_effect_pval < q_val &
-                                                          time_dist_model_adj_rsq > 0) %>%
-    group_by(to) %>%
-    #slice_max(dist_model_score, n=3) %>%
-    ungroup() %>% arrange(desc(time_dist_model_score)) %>%
-    dplyr::mutate(path_contrast="time")
+    if (!is.null(G) && !is.na(G) && make_dag){
 
-  #selected_paths %>% select(origin=from, destination=to, path, path_score) %>% tidyr::unnest(path) %>% arrange(origin, destination) %>% filter(from %in% c("20", "38") & to %in% c("20", "38"))  %>% print(n=1000)
+      #igraph::edge_attr(G, "support") = igraph::edge_attr(G, "total_perturb_path_score_supporting")
+      cycle_breaking_scores = igraph::edge_attr(G, "total_path_score_supporting")
+      cycle_breaking_scores[is.na(cycle_breaking_scores)] = 0
+      igraph::edge_attr(G, "support") = cycle_breaking_scores
 
-  #G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = FALSE)
+      print (igraph::edge_attr(G, "support"))
 
-  print ("combining paths...")
-  G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = TRUE)
+      print ("breaking cycles...")
+      G = hooke:::break_cycles_in_state_transition_graph(G)
 
-  if (make_dag){
+      G = compute_min_path_cover(ccm, G, weight_attribute="support")
 
-    #igraph::edge_attr(G, "support") = igraph::edge_attr(G, "total_perturb_path_score_supporting")
-    cycle_breaking_scores = igraph::edge_attr(G, "total_path_score_supporting")
-    cycle_breaking_scores[is.na(cycle_breaking_scores)] = 0
-    igraph::edge_attr(G, "support") = cycle_breaking_scores
+      edge_support = igraph::as_data_frame(G) %>% select(from, to)
 
-    print (igraph::edge_attr(G, "support"))
+      edge_support = left_join(edge_support,
+                               selected_paths %>% select(-from, -to) %>% tidyr::unnest(path))
 
-    print ("breaking cycles...")
-    G = hooke:::break_cycles_in_state_transition_graph(G)
+      #print (edge_support)
+      edge_support = edge_support %>% group_by(from, to) %>% slice_max(time_dist_model_adj_rsq, n=1)
 
-    G = compute_min_path_cover(ccm, G, weight_attribute="support")
+      #print (edge_support)
+      G = igraph::graph_from_data_frame(edge_support, directed=TRUE, vertices=data.frame(id=igraph::V(G)$name))
+    }
 
-    edge_support = igraph::as_data_frame(G) %>% select(from, to)
-
-    edge_support = left_join(edge_support,
-                             selected_paths %>% select(-from, -to) %>% tidyr::unnest(path))
-
-    #print (edge_support)
-    edge_support = edge_support %>% group_by(from, to) %>% slice_max(time_dist_model_adj_rsq, n=1)
-
-    #print (edge_support)
-    G = igraph::graph_from_data_frame(edge_support, directed=TRUE, vertices=data.frame(id=igraph::V(G)$name))
-  }
-
-  return(G)
+    print ("Finished building timeseries graph")
+    return(G)
+  }, error = function(e) {
+    print (e)
+    return (NA)
+  }, finally = {
+    #RhpcBLASctl::omp_set_num_threads(old_omp_num_threads)
+    #RhpcBLASctl::blas_set_num_threads(old_blas_num_threads)
+  })
+  return (NA)
 }
 
 #' @noRd
@@ -804,95 +941,117 @@ get_paths_between_recip_time_nodes <- function(ccm,
                                                verbose=FALSE){
   #timepoints = sort(unique(timepoint_pred_df[[interval_col]]))
 
-  compare_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
-    cond_x = timepoint_pred_df %>% filter(!!sym(interval_col) == t1)
-    cond_y = timepoint_pred_df %>% filter(!!sym(interval_col) == t2)
-    return(compare_abundances(ccm, cond_x, cond_y))
-  }
+  # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
+  #old_omp_num_threads = single_thread_omp()
+  #old_blas_num_threads = single_thread_blas()
 
-  time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
-    filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
+  tryCatch({
 
-  if (verbose)
-    message(paste("\tLooking at", nrow(time_contrasts), "time contrasts"))
+    compare_timepoints <- function(timepoint_pred_df, t1, t2, interval_col)  {
+      cond_x = timepoint_pred_df %>% filter(!!sym(interval_col) == t1)
+      cond_y = timepoint_pred_df %>% filter(!!sym(interval_col) == t2)
+      return(compare_abundances(ccm, cond_x, cond_y))
+    }
 
-  # Find the nodes that undergo reciprocal fold changes between successive time points
-  recip_time_node_pairs = time_contrasts %>%
-    mutate(comp_abund = purrr::map2(.f = compare_timepoints,
-                                    .x = t1,
-                                    .y = t2,
-                                    interval_col=interval_col,
-                                    timepoint_pred_df = timepoint_pred_df)) %>%
-    mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
-                                  .x = comp_abund,
-                                  ccm = ccm))
-  recip_time_node_pairs = recip_time_node_pairs %>%
-    tidyr::unnest(rec_edges)
+    time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
+      filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
 
-  # Let's adjust all the p values to account for the fact that we've done many contrasts
-  recip_time_node_pairs = recip_time_node_pairs %>%
-    dplyr::mutate(from_delta_q_value = p.adjust(from_delta_p_value),
-                  to_delta_p_value = p.adjust(to_delta_p_value))
+    if (verbose)
+      message(paste("\tLooking at", nrow(time_contrasts), "time contrasts"))
 
-  if (verbose){
-    num_distinct_node_pairs = recip_time_node_pairs %>% select(from, to) %>% distinct()
-    message(paste("\t Found", nrow(num_distinct_node_pairs), "reciprocal node pairs"))
-  }
+    # Find the nodes that undergo reciprocal fold changes between successive time points
+    recip_time_node_pairs = time_contrasts %>%
+      mutate(comp_abund = furrr::future_map2(.f = compare_timepoints,
+                                             .x = t1,
+                                             .y = t2,
+                                             interval_col=interval_col,
+                                             timepoint_pred_df = timepoint_pred_df,
+                                             .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                             .progress=TRUE)) %>%
+      mutate(rec_edges = furrr::future_map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
+                                           .x = comp_abund,
+                                           ccm = ccm,
+                                           .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                           .progress=TRUE))
+    recip_time_node_pairs = recip_time_node_pairs %>%
+      tidyr::unnest(rec_edges)
 
-  recip_time_node_pairs = recip_time_node_pairs %>%
-    #dplyr::filter(pcor < 0) %>% # do we just want negative again?
-    dplyr::filter((from_delta_log_abund > min_pathfinding_lfc & to_delta_log_abund < min_pathfinding_lfc) |
-                    (to_delta_log_abund > min_pathfinding_lfc & from_delta_log_abund < min_pathfinding_lfc)) %>%
-    dplyr::filter(from_delta_q_value < q_val & to_delta_q_value < q_val)
+    # Let's adjust all the p values to account for the fact that we've done many contrasts
+    recip_time_node_pairs = recip_time_node_pairs %>%
+      dplyr::mutate(from_delta_q_value = p.adjust(from_delta_p_value),
+                    to_delta_p_value = p.adjust(to_delta_p_value))
 
-  if (verbose){
-    num_distinct_node_pairs = recip_time_node_pairs %>% select(from, to) %>% distinct()
-    message(paste("\tOf these", nrow(num_distinct_node_pairs), "survived thresholding"))
-  }
+    if (verbose){
+      num_distinct_node_pairs = recip_time_node_pairs %>% select(from, to) %>% distinct()
+      message(paste("\t Found", nrow(num_distinct_node_pairs), "reciprocal node pairs"))
+    }
+
+    recip_time_node_pairs = recip_time_node_pairs %>%
+      #dplyr::filter(pcor < 0) %>% # do we just want negative again?
+      dplyr::filter((from_delta_log_abund > min_pathfinding_lfc & to_delta_log_abund < min_pathfinding_lfc) |
+                      (to_delta_log_abund > min_pathfinding_lfc & from_delta_log_abund < min_pathfinding_lfc)) %>%
+      dplyr::filter(from_delta_q_value < q_val & to_delta_q_value < q_val)
+
+    if (verbose){
+      num_distinct_node_pairs = recip_time_node_pairs %>% select(from, to) %>% distinct()
+      message(paste("\tOf these", nrow(num_distinct_node_pairs), "survived thresholding"))
+    }
 
 
-  if (verbose)
-    message("Computing shortest paths between reciprocal time nodes")
+    if (verbose)
+      message("Computing shortest paths between reciprocal time nodes")
 
-  # Compute the shortest paths between each of those node pairs in the pathfinding graph
-  recip_time_node_pairs = recip_time_node_pairs %>% select(from, to) %>% distinct()
-  paths_between_recip_time_nodes = recip_time_node_pairs %>%
-    mutate(path = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
-                              .x = from, .y = to,
-                              pathfinding_graph))
+    # Compute the shortest paths between each of those node pairs in the pathfinding graph
+    recip_time_node_pairs = recip_time_node_pairs %>% select(from, to) %>% distinct()
+    paths_between_recip_time_nodes = recip_time_node_pairs %>%
+      mutate(path = furrr::future_map2(.f = purrr::possibly(hooke:::get_shortest_path, NA_character_),
+                                       .x = from, .y = to,
+                                       pathfinding_graph,
+                                       .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                       .progress=TRUE))
 
-  #paths_between_recip_time_nodes %>% filter (from == "15") %>% print
+    #paths_between_recip_time_nodes %>% filter (from == "15") %>% print
 
-  cells_along_path_df = normalized_counts(ccm@ccs, "size_only", pseudocount = 0) %>%
-    as.matrix() %>%
-    Matrix::t() %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column() %>%
-    tidyr::pivot_longer(!matches("rowname")) %>%
-    rename(sample=rowname, cell_group=name, num_cells=value)
+    cells_along_path_df = normalized_counts(ccm@ccs, "size_only", pseudocount = 0) %>%
+      as.matrix() %>%
+      Matrix::t() %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column() %>%
+      tidyr::pivot_longer(!matches("rowname")) %>%
+      rename(sample=rowname, cell_group=name, num_cells=value)
 
-  # Score each shortest path for correlation between time and distance along it
-  paths_between_recip_time_nodes = paths_between_recip_time_nodes %>%
-    filter(!is.na(path))
+    # Score each shortest path for correlation between time and distance along it
+    paths_between_recip_time_nodes = paths_between_recip_time_nodes %>%
+      filter(!is.na(path))
 
-  if (verbose)
-    message(paste("Found", nrow(paths_between_recip_time_nodes), " paths through pathfinding graph. Scoring for time-flow..."))
+    if (verbose)
+      message(paste("Found", nrow(paths_between_recip_time_nodes), " paths through pathfinding graph. Scoring for time-flow..."))
 
-  paths_between_recip_time_nodes = paths_between_recip_time_nodes %>%
-    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
-                                                     .x = path,
-                                                     ccs=ccm@ccs,
-                                                     cells_along_path_df=cells_along_path_df,
-                                                     interval_col=interval_col)) %>%
-    tidyr::unnest(time_vs_distance_model_stats)
+    paths_between_recip_time_nodes = paths_between_recip_time_nodes %>%
+      mutate(time_vs_distance_model_stats = furrr::future_map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
+                                                              .x = path,
+                                                              ccs=ccm@ccs,
+                                                              cells_along_path_df=cells_along_path_df,
+                                                              interval_col=interval_col,
+                                                              .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                                              .progress=TRUE)) %>%
+      tidyr::unnest(time_vs_distance_model_stats)
 
-  paths_between_recip_time_nodes = paths_between_recip_time_nodes %>% mutate(time_dist_model_score = time_dist_effect * time_dist_model_adj_rsq)
-  paths_between_recip_time_nodes = paths_between_recip_time_nodes %>% mutate(time_dist_effect_q_val = p.adjust(time_dist_effect_pval, method="BH"))
-  #paths_between_recip_time_nodes = paths_between_recip_time_nodes %>% filter (dist_effect > 0 & dist_effect_q_val < q_val & dist_model_adj_rsq > min_dist_vs_time_r_sq) %>%
-  #  group_by(to) %>%
-  #  #slice_max(dist_model_score, n=3) %>%
-  #  ungroup() %>% arrange(desc(dist_model_score))
-  return(paths_between_recip_time_nodes)
+    paths_between_recip_time_nodes = paths_between_recip_time_nodes %>% mutate(time_dist_model_score = time_dist_effect * time_dist_model_adj_rsq)
+    paths_between_recip_time_nodes = paths_between_recip_time_nodes %>% mutate(time_dist_effect_q_val = p.adjust(time_dist_effect_pval, method="BH"))
+    #paths_between_recip_time_nodes = paths_between_recip_time_nodes %>% filter (dist_effect > 0 & dist_effect_q_val < q_val & dist_model_adj_rsq > min_dist_vs_time_r_sq) %>%
+    #  group_by(to) %>%
+    #  #slice_max(dist_model_score, n=3) %>%
+    #  ungroup() %>% arrange(desc(dist_model_score))
+    return(paths_between_recip_time_nodes)
+  }, error = function(e){
+    print (e);
+    return(NA)
+  }, finally = {
+    #RhpcBLASctl::omp_set_num_threads(old_omp_num_threads)
+    #RhpcBLASctl::blas_set_num_threads(old_blas_num_threads)
+  })
+  return(NA)
 }
 
 
@@ -1032,44 +1191,54 @@ get_pcor_between_pair <- function(perturb_model_pcor_matrix, from, to){
 #' @noRd
 score_paths_for_perturbations <- function(perturbation_ccm, paths_between_recip_time_nodes, perturbation_col="knockout", interval_col="timepoint")
 {
-  #net <- model$latent_network(type = type)
-  #perturb_model_pcor_matrix = model(perturbation_ccm, "reduced")$latent_network(type = "partial_cor")
-  # Now measure each time-flow path for a drop in perturbed cells along it
-  #print ("scoring paths with model:")
-  #print (perturb_model_pcor_graph)
-  #print (paths_between_recip_time_nodes)
+  # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
+  #old_omp_num_threads = single_thread_omp()
+  #old_blas_num_threads = single_thread_blas()
 
-  cells_along_path_df = normalized_counts(perturbation_ccm@ccs, "size_only", pseudocount = 0) %>%
-    as.matrix() %>%
-    Matrix::t() %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column() %>%
-    tidyr::pivot_longer(!matches("rowname")) %>%
-    rename(sample=rowname, cell_group=name, num_cells=value)
+  tryCatch({
 
-  paths_between_perturb_vs_wt_node_pairs = paths_between_recip_time_nodes %>%
-    filter(!is.na(path)) %>%
-    #mutate(pcor_between_node_pair =  get_pcor_between_pair(perturb_model_pcor_matrix, from, to)) %>%
-    mutate(perturb_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_perturbation_freq_along_path, NA_character_),
-                                                        .x = path,
-                                                        ccs=perturbation_ccm@ccs,
-                                                        cells_along_path_df=cells_along_path_df,
-                                                        perturbation_col=perturbation_col,
-                                                        interval_col=interval_col)) %>%
-    filter(!is.na(perturb_vs_distance_model_stats)) %>%
-    tidyr::unnest(perturb_vs_distance_model_stats)
+    cells_along_path_df = normalized_counts(perturbation_ccm@ccs, "size_only", pseudocount = 0) %>%
+      as.matrix() %>%
+      Matrix::t() %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column() %>%
+      tidyr::pivot_longer(!matches("rowname")) %>%
+      rename(sample=rowname, cell_group=name, num_cells=value)
 
-  #print (head(paths_between_perturb_vs_wt_node_pairs))
-  #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(path_score = ifelse(perturb_dist_effect < 0, -perturb_dist_effect, 0))
-  #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(path_score = ifelse(perturb_dist_effect < 0, -perturb_dist_effect * perturb_dist_model_adj_rsq, 0))
-  #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(pertubation_path_score = ifelse(perturb_dist_effect < 0, perturb_dist_model_adj_rsq, 0))
-  #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(path_score = ifelse(perturb_dist_effect < 0, 1, 0))
+    paths_between_perturb_vs_wt_node_pairs = paths_between_recip_time_nodes %>%
+      filter(!is.na(path)) %>%
+      #mutate(pcor_between_node_pair =  get_pcor_between_pair(perturb_model_pcor_matrix, from, to)) %>%
+      mutate(perturb_vs_distance_model_stats = furrr::future_map(.f = purrr::possibly(measure_perturbation_freq_along_path, NA_character_),
+                                                                 .x = path,
+                                                                 ccs=perturbation_ccm@ccs,
+                                                                 cells_along_path_df=cells_along_path_df,
+                                                                 perturbation_col=perturbation_col,
+                                                                 interval_col=interval_col,
+                                                                 .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                                                 .progress=TRUE)) %>%
+      filter(!is.na(perturb_vs_distance_model_stats)) %>%
+      tidyr::unnest(perturb_vs_distance_model_stats)
 
-  #print (paths_between_perturb_vs_wt_node_pairs)
+    #print (head(paths_between_perturb_vs_wt_node_pairs))
+    #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(path_score = ifelse(perturb_dist_effect < 0, -perturb_dist_effect, 0))
+    #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(path_score = ifelse(perturb_dist_effect < 0, -perturb_dist_effect * perturb_dist_model_adj_rsq, 0))
+    #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(pertubation_path_score = ifelse(perturb_dist_effect < 0, perturb_dist_model_adj_rsq, 0))
+    #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(path_score = ifelse(perturb_dist_effect < 0, 1, 0))
 
-  #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(perturb_dist_model_score = -perturb_dist_effect * perturb_dist_model_adj_rsq)
-  #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(perturb_dist_effect_q_val = p.adjust(perturb_dist_effect_pval, method="BH"))
-  return(paths_between_perturb_vs_wt_node_pairs)
+    #print (paths_between_perturb_vs_wt_node_pairs)
+
+    #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(perturb_dist_model_score = -perturb_dist_effect * perturb_dist_model_adj_rsq)
+    #paths_between_perturb_vs_wt_node_pairs = paths_between_perturb_vs_wt_node_pairs %>% mutate(perturb_dist_effect_q_val = p.adjust(perturb_dist_effect_pval, method="BH"))
+    return(paths_between_perturb_vs_wt_node_pairs)
+  }, error = function(e) {
+    print (e)
+    return (NA)
+  }, finally = {
+    #RhpcBLASctl::omp_set_num_threads(old_omp_num_threads)
+    #RhpcBLASctl::blas_set_num_threads(old_blas_num_threads)
+  }
+  )
+  return (NA)
 }
 
 #' @noRd
@@ -1090,135 +1259,69 @@ estimate_loss_timing <- function(perturbation_ccm,
                                  q_val=0.01,
                                  ...){
 
+    wt_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=FALSE, interval_col=interval_col, interval_step=interval_step, ...)
+    ko_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=TRUE, interval_col=interval_col, interval_step=interval_step, ...)
 
-  wt_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=FALSE, interval_col=interval_col, interval_step=interval_step, ...)
-  ko_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=TRUE, interval_col=interval_col, interval_step=interval_step, ...)
+    #print (wt_timepoint_pred_df)
+    #print (ko_timepoint_pred_df)
+    timepoints = seq(start_time, stop_time, interval_step)
 
-  #print (wt_timepoint_pred_df)
-  #print (ko_timepoint_pred_df)
-  timepoints = seq(start_time, stop_time, interval_step)
-
-  # Find the pairs of nodes that are both lost in the perturbation at the same time
-  perturb_vs_wt_nodes = tibble(t1=timepoints) %>%
-    mutate(comp_abund = purrr::map(.f = compare_ko_to_wt_at_timepoint,
-                                   .x = t1,
-                                   perturbation_ccm=perturbation_ccm,
-                                   interval_col=interval_col,
-                                   wt_pred_df = wt_timepoint_pred_df,
-                                   ko_pred_df = ko_timepoint_pred_df)) %>% tidyr::unnest(comp_abund)
-    #mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
+    # Find the pairs of nodes that are both lost in the perturbation at the same time
+    perturb_vs_wt_nodes = tibble(t1=timepoints) %>%
+      mutate(comp_abund = purrr::map(.f = compare_ko_to_wt_at_timepoint,
+                                            .x = t1,
+                                            perturbation_ccm=perturbation_ccm,
+                                            interval_col=interval_col,
+                                            wt_pred_df = wt_timepoint_pred_df,
+                                            ko_pred_df = ko_timepoint_pred_df)) %>% tidyr::unnest(comp_abund)
+    #mutate(rec_edges = furrr::future_map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
     #                              .x = comp_abund,
     #                              ccm = perturbation_ccm)) %>% tidyr::unnest(rec_edges)
 
-  #perturb_vs_wt_nodes %>% print (n=10000)
-  #print(sym(paste(interval_col, "_x", sep="")))
-  #print (perturb_vs_wt_nodes)
-  #print ("subsetting loss tbl")
-  #print (q_val)
-  #perturb_vs_wt_nodes %>% filter(cell_group == "1")  %>%
+    #perturb_vs_wt_nodes %>% print (n=10000)
+    #print(sym(paste(interval_col, "_x", sep="")))
+    #print (perturb_vs_wt_nodes)
+    #print ("subsetting loss tbl")
+    #print (q_val)
+    #perturb_vs_wt_nodes %>% filter(cell_group == "1")  %>%
     #filter(is.na(adjusted_timepoint_x) == FALSE) %>% as.data.frame %>%
-  #  select(cell_group, adjusted_timepoint_x, log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y, delta_log_abund, delta_p_value) %>%
-  #  print(n=1000)
+    #  select(cell_group, adjusted_timepoint_x, log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y, delta_log_abund, delta_p_value) %>%
+    #  print(n=1000)
 
 
-  earliest_loss_tbl =  perturb_vs_wt_nodes %>%
-    filter(delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val)
+    earliest_loss_tbl =  perturb_vs_wt_nodes %>%
+      filter(delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val)
 
-  #print (earliest_loss_tbl)
-
-
-  peak_wt_abundance = perturb_vs_wt_nodes %>% group_by(cell_group) %>% slice_max(log_abund_x, n=1)
-  loss_at_peak_wt_abundance = peak_wt_abundance %>% mutate(cell_group,
-                                                           peak_wt_time = !!sym(paste(interval_col, "_x", sep="")),
-                                                           lost_at_peak = delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val,
-                                                           peak_loss_time = ifelse(lost_at_peak, peak_wt_time, NA))
-  loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% select(cell_group, peak_wt_time, lost_at_peak, peak_loss_time)
-
-  #loss_at_peak_wt_abundance %>% filter(cell_group == "1") %>% print()
-
-  largest_losses = perturb_vs_wt_nodes %>%
-    filter(delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val) %>%
-    group_by(cell_group) %>%
-    slice_min(delta_log_abund, n=1) %>% select(cell_group, largest_loss_time=!!sym(paste(interval_col, "_x", sep="")), largest_loss=delta_log_abund)
-
-  #print (largest_losses)
-  earliest_loss_tbl = earliest_loss_tbl %>%
-    group_by(cell_group) %>%
-    #mutate(largest_loss = min(delta_log_abund),
-    #       largest_loss_time = !!sym(paste(interval_col, "_x", sep=""))[which(delta_log_abund == largest_loss)]) %>%
-    summarize(#largest_loss_time = min(largest_loss_time),
-              earliest_time = min(!!sym(paste(interval_col, "_x", sep=""))),
-              latest_time = max(!!sym(paste(interval_col, "_x", sep=""))))
-
-  loss_tbl = earliest_loss_tbl %>% left_join(largest_losses)
-  loss_tbl = loss_tbl %>% left_join(loss_at_peak_wt_abundance)
+    #print (earliest_loss_tbl)
 
 
-  #print (earliest_loss_tbl)
+    peak_wt_abundance = perturb_vs_wt_nodes %>% group_by(cell_group) %>% slice_max(log_abund_x, n=1)
+    loss_at_peak_wt_abundance = peak_wt_abundance %>% mutate(cell_group,
+                                                             peak_wt_time = !!sym(paste(interval_col, "_x", sep="")),
+                                                             lost_at_peak = delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val,
+                                                             peak_loss_time = ifelse(lost_at_peak, peak_wt_time, NA))
+    loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% select(cell_group, peak_wt_time, lost_at_peak, peak_loss_time)
 
-  return(loss_tbl)
-}
+    #loss_at_peak_wt_abundance %>% filter(cell_group == "1") %>% print()
 
-#' @noRd
-score_graph_edges_for_perturbations <- function(perturbation_ccm, state_transition_graph, start_time, stop_time, interval_step, interval_col="timepoint", q_val=0.01, ...)
-{
+    largest_losses = perturb_vs_wt_nodes %>%
+      filter(delta_log_abund < delta_log_abund_loss_thresh & delta_q_value < q_val) %>%
+      group_by(cell_group) %>%
+      slice_min(delta_log_abund, n=1) %>% select(cell_group, largest_loss_time=!!sym(paste(interval_col, "_x", sep="")), largest_loss=delta_log_abund)
 
-  wt_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=FALSE, interval_col=interval_col, interval_step=interval_step, ...)
-  ko_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=TRUE, interval_col=interval_col, interval_step=interval_step, ...)
+    #print (largest_losses)
+    earliest_loss_tbl = earliest_loss_tbl %>%
+      group_by(cell_group) %>%
+      #mutate(largest_loss = min(delta_log_abund),
+      #       largest_loss_time = !!sym(paste(interval_col, "_x", sep=""))[which(delta_log_abund == largest_loss)]) %>%
+      summarize(#largest_loss_time = min(largest_loss_time),
+        earliest_time = min(!!sym(paste(interval_col, "_x", sep=""))),
+        latest_time = max(!!sym(paste(interval_col, "_x", sep=""))))
 
-  compare_ko_to_wt_at_timepoint <- function(tp, wt_pred_df, ko_pred_df, interval_col)  {
-    cond_wt = wt_pred_df %>% filter(!!sym(interval_col) == tp)
-    cond_ko = ko_pred_df %>% filter(!!sym(interval_col) == tp)
-    return(compare_abundances(perturbation_ccm, cond_wt, cond_ko))
-  }
+    loss_tbl = earliest_loss_tbl %>% left_join(largest_losses, by="cell_group")
+    loss_tbl = loss_tbl %>% left_join(loss_at_peak_wt_abundance, by="cell_group")
 
-  timepoints = seq(start_time, stop_time, interval_step)
-
-  # Find the pairs of nodes that are both lost in the perturbation at the same time
-  perturb_vs_wt_nodes = tibble(t1=timepoints) %>%
-    mutate(comp_abund = purrr::map(.f = compare_ko_to_wt_at_timepoint,
-                                    .x = t1,
-                                    interval_col=interval_col,
-                                   wt_pred_df = wt_timepoint_pred_df,
-                                   ko_pred_df = ko_timepoint_pred_df)) %>%
-    mutate(rec_edges = purrr::map(.f = purrr::possibly(hooke:::collect_pln_graph_edges, NULL),
-                                  .x = comp_abund,
-                                  ccm = perturbation_ccm)) %>% tidyr::unnest(rec_edges)
-
-  perturb_vs_wt_edges = state_transition_graph %>% igraph::as_data_frame() %>% dplyr::select(from, to)
-
-  #print (perturb_vs_wt_nodes)
-  #print(sym(paste(interval_col, "_x", sep="")))
-  earliest_loss_tbl =  perturb_vs_wt_nodes %>%
-    filter(delta_log_abund < 0 & delta_q_value < q_val) %>%
-    group_by(cell_group) %>% summarize(earliest_time = min(!!sym(paste(interval_col, "_x", sep=""))))
-
-  #print (earliest_loss_tbl)
-
-  #print (perturb_vs_wt_edges)
-  #print (perturb_vs_wt_nodes)
-  #corr_edge_coords_umap_delta_abund = corr_edge_coords_umap
-  perturb_vs_wt_edges = dplyr::left_join(perturb_vs_wt_edges, perturb_vs_wt_nodes %>% setNames(paste0('to_', names(.))), by=c("to"="to_cell_group")) #%>%
-  #dplyr::rename(log_abund_x,
-  #              to_delta_log_abund = delta_log_abund)
-  perturb_vs_wt_edges = dplyr::left_join(perturb_vs_wt_edges, perturb_vs_wt_nodes %>% setNames(paste0('from_', names(.))), by=c("from"="from_cell_group"))# %>%
-  #  dplyr::rename(from_delta_log_abund = delta_log_abund)
-
-  perturb_vs_wt_edges = dplyr::left_join(perturb_vs_wt_edges, earliest_loss_tbl %>% setNames(paste0('to_', names(.))), by=c("to"="to_cell_group")) #%>%
-  perturb_vs_wt_edges = dplyr::left_join(perturb_vs_wt_edges, earliest_loss_tbl %>% setNames(paste0('from_', names(.))), by=c("from"="from_cell_group"))# %>%
-
-  #print (perturb_vs_wt_edges)
-  # First just find the pairs of cell types that are lost concurrently,
-  perturb_vs_wt_edges = perturb_vs_wt_edges %>%
-    #dplyr::filter(pcor < 0) %>% # do we just want negative again?
-    #dplyr::filter((from_delta_log_abund > 0 & to_delta_log_abund < 0) |
-    #                (from_delta_log_abund < 0 & to_delta_log_abund > 0)) %>%
-    dplyr::filter((from_delta_log_abund < 0 & to_delta_log_abund < 0)) %>%
-    dplyr::filter(from_delta_q_value < q_val & to_delta_q_value < q_val) %>%
-    dplyr::filter(from_earliest_time < to_earliest_time)
-
-  perturb_vs_wt_edges = perturb_vs_wt_edges %>% select(from, to) %>% group_by(from, to) %>% summarize(num_intervals_supported=n())
-  return(perturb_vs_wt_edges)
+    return(loss_tbl)
 }
 
 #' Identify the possible origins for each destination
@@ -1348,9 +1451,11 @@ compute_min_path_cover <- function(ccm, G, weight_attribute="weight"){
   igraph::edge_attr(node_dag, "weight") = tidyr::replace_na(igraph::edge_attr(node_dag, "weight"), 0)
   #print(node_dag)
   paths_from_chains = matching %>% as_tibble() %>%
-    mutate(chain_leg = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+    mutate(chain_leg = furrr::future_map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
                                    .x = from, .y = to,
-                                   node_dag))
+                                   node_dag,
+                                   .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                   .progress=TRUE))
 
   covered_graph = paths_from_chains %>% select(chain_leg) %>%
     tidyr::unnest(c(chain_leg)) %>%
@@ -1364,14 +1469,18 @@ compute_min_path_cover <- function(ccm, G, weight_attribute="weight"){
 
 
   paths_to_chain_heads = source_edge_df %>% as_tibble() %>%
-    mutate(chain_leg = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+    mutate(chain_leg = furrr::future_map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
                                    .x = from, .y = to,
-                                   node_dag))
+                                   node_dag,
+                                   .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                   .progress=TRUE))
 
   paths_to_chain_tails = sink_edge_df %>% as_tibble() %>%
-    mutate(chain_leg = purrr::map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
+    mutate(chain_leg = furrr::future_map2(.f = purrr::possibly(hooke:::get_shortest_path, NULL),
                                    .x = from, .y = to,
-                                   node_dag))
+                                   node_dag,
+                                   .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                   .progress=TRUE))
 
   covered_graph = paths_to_chain_heads %>% select(chain_leg) %>%
     tidyr::unnest(c(chain_leg)) %>%
@@ -1460,7 +1569,9 @@ assemble_timeseries_transitions <- function(ccm,
                                       make_dag=make_dag,
                                       ...)
 
-  igraph::V(G)$cell_group = ccm@ccs@info$cell_group
+  # FIXME: Consider moving this step into build_timeseries_transition_graph()?
+  if (!is.null(G) && !is.na(G))
+    igraph::V(G)$cell_group = ccm@ccs@info$cell_group
 
   return(G)
 }
@@ -1494,271 +1605,252 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
                                                          ...)
 {
 
-  # Get a table of the cell types that are in the control
-  # FIXME: "knockout" is hard coded and should be a user-defined term in the model
-  extant_cell_type_df = get_extant_cell_types(control_timeseries_ccm,
-                                              start_time,
-                                              stop_time,
-                                              interval_col=interval_col,
-                                              percent_max_threshold=percent_max_threshold,
-                                              log_abund_detection_thresh=log_abund_detection_thresh,
-                                              perturbation_col=perturbation_col,
-                                              knockout=FALSE,
-                                              ...)
+  # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
+  #old_omp_num_threads = single_thread_omp()
+  #old_blas_num_threads = single_thread_blas()
 
-  if (verbose)
-    message ("Setting up pathfinding graph")
-  # Now let's set up a directed graph that links the states between which cells *could* directly
-  # transition. If we don't know the direction of flow, add edges in both directions. The idea is
-  # that we will find shortest paths over this graph between destination states and their plausible
-  # origin states, then choose the best origins for each destination.
-  pathfinding_graph = init_pathfinding_graph(control_timeseries_ccm,
-                                             extant_cell_type_df,
-                                             links_between_components=links_between_components,
-                                             edge_whitelist=edge_whitelist,
-                                             edge_blacklist=edge_blacklist)
+  tryCatch({
 
-  timeseries_graph = assemble_timeseries_transitions(control_timeseries_ccm,
-                                                     q_val=q_val,
-                                                     start_time = start_time,
-                                                     stop_time = stop_time,
-                                                     perturbation_col=perturbation_col,
-                                                     interval_col=interval_col,
-                                                     interval_step = interval_step,
-                                                     min_interval = min_interval,
-                                                     max_interval = max_interval,
-                                                     log_abund_detection_thresh=log_abund_detection_thresh,
-                                                     min_pathfinding_lfc=min_pathfinding_lfc,
-                                                     links_between_components=links_between_components,
-                                                     edge_whitelist=edge_whitelist,
-                                                     edge_blacklist=edge_blacklist,
-                                                     ...)
+    # Get a table of the cell types that are in the control
+    # FIXME: "knockout" is hard coded and should be a user-defined term in the model
+    extant_cell_type_df = get_extant_cell_types(control_timeseries_ccm,
+                                                start_time,
+                                                stop_time,
+                                                interval_col=interval_col,
+                                                percent_max_threshold=percent_max_threshold,
+                                                log_abund_detection_thresh=log_abund_detection_thresh,
+                                                perturbation_col=perturbation_col,
+                                                knockout=FALSE,
+                                                ...)
 
-  pathfinding_graph = igraph::intersection(pathfinding_graph, timeseries_graph)
+    if (verbose)
+      message ("Setting up pathfinding graph")
+    # Now let's set up a directed graph that links the states between which cells *could* directly
+    # transition. If we don't know the direction of flow, add edges in both directions. The idea is
+    # that we will find shortest paths over this graph between destination states and their plausible
+    # origin states, then choose the best origins for each destination.
+    pathfinding_graph = init_pathfinding_graph(control_timeseries_ccm,
+                                               extant_cell_type_df,
+                                               links_between_components=links_between_components,
+                                               edge_whitelist=edge_whitelist,
+                                               edge_blacklist=edge_blacklist)
 
-  if (verbose)
-    message ("Computing paths between cell state losses")
+    timeseries_graph = assemble_timeseries_transitions(control_timeseries_ccm,
+                                                       q_val=q_val,
+                                                       start_time = start_time,
+                                                       stop_time = stop_time,
+                                                       perturbation_col=perturbation_col,
+                                                       interval_col=interval_col,
+                                                       interval_step = interval_step,
+                                                       min_interval = min_interval,
+                                                       max_interval = max_interval,
+                                                       log_abund_detection_thresh=log_abund_detection_thresh,
+                                                       min_pathfinding_lfc=min_pathfinding_lfc,
+                                                       links_between_components=links_between_components,
+                                                       edge_whitelist=edge_whitelist,
+                                                       edge_blacklist=edge_blacklist,
+                                                       ...)
 
-  # Now let's find paths between nodes that are lost following each perturbation. This step
-  # returns a tibble of paths, each of which links lost nodes in the pathfinding graph.
-  # Paths are also consistent with the flow of time in the control, at least over the window
-  # of time measured in the corresponding perturbation experiment. Note that the same path may
-  # recur in multiple perturbation experiments. Such paths are returned separately in this table.
-  path_tbl = perturbation_ccm_tbl %>%
-    dplyr::mutate(paths_between_concordant_loss_nodes = purrr::map2(.f = purrr::possibly(
-      get_perturbation_paths, NA_real_),
-      .x = perturb_ccm,
-      .y = perturb_time_window,
-      pathfinding_graph,
-      interval_col=interval_col,
-      interval_step = interval_step,
-      q_val=q_val,
-      min_pathfinding_lfc=min_pathfinding_lfc,
-      ...))
-  path_tbl = path_tbl %>%
-    filter(!is.na(paths_between_concordant_loss_nodes)) %>%
-    tidyr::unnest(paths_between_concordant_loss_nodes) %>%
-    filter(!is.na(path))
+    if (is.null(timeseries_graph) || is.na(timeseries_graph)){
+      print("Error: timeseries graph assembly failed. Aborting.")
+      return (NA)
+    }
 
-  message (paste("Found ", nrow(path_tbl), " loss paths"))
-  if (verbose)
-    message (paste("Assessing time flows across", nrow(path_tbl), " loss paths"))
+    pathfinding_graph = igraph::intersection(pathfinding_graph, timeseries_graph)
 
-  cells_along_path_df = normalized_counts(control_timeseries_ccm@ccs, "size_only", pseudocount = 0) %>%
-    as.matrix() %>%
-    Matrix::t() %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column() %>%
-    tidyr::pivot_longer(!matches("rowname")) %>%
-    rename(sample=rowname, cell_group=name, num_cells=value)
+    if (verbose)
+      message ("Computing paths between cell state losses")
 
-  # Measure the flow of time along each perturbation loss path
-  path_tbl = path_tbl %>%
-    mutate(time_vs_distance_model_stats = purrr::map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
-                                                     .x = path,
-                                                     ccs=control_timeseries_ccm@ccs,
-                                                     cells_along_path_df=cells_along_path_df,
-                                                     interval_col=interval_col)) %>%
-    tidyr::unnest(time_vs_distance_model_stats)
+    # Now let's find paths between nodes that are lost following each perturbation. This step
+    # returns a tibble of paths, each of which links lost nodes in the pathfinding graph.
+    # Paths are also consistent with the flow of time in the control, at least over the window
+    # of time measured in the corresponding perturbation experiment. Note that the same path may
+    # recur in multiple perturbation experiments. Such paths are returned separately in this table.
+    path_tbl = perturbation_ccm_tbl %>%
+      dplyr::mutate(paths_between_concordant_loss_nodes = purrr::map2(.f = purrr::possibly(
+        get_perturbation_paths, NA_real_),
+        .x = perturb_ccm,
+        .y = perturb_time_window,
+        pathfinding_graph,
+        interval_col=interval_col,
+        interval_step = interval_step,
+        q_val=q_val,
+        min_pathfinding_lfc=min_pathfinding_lfc,
+        ...))
+    path_tbl = path_tbl %>%
+      filter(!is.na(paths_between_concordant_loss_nodes)) %>%
+      tidyr::unnest(paths_between_concordant_loss_nodes) %>%
+      filter(!is.na(path))
+
+    message (paste("Found ", nrow(path_tbl), " loss paths"))
+
+    if (nrow(path_tbl) == 0)
+      return (NA)
+
+    cells_along_path_df = normalized_counts(control_timeseries_ccm@ccs, "size_only", pseudocount = 0) %>%
+      as.matrix() %>%
+      Matrix::t() %>%
+      as.data.frame() %>%
+      tibble::rownames_to_column() %>%
+      tidyr::pivot_longer(!matches("rowname")) %>%
+      rename(sample=rowname, cell_group=name, num_cells=value)
+
+    if (verbose)
+      message (paste("Assessing time flows across", nrow(path_tbl), " loss paths"))
+
+    # Measure the flow of time along each perturbation loss path
+    path_tbl = path_tbl %>%
+      mutate(time_vs_distance_model_stats = furrr::future_map(.f = purrr::possibly(measure_time_delta_along_path, NA_character_),
+                                                       .x = path,
+                                                       ccs=control_timeseries_ccm@ccs,
+                                                       cells_along_path_df=cells_along_path_df,
+                                                       interval_col=interval_col,
+                                                       .options=furrr::furrr_options(stdout=FALSE,conditions = character()),
+                                                       .progress=TRUE)) %>%
+      tidyr::unnest(time_vs_distance_model_stats)
 
 
-  #print(path_tbl %>% head)
-  #print (colnames(path_tbl))
+    #print(path_tbl %>% head)
+    #print (colnames(path_tbl))
 
-  # Compute some scores that summarize the level of support for each path by the various perturbations.
-  path_tbl = path_tbl %>% mutate(timeseries_model_path_score = ifelse(time_dist_effect > 0 & time_dist_effect_pval < q_val, time_dist_model_adj_rsq, 0))
-  path_tbl = path_tbl %>% mutate(perturb_model_path_score = ifelse(perturb_dist_effect < 0 & perturb_dist_effect_pval < q_val, perturb_dist_model_adj_rsq, 0))
-  path_tbl = path_tbl %>% mutate(path_score = ifelse(timeseries_model_path_score > 0 & perturb_model_path_score > 0, perturb_model_path_score * timeseries_model_path_score, 0))
+    # Compute some scores that summarize the level of support for each path by the various perturbations.
+    path_tbl = path_tbl %>% mutate(timeseries_model_path_score = ifelse(time_dist_effect > 0 & time_dist_effect_pval < q_val, time_dist_model_adj_rsq, 0))
+    path_tbl = path_tbl %>% mutate(perturb_model_path_score = ifelse(perturb_dist_effect < 0 & perturb_dist_effect_pval < q_val, perturb_dist_model_adj_rsq, 0))
+    path_tbl = path_tbl %>% mutate(path_score = ifelse(timeseries_model_path_score > 0 & perturb_model_path_score > 0, perturb_model_path_score * timeseries_model_path_score, 0))
 
-  # Exclude paths that have no support from perturbations or go against the flow of time
-  path_tbl =  path_tbl %>% filter (path_score > 0)
+    # Exclude paths that have no support from perturbations or go against the flow of time
+    path_tbl =  path_tbl %>% filter (path_score > 0)
 
-  if (verbose)
-    message ("Constructing transition graph")
+    message (paste("Found ", nrow(path_tbl), "significant loss paths with forward time-flow"))
 
-  # Now let's start to build up a state transition graph from the paths by taking their union across all
-  # perturbations, provided they survived the above filtering steps.
-  selected_paths = path_tbl %>%
-    #group_by(to) %>%
-    ungroup() %>% arrange(desc(path_score)) %>%
-    dplyr::rename(path_contrast=perturb_name)
-  G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = TRUE)
+    if (nrow(path_tbl) == 0)
+      return (NA)
 
-  # Now go back and score each edge in the state graph for support from perturbations, as well as support
-  # the full control timeseries
-  if (verbose)
-    message ("Assessing perturbation support for transition graph")
-  G = assess_support_for_transition_graph(control_timeseries_ccm,
-                                          perturbation_ccm_tbl,
-                                          path_tbl,
-                                          G,
-                                                    q_val,
-                                                    start_time,
-                                                    stop_time,
-                                                    perturbation_col,
-                                                    interval_col,
-                                                    interval_step,
-                                                    min_interval,
-                                                    max_interval,
-                                                    log_abund_detection_thresh,
-                                                    percent_max_threshold,
-                                                    ...)
+    if (verbose)
+      message ("Constructing transition graph")
 
-  # # Now that we have a graph in which every edge is supported by at least one perturbations,
-  # # let's add edges that may not have perturbation support but do have timeseries support
-  # # and also do not conflict with the perturbation-based graph. First, we will compute
-  # # paths between states that are reciprocally gained and lost over the timeseries
-  # # (i.e. one is lost and the other is gained)
-  #
-  #
-  # if (verbose)
-  #   message ("Computing timeseries-only transition graph")
-  #
-  # paths_between_recip_time_nodes = get_timeseries_paths(control_timeseries_ccm,
-  #                                                       extant_cell_type_df,
-  #                                                       pathfinding_graph,
-  #                                                       start_time = start_time,
-  #                                                       stop_time = stop_time,
-  #                                                       interval_col=interval_col,
-  #                                                       interval_step = interval_step,
-  #                                                       min_interval = min_interval,
-  #                                                       max_interval = max_interval,
-  #                                                       min_pathfinding_lfc=min_pathfinding_lfc,
-  #                                                       knockout=FALSE,
-  #                                                       verbose=verbose,
-  #                                                       ...)
-  #
-  # # Sort these paths by the level of support from the timeseries, as quantified by how well
-  # # distance along a path correlates with an increase in the time cells that fall on it were
-  # # collected.
-  # selected_paths = paths_between_recip_time_nodes %>% filter (time_dist_effect > 0 & time_dist_effect_pval < q_val) %>%
-  #   ungroup() %>% arrange(desc(time_dist_model_adj_rsq)) %>%
-  #   mutate(path_contrast="time")
-  #
-  # #G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles=FALSE)
-  #
-  # # Add these paths, one at a time, in order of best score, provided that they do not add new
-  # # cycles to the graph.
-  # num_cycles_in_orig_G = length(find_cycles(G))
-  # for (i in (1:nrow(selected_paths))){
-  #   next_path = selected_paths$path[[i]] %>% select(from, to)
-  #   next_path_graph = next_path %>% igraph::graph_from_data_frame(directed=TRUE)
-  #   G_prime = igraph::union(G, next_path_graph)
-  #   if (length(find_cycles(G_prime)) == num_cycles_in_orig_G){
-  #     G = G_prime
-  #   }else{
-  #     # Debug:
-  #     #print ("skipping due to cycle:")
-  #     #print (selected_paths[i,] %>% select(-path))
-  #   }
-  # }
+    # Now let's start to build up a state transition graph from the paths by taking their union across all
+    # perturbations, provided they survived the above filtering steps.
+    selected_paths = path_tbl %>%
+      #group_by(to) %>%
+      ungroup() %>% arrange(desc(path_score)) %>%
+      dplyr::rename(path_contrast=perturb_name)
+    G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles = TRUE)
 
-  # FIXME: this is gross and there is probably a cleaner way, but what we're doing here
-  # is annotating that these edges from the timeseries are not supported by the perturbations
-  G_num_perturbs_supporting = igraph::edge_attr(G, "num_perturbs_supporting")
-  G_num_perturbs_supporting[is.na(G_num_perturbs_supporting)] = 0
-  igraph::edge_attr(G, "num_perturbs_supporting") = G_num_perturbs_supporting
+    # Now go back and score each edge in the state graph for support from perturbations, as well as support
+    # the full control timeseries
+    if (verbose)
+      message ("Assessing perturbation support for transition graph")
+    G = assess_support_for_transition_graph(control_timeseries_ccm,
+                                            perturbation_ccm_tbl,
+                                            path_tbl,
+                                            G,
+                                            q_val,
+                                            start_time,
+                                            stop_time,
+                                            perturbation_col,
+                                            interval_col,
+                                            interval_step,
+                                            min_interval,
+                                            max_interval,
+                                            log_abund_detection_thresh,
+                                            percent_max_threshold,
+                                            ...)
 
-  G_max_timeseries_path_score_supporting = igraph::edge_attr(G, "max_timeseries_path_score_supporting")
-  G_max_timeseries_path_score_supporting[is.na(G_max_timeseries_path_score_supporting)] = 0
-  igraph::edge_attr(G, "max_timeseries_path_score_supporting") = G_max_timeseries_path_score_supporting
+    # # Now that we have a graph in which every edge is supported by at least one perturbations,
+    # # let's add edges that may not have perturbation support but do have timeseries support
+    # # and also do not conflict with the perturbation-based graph. First, we will compute
+    # # paths between states that are reciprocally gained and lost over the timeseries
+    # # (i.e. one is lost and the other is gained)
+    #
+    #
+    # if (verbose)
+    #   message ("Computing timeseries-only transition graph")
+    #
+    # paths_between_recip_time_nodes = get_timeseries_paths(control_timeseries_ccm,
+    #                                                       extant_cell_type_df,
+    #                                                       pathfinding_graph,
+    #                                                       start_time = start_time,
+    #                                                       stop_time = stop_time,
+    #                                                       interval_col=interval_col,
+    #                                                       interval_step = interval_step,
+    #                                                       min_interval = min_interval,
+    #                                                       max_interval = max_interval,
+    #                                                       min_pathfinding_lfc=min_pathfinding_lfc,
+    #                                                       knockout=FALSE,
+    #                                                       verbose=verbose,
+    #                                                       ...)
+    #
+    # # Sort these paths by the level of support from the timeseries, as quantified by how well
+    # # distance along a path correlates with an increase in the time cells that fall on it were
+    # # collected.
+    # selected_paths = paths_between_recip_time_nodes %>% filter (time_dist_effect > 0 & time_dist_effect_pval < q_val) %>%
+    #   ungroup() %>% arrange(desc(time_dist_model_adj_rsq)) %>%
+    #   mutate(path_contrast="time")
+    #
+    # #G = select_paths_from_pathfinding_graph(pathfinding_graph, selected_paths, allow_cycles=FALSE)
+    #
+    # # Add these paths, one at a time, in order of best score, provided that they do not add new
+    # # cycles to the graph.
+    # num_cycles_in_orig_G = length(find_cycles(G))
+    # for (i in (1:nrow(selected_paths))){
+    #   next_path = selected_paths$path[[i]] %>% select(from, to)
+    #   next_path_graph = next_path %>% igraph::graph_from_data_frame(directed=TRUE)
+    #   G_prime = igraph::union(G, next_path_graph)
+    #   if (length(find_cycles(G_prime)) == num_cycles_in_orig_G){
+    #     G = G_prime
+    #   }else{
+    #     # Debug:
+    #     #print ("skipping due to cycle:")
+    #     #print (selected_paths[i,] %>% select(-path))
+    #   }
+    # }
 
-  G_total_timeseries_path_score_supporting = igraph::edge_attr(G, "total_timeseries_path_score_supporting")
-  G_total_timeseries_path_score_supporting[is.na(G_total_timeseries_path_score_supporting)] = 0
-  igraph::edge_attr(G, "total_timeseries_path_score_supporting") = G_total_timeseries_path_score_supporting
+    # FIXME: this is gross and there is probably a cleaner way, but what we're doing here
+    # is annotating that these edges from the timeseries are not supported by the perturbations
+    G_num_perturbs_supporting = igraph::edge_attr(G, "num_perturbs_supporting")
+    G_num_perturbs_supporting[is.na(G_num_perturbs_supporting)] = 0
+    igraph::edge_attr(G, "num_perturbs_supporting") = G_num_perturbs_supporting
 
-  G_max_perturb_path_score_supporting = igraph::edge_attr(G, "max_perturb_path_score_supporting")
-  G_max_perturb_path_score_supporting[is.na(G_max_perturb_path_score_supporting)] = 0
-  igraph::edge_attr(G, "max_perturb_path_score_supporting") = G_max_perturb_path_score_supporting
+    G_max_timeseries_path_score_supporting = igraph::edge_attr(G, "max_timeseries_path_score_supporting")
+    G_max_timeseries_path_score_supporting[is.na(G_max_timeseries_path_score_supporting)] = 0
+    igraph::edge_attr(G, "max_timeseries_path_score_supporting") = G_max_timeseries_path_score_supporting
 
-  G_total_perturb_path_score_supporting = igraph::edge_attr(G, "total_perturb_path_score_supporting")
-  G_total_perturb_path_score_supporting[is.na(G_total_perturb_path_score_supporting)] = 0
-  igraph::edge_attr(G, "total_perturb_path_score_supporting") = G_total_perturb_path_score_supporting
+    G_total_timeseries_path_score_supporting = igraph::edge_attr(G, "total_timeseries_path_score_supporting")
+    G_total_timeseries_path_score_supporting[is.na(G_total_timeseries_path_score_supporting)] = 0
+    igraph::edge_attr(G, "total_timeseries_path_score_supporting") = G_total_timeseries_path_score_supporting
 
-  G_max_path_score_supporting = igraph::edge_attr(G, "max_path_score_supporting")
-  G_max_path_score_supporting[is.na(G_max_path_score_supporting)] = 0
-  igraph::edge_attr(G, "max_path_score_supporting") = G_max_path_score_supporting
+    G_max_perturb_path_score_supporting = igraph::edge_attr(G, "max_perturb_path_score_supporting")
+    G_max_perturb_path_score_supporting[is.na(G_max_perturb_path_score_supporting)] = 0
+    igraph::edge_attr(G, "max_perturb_path_score_supporting") = G_max_perturb_path_score_supporting
 
-  G_total_path_score_supporting = igraph::edge_attr(G, "total_path_score_supporting")
-  G_total_path_score_supporting[is.na(G_total_path_score_supporting)] = 0
-  igraph::edge_attr(G, "total_path_score_supporting") = G_total_path_score_supporting
+    G_total_perturb_path_score_supporting = igraph::edge_attr(G, "total_perturb_path_score_supporting")
+    G_total_perturb_path_score_supporting[is.na(G_total_perturb_path_score_supporting)] = 0
+    igraph::edge_attr(G, "total_perturb_path_score_supporting") = G_total_perturb_path_score_supporting
 
-  G_label = igraph::edge_attr(G, "label")
-  G_label[is.na(G_label)] = ""
-  igraph::edge_attr(G, "label") = G_label
+    G_max_path_score_supporting = igraph::edge_attr(G, "max_path_score_supporting")
+    G_max_path_score_supporting[is.na(G_max_path_score_supporting)] = 0
+    igraph::edge_attr(G, "max_path_score_supporting") = G_max_path_score_supporting
 
-  return (G)
-  # print ("done")
-  #
-  # # cycle_breaking_scores = igraph::edge_attr(G, "max_perturb_score_supporting")
-  # # cycle_breaking_scores[is.na(cycle_breaking_scores)] = 0
-  # # igraph::edge_attr(G, "support") = cycle_breaking_scores
-  #
-  # print ("after assessment")
-  # #G %>% igraph::as_data_frame() %>% filter(from == "27" & to == "24")  %>% print(n=1000)
-  # # print (G %>% igraph::as_data_frame() )
-  # # missing_pathfinding_edges = dplyr::setdiff(as_tibble(igraph::as_edgelist(timeseries_pathfinding_graph)), as_tibble(igraph::as_edgelist(G)))
-  # # colnames(missing_pathfinding_edges) = c("from", "to")
-  # # G = G + igraph::graph_from_edgelist(as.matrix(missing_pathfinding_edges))
-  #
-  # #igraph::edge_attr(G, "support") = igraph::edge_attr(G, "total_perturb_path_score_supporting")
-  # cycle_breaking_scores = igraph::edge_attr(G, "max_perturb_score_supporting")
-  # cycle_breaking_scores[is.na(cycle_breaking_scores)] = 0
-  # igraph::edge_attr(G, "support") = cycle_breaking_scores
-  #
-  # print (igraph::edge_attr(G, "support"))
-  #
-  # print ("breaking cycles...")
-  # G = break_cycles_in_state_transition_graph(G)
-  # print ("done")
-  #
-  # # print ("finding min path cover...")
-  # # covered_G = compute_min_path_cover(control_timeseries_ccm, G, weight_attribute="support")
-  # # print ("done. path covered graph:")
-  #
-  # #annotated_G = covered_G #%>% igraph::as_data_frame()
-  # annotated_G = G
-  # igraph::V(annotated_G)$cell_group = control_timeseries_ccm@ccs@info$cell_group
-  #
-  # print (annotated_G)
-  # annotated_G = assess_support_for_transition_graph(control_timeseries_ccm,
-  #                                         perturbation_ccm_tbl,
-  #                                         path_tbl,
-  #                                         annotated_G,
-  #                                         q_val,
-  #                                         start_time,
-  #                                         stop_time,
-  #                                         perturbation_col,
-  #                                         interval_col,
-  #                                         interval_step,
-  #                                         min_interval,
-  #                                         max_interval,
-  #                                         log_abund_detection_thresh,
-  #                                         percent_max_threshold,
-  #                                         ...)
+    G_total_path_score_supporting = igraph::edge_attr(G, "total_path_score_supporting")
+    G_total_path_score_supporting[is.na(G_total_path_score_supporting)] = 0
+    igraph::edge_attr(G, "total_path_score_supporting") = G_total_path_score_supporting
 
-  return(annotated_G)
+    G_label = igraph::edge_attr(G, "label")
+    G_label[is.na(G_label)] = ""
+    igraph::edge_attr(G, "label") = G_label
 
+    return (G)
+  }, error = function(e){
+    print (e)
+    return(NA)
+  }, finally = {
+    #RhpcBLASctl::omp_set_num_threads(old_omp_num_threads)
+    #RhpcBLASctl::blas_set_num_threads(old_blas_num_threads)
+  }
+  )
+
+  return (NA)
 }
 
 #' Assess support for a graph built via perturbations
