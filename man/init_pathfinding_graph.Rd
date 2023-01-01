@@ -8,7 +8,9 @@ init_pathfinding_graph(
   ccm,
   extant_cell_type_df,
   links_between_components = c("none", "strongest-pcor", "strong-pcor"),
-  weigh_by_pcor = F
+  weigh_by_pcor = F,
+  edge_whitelist = NULL,
+  edge_blacklist = NULL
 )
 }
 \arguments{

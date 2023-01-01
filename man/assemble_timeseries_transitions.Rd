@@ -17,6 +17,8 @@ assemble_timeseries_transitions(
   min_pathfinding_lfc = 1,
   make_dag = FALSE,
   links_between_components = c("none", "strongest-pcor", "strong-pcor"),
+  edge_whitelist = NULL,
+  edge_blacklist = NULL,
   ...
 )
 }

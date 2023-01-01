@@ -44,15 +44,16 @@ positive and the rows and columns must be named with the cell_group names.
 Use to specify an undirected graph prior for the PLN model.}
 
 \item{whitelist}{list A data frame with two columns corresponding to (undirected)
-edges that should receive min_penalty. The columns are either cell_group
-names or integers that refer to cell_groups in penalty_matrix.}
+edges that should receive min_penalty. The columns are integers that refer to
+cell clusters.}
 
 \item{blacklist}{list A data frame with two columns corresponding to (undirected)
-edges that should receive max_penalty. The columns are either cell_group
-names or integers that refer to cell_groups.}
+edges that should receive max_penalty. The columns are integers that refer to
+cell clusters.}
 
-\item{sparsity_factor}{A positive number to control how sparse the PLN network
-is. Larger values make the network sparser.}
+\item{sparsity_factor}{A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
+edges that should receive min_penalty. The columns are either cell_group
+names or integers that refer to cell_groups in penalty_matrix.}
 
 \item{base_penalty}{numeric A factor that scales the penalty matrix.}
 

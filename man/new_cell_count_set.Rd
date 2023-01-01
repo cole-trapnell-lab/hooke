@@ -11,7 +11,8 @@ new_cell_count_set(
   sample_metadata = NULL,
   cell_metadata = NULL,
   lower_threshold = NULL,
-  upper_threshold = NULL
+  upper_threshold = NULL,
+  keep_cds = TRUE
 )
 }
 \arguments{

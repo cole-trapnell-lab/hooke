@@ -20,6 +20,8 @@ assemble_transition_graph_from_perturbations(
   min_pathfinding_lfc = 1,
   links_between_components = c("none", "strongest-pcor", "strong-pcor"),
   verbose = FALSE,
+  edge_whitelist = NULL,
+  edge_blacklist = NULL,
   ...
 )
 }
