@@ -452,6 +452,24 @@ top_gene_pattern <- function(ccm,
 }
 
 
+#' @noRd
+single_thread_omp = function(){
+  old_omp_num_threads = as.numeric(Sys.getenv("OMP_NUM_THREADS"))
+  if (is.na(old_omp_num_threads)){
+    old_omp_num_threads = 1
+  }
+  RhpcBLASctl::omp_set_num_threads(1)
+  return (old_omp_num_threads)
+}
+
+single_thread_blas = function(){
+  old_blas_num_threads = as.numeric(Sys.getenv("OPENBLAS_NUM_THREADS"))
+  if (is.na(old_blas_num_threads)){
+    old_blas_num_threads = 1
+  }
+  RhpcBLASctl::blas_set_num_threads(1)
+  return (old_blas_num_threads)
+}
 
 
 
