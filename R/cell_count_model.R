@@ -23,6 +23,7 @@ setClass("cell_count_set",
                    cds_reduced_dims = "SimpleList",
                    info = "SimpleList")
 )
+setMethod("is.na", "cell_count_set", function(x) FALSE)
 
 
 #' The cell_count_model class
@@ -57,7 +58,7 @@ setClass("cell_count_model",
                    vhat = "dgCMatrix",
                    vhat_method = "character")
 )
-
+setMethod("is.na", "cell_count_model", function(x) FALSE)
 
 empty_sparse_matrix = function (nrow = 0L, ncol = 0L, format = "R", dtype = "d")
 {
@@ -591,6 +592,7 @@ new_cell_count_model <- function(ccs,
                                  num_bootstraps = 10,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
+                                 num_threads=1,
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -766,15 +768,23 @@ new_cell_count_model <- function(ccs,
   # calling the fit via do.call prevents a weird error with formula
   # created with as.formula (e.g. after pasting).
 
-  reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
-                                                                data=pln_data,
-                                                                control_init=list(min.ratio=pln_min_ratio,
-                                                                                  nPenalties=pln_num_penalties,
-                                                                                  penalty_weights=initial_penalties),
-                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
-                                                                ...),)
+  tryCatch({
+    if (num_threads > 1){
+      print (paste("fitting model with", num_threads, "threads"))
+      RhpcBLASctl::omp_set_num_threads(1)
+      RhpcBLASctl::blas_set_num_threads(num_threads)
+    }else{
+      print (paste("fitting model with", 1, "threads"))
+    }
+    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+                                                                  data=pln_data,
+                                                                  control_init=list(min.ratio=pln_min_ratio,
+                                                                                    nPenalties=pln_num_penalties,
+                                                                                    penalty_weights=initial_penalties),
+                                                                  control_main=list(trace = ifelse(verbose, 2, 0)),
+                                                                  ...),)
 
-  full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+    full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                                                data=pln_data,
                                                                penalties = reduced_pln_model$penalties,
                                                                control_init=list(min.ratio=pln_min_ratio,
@@ -782,6 +792,11 @@ new_cell_count_model <- function(ccs,
                                                                                  penalty_weights=initial_penalties),
                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
                                                                ...),)
+  }, finally = {
+    RhpcBLASctl::omp_set_num_threads(1)
+    RhpcBLASctl::blas_set_num_threads(1)
+  })
+
 
   model_frame = model.frame(full_model_formula[-2], pln_data)
   xlevels = .getXlevels(terms(model_frame), model_frame)
