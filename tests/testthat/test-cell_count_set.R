@@ -43,7 +43,8 @@ test_that('new_cell_count_set works', {
                                       sample_group = 'sampleName',
                                       cell_group = 'cell_type',
                                       lower_threshold = lower_threshold,
-                                      upper_threshold = upper_threshold),  'cell_data_set')
+                                      upper_threshold = upper_threshold),
+            'cell_data_set')
 
   expect_equal(as.vector(sort(Matrix::rowSums(counts(ccs)))), c(207, 230, 422))
 
@@ -114,10 +115,16 @@ test_that('new_cell_count_set problems', {
 
   # unique(colData(cds)[[cell_group]])   -> cell_metadata      rows of ccs count matrix
   # unique(colData(cds)[[sample_group]]) -> sample_metadata    columns of ccs count matrix
+
   expect_error(new_cell_count_set( cds = as.data.frame(as.matrix(small_a549_exprs)),
                                    sample_metadata = small_a549_colData_df,
                                    cell_metadata = small_a549_rowData_df),
                "Argument cds must be a cell_data_set")
+
+  expect_error(new_cell_count_set(cds = small_a549_cds, sample_group='SAMPLE', cell_group='cell_type'),
+               'Argument sample_group value must be a column name in the cell_data_set.')
+  expect_error(new_cell_count_set(cds = small_a549_cds, sample_group='sample', cell_group='CELL_TYPES'),
+               'Argument cell_group value must be a column name in the cell_data_set.')
 
   sample_group_test_1 <- data.frame(sample='sample_a', datum='big')
   rownames(sample_group_test_1) <- 'sample_a'

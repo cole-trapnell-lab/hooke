@@ -3,6 +3,223 @@ context('test-cell_count_model')
 
 test_that('new_cell_count_model works', {
 
+  # On Github Actions
+  skip_if_not(identical(Sys.getenv("GITHUB_ACTIONS"), "true"))
+
+  set.seed(2016)
+
+  # alt: /home/brent/work/hooke_data/macrophage/PAP/pap.al_2021-09-15.cds.RDS
+
+  cds <- readRDS(system.file('extdata', 'pap_cds.trim_cell_type_sub3.2.rds', package = 'hooke'))
+  cds <- detect_genes(cds)
+  colData(cds)$cell_type <- colData(cds)$CW_assignedCellType
+  colData(cds)$cluster <- monocle3::clusters(cds)
+
+  colData(cds)$Size_Factor <- size_factors(cds)
+
+
+  colData(cds)$experiment <- colData(cds)$sample
+  colData(cds)$sample <- NULL
+
+  expect_is(ccs <- new_cell_count_set(cds,
+                                      sample_group = 'sampleName',
+                                      cell_group = 'cell_type'),
+            'cell_data_set')
+
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch"),
+            'cell_count_model')
+
+  # Reduced cell_count_model
+  model_list <- model(ccm, model_to_return='reduced')
+  expect_equal(model_list$nb_param, 19)
+  expect_equivalent(model_list$loglik, -424.00, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -452.00, tol=1.0e-2)
+  expect_equivalent(model_list$ICL, -511.00, tol=1.0e-2)
+  expect_equal(model_list$n_edges, 7)
+  expect_equivalent(model_list$EBIC, -455.00, tol=1.0e-2)
+  expect_equivalent(model_list$pen_loglik, -433.00, tol=1.0e-2)
+  expect_equivalent(model_list$density, 0.389, tol=1.0e-2)
+
+  expect_equivalent(model_list$latent[1,1], 1.858, tol=1.0e-2)
+  expect_equivalent(vcov(model_list)[1,1], 0.213, tol=1.0e-2)
+
+
+  # Full cell_count_model
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 34)
+  expect_equivalent(model_list$loglik, -388.00, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
+  expect_equivalent(model_list$ICL, -501.212, tol=1.0e-2)
+  expect_equal(model_list$n_edges, 4)
+  expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-2)
+  expect_equivalent(model_list$pen_loglik, -401.00, tol=1.0e-2)
+  expect_equivalent(model_list$density, 0.222, tol=1.0e-2)
+
+  expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-2)
+  expect_equivalent(vcov(model_list)[1,1], 0.356, tol=1.0e-2)
+
+  # Penalty matrix.
+  penalty_vector <- c(0.0020000, 0.2927265,  0.5065795,  0.3674560,  0.9472785, 1.0020000,
+                      0.2927265, 0.00200000, 0.04575442, 0.05469007, 0.2746410, 0.4931481,
+                      0.5065795, 0.04575442, 0.00200000, 0.02917695, 0.1012464, 0.2887256,
+                      0.3674560, 0.05469007, 0.02917695, 0.00200000, 0.1374082, 0.2307490,
+                      0.9472785, 0.2746410,  0.1012464 , 0.1374082,  0.0020000, 0.1076127,
+                      1.0020000, 0.4931481,  0.2887256 , 0.2307490,  0.1076127, 0.0020000)
+  penalty_matrix <- matrix(penalty_vector, nrow=6)
+  cell_group_names <- c('Aerocytes', 'Healthy alveolar macrophages', 'hPAP alveolar macrophages', 'Monocytes', 'T cells', 'B cells')
+  rownames(penalty_matrix) <- cell_group_names
+  colnames(penalty_matrix) <- cell_group_names
+
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        penalty_matrix = penalty_matrix),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 33)
+  expect_equivalent(model_list$loglik, -386.575, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -434.507, tol=1.0e-2)
+
+  # Whitelist by cell_group names.
+  penalty_matrix <- matrix(penalty_vector, nrow=6)
+  cell_group_names <- c('Aerocytes', 'Healthy alveolar macrophages', 'hPAP alveolar macrophages', 'Monocytes', 'T cells', 'B cells')
+  rownames(penalty_matrix) <- cell_group_names
+  colnames(penalty_matrix) <- cell_group_names
+  min_penalty <- 0.001
+  whitelist <- data.frame(a=c('Aerocytes', 'Monocytes'), b=c('T cells', 'B cells'))
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        penalty_matrix = penalty_matrix,
+                                        whitelist = whitelist,
+                                        min_penalty = min_penalty),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 35)
+  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-2)
+ 
+  # Blacklist by cell_group names.
+  penalty_matrix <- matrix(penalty_vector, nrow=6)
+  cell_group_names <- c('Aerocytes', 'Healthy alveolar macrophages', 'hPAP alveolar macrophages', 'Monocytes', 'T cells', 'B cells')
+  rownames(penalty_matrix) <- cell_group_names
+  colnames(penalty_matrix) <- cell_group_names
+  max_penalty <- 1.0e6
+  blacklist <- data.frame(a=c('Aerocytes', 'Monocytes'), b=c('T cells', 'B cells'))
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        penalty_matrix = penalty_matrix,
+                                        blacklist = blacklist,
+                                        max_penalty = max_penalty),
+            'cell_count_model')
+
+  # Whitelist by cell_group indices.
+  penalty_matrix <- matrix(penalty_vector, nrow=6)
+  cell_group_names <- c('Aerocytes', 'Healthy alveolar macrophages', 'hPAP alveolar macrophages', 'Monocytes', 'T cells', 'B cells')
+  rownames(penalty_matrix) <- cell_group_names
+  colnames(penalty_matrix) <- cell_group_names
+  min_penalty <- 0.001
+  whitelist <- data.frame(a=c(1, 4), b=c(5, 6))
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        penalty_matrix = penalty_matrix,
+                                        whitelist = whitelist,
+                                        min_penalty = min_penalty),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 35)
+  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-2)
+
+  # Blacklist by cell_group indices.
+  penalty_matrix <- matrix(penalty_vector, nrow=6)
+  cell_group_names <- c('Aerocytes', 'Healthy alveolar macrophages', 'hPAP alveolar macrophages', 'Monocytes', 'T cells', 'B cells')
+  rownames(penalty_matrix) <- cell_group_names
+  colnames(penalty_matrix) <- cell_group_names
+  max_penalty <- 1.0e6
+  blacklist <- data.frame(a=c(1, 4), b=c(5, 6))
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        penalty_matrix = penalty_matrix,
+                                        blacklist = blacklist,
+                                        max_penalty = max_penalty),
+            'cell_count_model')
+
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 33)
+  expect_equivalent(model_list$loglik, -386.575, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -434.507, tol=1.0e-2)
+
+  # Sparsity factor argument. 
+  sparsity_factor <- 0.1
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        sparsity_factor = sparsity_factor),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 34)
+  expect_equivalent(model_list$loglik, -388.00, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
+
+  # Base_penalty
+  base_penalty <- 0.1
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        base_penalty = base_penalty),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 34)
+  expect_equivalent(model_list$loglik, -388.00, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -439.386, tol=1.0e-2)
+
+  # Pseudocount
+  pseudocount <- 0.1
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        pseudocount = pseudocount),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 38)   
+  expect_equivalent(model_list$loglik, -382.549, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -439.468, tol=1.0e-2)
+
+  # Pln_min_ratio
+  pln_min_ratio <- 0.1
+  expect_is(ccm <- new_cell_count_model(ccs,
+                                        main_model_formula_str = "Genotype",
+                                        nuisance_model_formula_str = "batch",
+                                        pln_min_ratio = pln_min_ratio),
+            'cell_count_model')
+
+  model_list <- model(ccm, model_to_return='full')
+  expect_equal(model_list$nb_param, 30)
+  expect_equivalent(model_list$loglik, -396.035, tol=1.0e-2)
+  expect_equivalent(model_list$BIC, -440.971, tol=1.0e-2)
+
+
+})
+
+
+test_that('new_cell_count_model works', {
+
+  # Not on Github Actions
+  skip_if(identical(Sys.getenv("GITHUB_ACTIONS"), "true"))
+
   set.seed(2016)
 
   cds <- readRDS(system.file('extdata', 'pap_cds.trim_cell_type_sub3.2.rds', package = 'hooke'))
@@ -43,14 +260,14 @@ test_that('new_cell_count_model works', {
 
   # Full cell_count_model
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 38)
+  expect_equal(model_list$nb_param, 37)
   expect_equivalent(model_list$loglik, -384.21, tol=1.0e-2)
   expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
   expect_equivalent(model_list$ICL, -501.212, tol=1.0e-2)
-  expect_equal(model_list$n_edges, 8)
+  expect_equal(model_list$n_edges, 7)
   expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-2)
   expect_equivalent(model_list$pen_loglik, -389.001, tol=1.0e-2)
-  expect_equivalent(model_list$density, 0.444, tol=1.0e-2)
+  expect_equivalent(model_list$density, 0.389, tol=1.0e-2)
 
   expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-2)
   expect_equivalent(vcov(model_list)[1,1], 0.356, tol=1.0e-2)
@@ -163,7 +380,7 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 38)
+  expect_equal(model_list$nb_param, 37)
   expect_equivalent(model_list$loglik, -384.210, tol=1.0e-2)
   expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
 

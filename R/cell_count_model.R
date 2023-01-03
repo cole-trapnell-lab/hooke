@@ -117,6 +117,12 @@ new_cell_count_set <- function(cds,
   assertthat::assert_that(is(cds, 'cell_data_set'),
                           msg = paste('Argument cds must be a cell_data_set.'))
 
+  assertthat::assert_that(sample_group %in% colnames(colData(cds)),
+                          msg = paste('Argument sample_group value must be a column name in the cell_data_set.'))
+
+  assertthat::assert_that(cell_group %in% colnames(colData(cds)),
+                          msg = paste('Argument cell_group value must be a column name in the cell_data_set.'))
+
   assertthat::assert_that(is.null(sample_metadata) || is.data.frame(sample_metadata),
                           msg = paste('Argument sample_metadata must be a data frame.'))
 
@@ -272,9 +278,14 @@ new_cell_count_set <- function(cds,
   # }
   #
 
+  # Notes:
+  #   o  ccs_cds has the original column names whereas coldata_df has
+  #      several renamed columns.
+  #   o  coldata_df has all rows
+  #   o  ccs_cds has rows filtered by thresholds
   ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
-  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
   ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
+  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
 
   return (ccs)
 }
@@ -323,7 +334,13 @@ bootstrap_model = function(ccs,
                            pln_num_penalties,
                            random.seed,
                            norm_method,
-                           backend = "nlopt") {
+                           backend = c('nlopt', 'torch')) {
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(backend) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument backend must be one of "nlopt" or "torch".'))
+  backend <- match.arg(backend)
 
   # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
@@ -374,7 +391,7 @@ compute_vhat = function(model, model_family, type) {
 
       X = model_family$responses
       Y = model_family$covariates
-      model$get_vcov_hat(type,X, Y)
+      model$get_vcov_hat(type, X, Y)
 
       vhat = vcov(model)
 

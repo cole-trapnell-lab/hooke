@@ -134,7 +134,7 @@ jobs:
           export TORCH_INSTALL=1
           R -e 'install.packages("torch", force=TRUE)'
           R -e 'remotes::install_github("cole-trapnell-lab/monocle3", ref="develop")'
-          R -e 'remotes::install_github("PLN-team/PLNmodels", ref="master")'
+          R -e 'remotes::install_github("PLN-team/PLNmodels", ref="022d59d")'
           R CMD build .
           R CMD check hooke*tar.gz
         shell: bash
