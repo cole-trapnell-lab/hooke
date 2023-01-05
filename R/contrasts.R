@@ -7,7 +7,7 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
                          xlev = ccm@model_aux[["xlevels"]])
   #O <- model.offset(ccm@model_aux[["model_frame"]])
-  EZ <- tcrossprod(X, model(ccm)$model_par$Theta)
+  EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
   #if (!is.null(O))
   #  EZ <- EZ + O
   EZ <- sweep(EZ, 2, 0.5 * diag(model(ccm)$model_par$Sigma), "+")
@@ -26,7 +26,7 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 #' @return tibble Cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
+estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(is.numeric(min_log_abund))
@@ -65,6 +65,11 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   v_hat = ccm@vhat
   v_hat_method = ccm@vhat_method
 
+message('bge: str(X)')
+str(X)
+message('bge: str(v_hat)')
+str(v_hat)
+
   if (v_hat_method == "wald") {
     se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
   } else {
@@ -96,6 +101,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #percent_range)
   newdata$Offset = NULL
   pred_out_tbl = cbind(newdata, pred_out_tbl)
+  tibble::tibble(pred_out_tbl)
   return(pred_out_tbl)
 }
 

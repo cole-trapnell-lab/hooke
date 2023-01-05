@@ -357,88 +357,141 @@ bootstrap_model = function(ccs,
   # as the original, non bootstrapped model
 
   if (backend == "torch") {
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o the PLNmodels::PLN() function versions that I see do not include 
+#                     the arguments min.ratio, nPenalties, vcov_est, and penalty_weights. I
+#                     am confused...
+#                   o I revert to the original because the PLNmodels changes break hooke.
     sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                        data = sub_pln_data,
                                                        # penalties = reduced_pln_model$penalties,
-                                                       control = list(min.ratio=pln_min_ratio,
-                                                                      nPenalties=pln_num_penalties,
-                                                                      vcov_est = "none",
-                                                                      inception = best_full_model,
-                                                                      backend = "torch",
-                                                                      penalty_weights=initial_penalties,
-                                                                      trace = ifelse(FALSE, 2, 0))))
+                                                       control = PLNmodels::PLN_param(backend = 'torch',
+                                                                                      trace = ifelse(FALSE, 2, 0),
+                                                                                      inception = best_full_model,
+                                                                                      config_post = list(jackknife = FALSE,
+                                                                                                         bootstrap = 0,
+                                                                                                         variational_var = TRUE,
+                                                                                                         rsquared = TRUE),
+                                                                                      config_optim = list(maxevel  = 10000,
+                                                                                                          ftol_rel = 1e-8,
+                                                                                                          xtol_rel = 1e-6))))
+
+# bge (20221227): notes
+#                   o I restore the PLN call for the earlier PLNmodels version commit 022d59d
+#                   o the earlier version of PLNmodels was 'PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)'
+#     sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
+#                                                        data = sub_pln_data,
+#                                                        # penalties = reduced_pln_model$penalties,
+#                                                        control = list(min.ratio=pln_min_ratio,
+#                                                                       nPenalties=pln_num_penalties,
+#                                                                       vcov_est = "none",
+#                                                                       inception = best_full_model,
+#                                                                       backend = "torch",
+#                                                                       penalty_weights=initial_penalties,
+#                                                                       trace = ifelse(FALSE, 2, 0))))
 
   } else {
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
     sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                                               data = sub_pln_data,
                                                               penalties = reduced_pln_model$penalties,
-                                                              control_init=list(min.ratio=pln_min_ratio,
-                                                                                nPenalties=pln_num_penalties,
-                                                                                penalty_weights=initial_penalties),
-                                                              control_main=list(trace = ifelse(FALSE, 2, 0))))
+                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+                                                                                                    trace = ifelse(FALSE, 2, 0),
+                                                                                                    n_penalties = pln_num_penalties,
+                                                                                                    min_ratio = pln_min_ratio,
+                                                                                                    penalty_weights = initial_penalties,
+                                                                                                    config_post = list(jackknife = FALSE,
+                                                                                                                       bootstrap = 0,
+                                                                                                                       variational_var = TRUE,
+                                                                                                                       rsquared = TRUE),
+                                                                                                    config_optim = list(algorithm = 'CCSAQ',
+                                                                                                                        maxeval = 10000,
+                                                                                                                        ftol_rel = 1e-8,
+                                                                                                                        xtol_rel = 1e-6,
+                                                                                                                        ftol_out = 1e-6,
+                                                                                                                        maxit_out = 50,
+                                                                                                                        ftol_abs = 0.0,
+                                                                                                                        xtol_abs = 0.0,
+                                                                                                                        maxtime = -1))))
+
+# bge (20221227): notes
+#                   o I restore the PLN call for the earlier PLNmodels version commit 022d59d
+#                   o the earlier version of PLNmodels was 'PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)'
+#     sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+#                                                               data = sub_pln_data,
+#                                                               penalties = reduced_pln_model$penalties,
+#                                                               control_init=list(min.ratio=pln_min_ratio,
+#                                                                                 nPenalties=pln_num_penalties,
+#                                                                                 penalty_weights=initial_penalties),
+#                                                               control_main=list(trace = ifelse(FALSE, 2, 0))))
   }
 
   return(sub_full_model)
 }
 
 
+#
+# Removed 20230104 bge PLNmodels v1.0.0 removed get_vcov_hat
 #' @noRd
-compute_vhat = function(model, model_family, type) {
-
-    if (model$d > 0) {
-      ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
-      ## safe inversion using Matrix::solve and Matrix::diag and error handling
-
-      X = model_family$responses
-      Y = model_family$covariates
-      model$get_vcov_hat(type, X, Y)
-
-      vhat = vcov(model)
-
-      # zero out everything not on block diagonal
-      if (type == "sandwich") {
-
-        num_coef = dim(coef(model))[2]
-        num_blocks =dim(vhat)[1]/num_coef
-
-        blocks = lapply(1:num_blocks, function(i) {
-          start = num_coef*(i-1) + 1
-          end = num_coef*i
-          vhat[start:end,start:end]
-        })
-
-        vhat = Matrix::bdiag(blocks) %>% as.matrix()
-      }
-
-      # vcov_mat = vcov(model)
-
-    #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
-    #
-    #   #dimnames(vhat) <- dimnames(vcov_mat)
-    #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
-    #   vcov_mat = vcov_mat[safe_rows, safe_cols]
-    #
-    #   out <- tryCatch(Matrix::solve(vcov_mat),
-    #                   error = function(e) {e})
-    #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-    #   if (is(out, "error")) {
-    #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
-    #                   out$message,
-    #                   "Returning NA",
-    #                   sep = "\n"))
-    #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
-    #   } else {
-    #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-    #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
-    #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
-    #   }
-    #   #dimnames(vhat) <- dimnames(vcov_mat)
-    } else {
-      vhat <- NULL
-    }
-    vhat = methods::as(vhat, "dgCMatrix")
-    vhat
-}
+# compute_vhat = function(model, model_family, type) {
+# 
+#     if (model$d > 0) {
+#       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
+#       ## safe inversion using Matrix::solve and Matrix::diag and error handling
+# 
+#       X = model_family$responses
+#       Y = model_family$covariates
+#       model$get_vcov_hat(type, X, Y)
+# 
+#       vhat = vcov(model)
+# 
+#       # zero out everything not on block diagonal
+#       if (type == "sandwich") {
+# 
+#         num_coef = dim(coef(model))[2]
+#         num_blocks =dim(vhat)[1]/num_coef
+# 
+#         blocks = lapply(1:num_blocks, function(i) {
+#           start = num_coef*(i-1) + 1
+#           end = num_coef*i
+#           vhat[start:end,start:end]
+#         })
+# 
+#         vhat = Matrix::bdiag(blocks) %>% as.matrix()
+#       }
+# 
+#       # vcov_mat = vcov(model)
+# 
+#     #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+#     #
+#     #   #dimnames(vhat) <- dimnames(vcov_mat)
+#     #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+#     #   vcov_mat = vcov_mat[safe_rows, safe_cols]
+#     #
+#     #   out <- tryCatch(Matrix::solve(vcov_mat),
+#     #                   error = function(e) {e})
+#     #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+#     #   if (is(out, "error")) {
+#     #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
+#     #                   out$message,
+#     #                   "Returning NA",
+#     #                   sep = "\n"))
+#     #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
+#     #   } else {
+#     #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+#     #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
+#     #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+#     #   }
+#     #   #dimnames(vhat) <- dimnames(vcov_mat)
+#     } else {
+#       vhat <- NULL
+#     }
+#     vhat = methods::as(vhat, "dgCMatrix")
+#     vhat
+# }
 
 
 #' computes the avg vhat across n bootstraps
@@ -793,22 +846,78 @@ new_cell_count_model <- function(ccs,
     }else{
       print (paste("fitting model with", 1, "threads"))
     }
+
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
     reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                   data=pln_data,
-                                                                  control_init=list(min.ratio=pln_min_ratio,
-                                                                                    nPenalties=pln_num_penalties,
-                                                                                    penalty_weights=initial_penalties),
-                                                                  control_main=list(trace = ifelse(verbose, 2, 0)),
+                                                                  control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+                                                                                                        trace = ifelse(verbose, 2, 0),
+                                                                                                        n_penalties = pln_num_penalties,
+                                                                                                        min_ratio = pln_min_ratio,
+                                                                                                        penalty_weights = initial_penalties,
+                                                                                                        config_post = list(jackknife = FALSE,
+                                                                                                                           bootstrap = 0,
+                                                                                                                           variational_var = TRUE,
+                                                                                                                           rsquared = TRUE),
+                                                                                                        config_optim = list(algorithm = 'CCSAQ',
+                                                                                                                            maxeval = 10000,
+                                                                                                                            ftol_rel = 1e-8,
+                                                                                                                            xtol_rel = 1e-6,
+                                                                                                                            ftol_out = 1e-6,
+                                                                                                                            maxit_out = 50,
+                                                                                                                            ftol_abs = 0.0,
+                                                                                                                            xtol_abs = 0.0,
+                                                                                                                            maxtime = -1)),
                                                                   ...),)
 
+# bge (20221227): notes:
+#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
+#   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+#                                                                 data=pln_data,
+#                                                                 control_init=list(min.ratio=pln_min_ratio,
+#                                                                                   nPenalties=pln_num_penalties,
+#                                                                                   penalty_weights=initial_penalties),
+#                                                                 control_main=list(trace = ifelse(verbose, 2, 0)),
+#                                                                 ...),)
+
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
     full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-                                                               data=pln_data,
-                                                               penalties = reduced_pln_model$penalties,
-                                                               control_init=list(min.ratio=pln_min_ratio,
-                                                                                 nPenalties=pln_num_penalties,
-                                                                                 penalty_weights=initial_penalties),
-                                                               control_main=list(trace = ifelse(verbose, 2, 0)),
+                                                                 data=pln_data,
+                                                                 penalties = reduced_pln_model$penalties,
+                                                                 control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+                                                                                                       trace = ifelse(verbose, 2, 0),
+                                                                                                       n_penalties = pln_num_penalties,
+                                                                                                       min_ratio = pln_min_ratio,
+                                                                                                       penalty_weights = initial_penalties,
+                                                                                                       config_post = list(jackknife = FALSE,
+                                                                                                                          bootstrap = 0,
+                                                                                                                          variational_var = TRUE,
+                                                                                                                          rsquared = TRUE),
+                                                                                                       config_optim = list(algorithm = 'CCSAQ',
+                                                                                                                           maxeval = 10000,
+                                                                                                                           ftol_rel = 1e-8,
+                                                                                                                           xtol_rel = 1e-6,
+                                                                                                                           ftol_out = 1e-6,
+                                                                                                                           maxit_out = 50,
+                                                                                                                           ftol_abs = 0.0,
+                                                                                                                           xtol_abs = 0.0,
+                                                                                                                           maxtime = -1)),
                                                                ...),)
+  
+# bge (20221227): notes:
+#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
+#   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+#                                                                data=pln_data,
+#                                                                penalties = reduced_pln_model$penalties,
+#                                                                control_init=list(min.ratio=pln_min_ratio,
+#                                                                                  nPenalties=pln_num_penalties,
+#                                                                                  penalty_weights=initial_penalties),
+#                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
+#                                                                ...),)
   }, finally = {
     RhpcBLASctl::omp_set_num_threads(1)
     RhpcBLASctl::blas_set_num_threads(1)
@@ -841,7 +950,9 @@ new_cell_count_model <- function(ccs,
                           num_bootstraps,
                           backend)
   } else {
-    vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
+#    vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
+    vhat <- vcov(best_full_model,  type = "covariance")
+    vhat <- methods::as(vhat, "dgCMatrix")
   }
 
   ccm <- methods::new("cell_count_model",
