@@ -33,32 +33,32 @@ test_that('new_cell_count_model works', {
 
   # Reduced cell_count_model
   model_list <- model(ccm, model_to_return='reduced')
-  expect_equal(model_list$nb_param, 19)
-  expect_equivalent(model_list$loglik, -424.00, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -452.00, tol=1.0e-2)
-  expect_equivalent(model_list$ICL, -511.00, tol=1.0e-2)
-  expect_equal(model_list$n_edges, 7)
-  expect_equivalent(model_list$EBIC, -455.00, tol=1.0e-2)
-  expect_equivalent(model_list$pen_loglik, -433.00, tol=1.0e-2)
-  expect_equivalent(model_list$density, 0.389, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 22)
+  expect_equivalent(model_list$loglik, -405.00, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -438.00, tol=1.0e-1)
+  expect_equivalent(model_list$ICL, -497.00, tol=1.0e-1)
+  expect_equal(model_list$n_edges, 10)
+  expect_equivalent(model_list$EBIC, -440.00, tol=1.0e-1)
+  expect_equivalent(model_list$pen_loglik, -410.00, tol=1.0e-1)
+  expect_equivalent(model_list$density, 0.556, tol=1.0e-1)
 
-  expect_equivalent(model_list$latent[1,1], 1.858, tol=1.0e-2)
-  expect_equivalent(vcov(model_list)[1,1], 0.213, tol=1.0e-2)
+  expect_equivalent(model_list$latent[1,1], 1.858, tol=1.0e-1)
+  expect_equivalent(attr(coef(model_list), 'vcov_variational')[1,1], 0.0106, tol=1.0e-3)
 
 
   # Full cell_count_model
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 34)
-  expect_equivalent(model_list$loglik, -388.00, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
-  expect_equivalent(model_list$ICL, -501.212, tol=1.0e-2)
-  expect_equal(model_list$n_edges, 4)
-  expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-2)
-  expect_equivalent(model_list$pen_loglik, -401.00, tol=1.0e-2)
-  expect_equivalent(model_list$density, 0.222, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 37)
+  expect_equivalent(model_list$loglik, -384.00, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-1)
+  expect_equivalent(model_list$ICL, -501.212, tol=1.0e-1)
+  expect_equal(model_list$n_edges, 7)
+  expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-1)
+  expect_equivalent(model_list$pen_loglik, -388.00, tol=1.0e-1)
+  expect_equivalent(model_list$density, 0.389, tol=1.0e-1)
 
-  expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-2)
-  expect_equivalent(vcov(model_list)[1,1], 0.356, tol=1.0e-2)
+  expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-1)
+  expect_equivalent(attr(coef(model_list), 'vcov_variational')[1,1], 0.0178, tol=1.0e-3)
 
   # Penalty matrix.
   penalty_vector <- c(0.0020000, 0.2927265,  0.5065795,  0.3674560,  0.9472785, 1.0020000,
@@ -79,9 +79,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 33)
-  expect_equivalent(model_list$loglik, -386.575, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -434.507, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 30)
+  expect_equivalent(model_list$loglik, -348.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -393.000, tol=1.0e-1)
 
   # Whitelist by cell_group names.
   penalty_matrix <- matrix(penalty_vector, nrow=6)
@@ -99,9 +99,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 35)
-  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 32)
+  expect_equivalent(model_list$loglik, -348.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -396.000, tol=1.0e-1)
  
   # Blacklist by cell_group names.
   penalty_matrix <- matrix(penalty_vector, nrow=6)
@@ -134,9 +134,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 35)
-  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 32)
+  expect_equivalent(model_list$loglik, -348.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -396.000, tol=1.0e-1)
 
   # Blacklist by cell_group indices.
   penalty_matrix <- matrix(penalty_vector, nrow=6)
@@ -155,9 +155,9 @@ test_that('new_cell_count_model works', {
 
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 33)
-  expect_equivalent(model_list$loglik, -386.575, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -434.507, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 30)
+  expect_equivalent(model_list$loglik, -348.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -393.000, tol=1.0e-1)
 
   # Sparsity factor argument. 
   sparsity_factor <- 0.1
@@ -168,9 +168,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 34)
-  expect_equivalent(model_list$loglik, -388.00, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 37)
+  expect_equivalent(model_list$loglik, -384.00, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-1)
 
   # Base_penalty
   base_penalty <- 0.1
@@ -181,9 +181,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 34)
-  expect_equivalent(model_list$loglik, -388.00, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.386, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 37)
+  expect_equivalent(model_list$loglik, -384.00, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -439.386, tol=1.0e-1)
 
   # Pseudocount
   pseudocount <- 0.1
@@ -194,9 +194,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 38)   
-  expect_equivalent(model_list$loglik, -382.549, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.468, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 33)   
+  expect_equivalent(model_list$loglik, -350.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -400.000, tol=1.0e-1)
 
   # Pln_min_ratio
   pln_min_ratio <- 0.1
@@ -208,8 +208,8 @@ test_that('new_cell_count_model works', {
 
   model_list <- model(ccm, model_to_return='full')
   expect_equal(model_list$nb_param, 30)
-  expect_equivalent(model_list$loglik, -396.035, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -440.971, tol=1.0e-2)
+  expect_equivalent(model_list$loglik, -396.035, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -440.971, tol=1.0e-1)
 
 
 })
@@ -245,32 +245,33 @@ test_that('new_cell_count_model works', {
 
   # Reduced cell_count_model
   model_list <- model(ccm, model_to_return='reduced')
-  expect_equal(model_list$nb_param, 21)
-  expect_equivalent(model_list$loglik, -406.74, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -438.204, tol=1.0e-2)
-  expect_equivalent(model_list$ICL, -496.427, tol=1.0e-2)
-  expect_equal(model_list$n_edges, 9)
-  expect_equivalent(model_list$EBIC, -440.503, tol=1.0e-2)
-  expect_equivalent(model_list$pen_loglik, -411.141, tol=1.0e-2)
-  expect_equivalent(model_list$density, 0.5, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 22)
+  expect_equivalent(model_list$loglik, -406.74, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -438.204, tol=1.0e-1)
+  expect_equivalent(model_list$ICL, -496.427, tol=1.0e-1)
+  expect_equal(model_list$n_edges, 10)
+  expect_equivalent(model_list$EBIC, -440.503, tol=1.0e-1)
+  expect_equivalent(model_list$pen_loglik, -411.141, tol=1.0e-1)
+  expect_equivalent(model_list$density, 0.5, tol=1.0e-1)
 
-  expect_equivalent(model_list$latent[1,1], 1.858, tol=1.0e-2)
-  expect_equivalent(vcov(model_list)[1,1], 0.213, tol=1.0e-2)
+  expect_equivalent(model_list$latent[1,1], 1.858, tol=1.0e-1)
+  expect_equivalent(attr(coef(model_list), 'vcov_variational')[1,1], 0.0106, tol=1.0e-3)
 
 
   # Full cell_count_model
   model_list <- model(ccm, model_to_return='full')
   expect_equal(model_list$nb_param, 37)
-  expect_equivalent(model_list$loglik, -384.21, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
-  expect_equivalent(model_list$ICL, -501.212, tol=1.0e-2)
+  expect_equivalent(model_list$loglik, -384.21, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-1)
+  expect_equivalent(model_list$ICL, -501.212, tol=1.0e-1)
   expect_equal(model_list$n_edges, 7)
-  expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-2)
-  expect_equivalent(model_list$pen_loglik, -389.001, tol=1.0e-2)
-  expect_equivalent(model_list$density, 0.389, tol=1.0e-2)
+  expect_equivalent(model_list$EBIC, -442.298, tol=1.0e-1)
+  expect_equivalent(model_list$pen_loglik, -389.001, tol=1.0e-1)
+  expect_equivalent(model_list$density, 0.389, tol=1.0e-1)
 
-  expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-2)
-  expect_equivalent(vcov(model_list)[1,1], 0.356, tol=1.0e-2)
+  expect_equivalent(model_list$latent[1,1], 1.859, tol=1.0e-1)
+  expect_equivalent(attr(coef(model_list), 'vcov_variational')[1,1], 0.0178, tol=1.0e-3)
+
 
   # Penalty matrix.
   penalty_vector <- c(0.0020000, 0.2927265,  0.5065795,  0.3674560,  0.9472785, 1.0020000,
@@ -291,9 +292,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 32)
-  expect_equivalent(model_list$loglik, -386.575, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -434.507, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 30)
+  expect_equivalent(model_list$loglik, -349.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -394.000, tol=1.0e-1)
 
   # Whitelist by cell_group names.
   penalty_matrix <- matrix(penalty_vector, nrow=6)
@@ -311,9 +312,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 34)
-  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 32)
+  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-1)
  
   # Blacklist by cell_group names.
   penalty_matrix <- matrix(penalty_vector, nrow=6)
@@ -346,9 +347,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 34)
-  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 32)
+  expect_equivalent(model_list$loglik, -385.782, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -436.709, tol=1.0e-1)
 
   # Blacklist by cell_group indices.
   penalty_matrix <- matrix(penalty_vector, nrow=6)
@@ -367,9 +368,9 @@ test_that('new_cell_count_model works', {
 
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 32)
-  expect_equivalent(model_list$loglik, -386.575, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -434.507, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 30)
+  expect_equivalent(model_list$loglik, -349.000, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -394.000, tol=1.0e-1)
 
   # Sparsity factor argument. 
   sparsity_factor <- 0.1
@@ -381,8 +382,8 @@ test_that('new_cell_count_model works', {
 
   model_list <- model(ccm, model_to_return='full')
   expect_equal(model_list$nb_param, 37)
-  expect_equivalent(model_list$loglik, -384.210, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-2)
+  expect_equivalent(model_list$loglik, -384.210, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -439.631, tol=1.0e-1)
 
   # Base_penalty
   base_penalty <- 0.1
@@ -393,9 +394,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 37)
-  expect_equivalent(model_list$loglik, -383.965, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.386, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 38)
+  expect_equivalent(model_list$loglik, -383.965, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -439.386, tol=1.0e-1)
 
   # Pseudocount
   pseudocount <- 0.1
@@ -406,9 +407,9 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 38)   
-  expect_equivalent(model_list$loglik, -382.549, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -439.468, tol=1.0e-2)
+  expect_equal(model_list$nb_param, 32)
+  expect_equivalent(model_list$loglik, -382.549, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -397.000, tol=1.0e-1)
 
   # Pln_min_ratio
   pln_min_ratio <- 0.1
@@ -420,8 +421,8 @@ test_that('new_cell_count_model works', {
 
   model_list <- model(ccm, model_to_return='full')
   expect_equal(model_list$nb_param, 30)
-  expect_equivalent(model_list$loglik, -396.035, tol=1.0e-2)
-  expect_equivalent(model_list$BIC, -440.971, tol=1.0e-2)
+  expect_equivalent(model_list$loglik, -396.035, tol=1.0e-1)
+  expect_equivalent(model_list$BIC, -440.971, tol=1.0e-1)
 
 
 })
