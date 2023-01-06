@@ -50,7 +50,6 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
                          xlev = ccm@model_aux[["xlevels"]])
 
-
   #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
   #                  xlev = ccm@model_aux[["xlevels"]])
   X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
@@ -62,13 +61,9 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   #   v_hat = ccm@bootstrapped_vhat
   # }
 
-  v_hat = ccm@vhat
-  v_hat_method = ccm@vhat_method
-
-message('bge: str(X)')
-str(X)
-message('bge: str(v_hat)')
-str(v_hat)
+  vhat_coef <- coef.PLNfit(model(ccm), type="main")
+  v_hat <- attr(vhat_coef, "vcov_variational")
+  v_hat_method = ccm@vhat_method   
 
   if (v_hat_method == "wald") {
     se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
@@ -163,7 +158,7 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni"
   # num samples
   n = nrow(model(ccm)$fitted)
   # num parameters
-  k = length(colnames(coef(ccm@best_full_model)))
+  k = length(rownames(coef(ccm@best_full_model)))
   df.r = n - k - 1
 
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
