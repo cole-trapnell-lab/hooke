@@ -716,6 +716,9 @@ test_that('select_model works', {
 })
 
 
+
+
+
 test_that('select_model works', {
 
   # On Github Actions
@@ -822,4 +825,39 @@ test_that('select_model works', {
   expect_equal(model_list$density, .0, tol=1.0e-1)
 
 })
+
+
+test_that('select_model problems', {
+
+  # On Github Actions
+  #  skip_if_not(identical(Sys.getenv("GITHUB_ACTIONS"), "true"))
+
+  # Not on Github Actions
+  #  skip_if(identical(Sys.getenv("GITHUB_ACTIONS"), "true"))
+
+  set.seed(2016)
+
+  cds <- readRDS(system.file('extdata', 'pap_cds.trim_cell_type_sub3.2.rds', package = 'hooke'))
+  cds <- detect_genes(cds)
+  colData(cds)$cell_type <- colData(cds)$CW_assignedCellType
+  colData(cds)$cluster <- monocle3::clusters(cds)
+  colData(cds)$Size_Factor <- size_factors(cds)
+  colData(cds)$experiment <- colData(cds)$sample
+  colData(cds)$sample <- NULL
+  ccs <- new_cell_count_set(cds, sample_group = 'sampleName',
+                            cell_group = 'cell_type')
+  ccm <- new_cell_count_model(ccs, main_model_formula_str = "Genotype",
+                              nuisance_model_formula_str = "batch")
+
+  ccm2 <- 5
+  expect_error(select_model(ccm2, criterion='BIC', sparsity_factor=2.0, models_to_update='both'))
+  criterion <- 'BICLICK'
+  expect_error(select_model(ccm2, criterion=criterion, sparsity_factor=2.0, models_to_update='both'))
+  sparsity_factor <- 'NOT_NUMERIC'
+  expect_error(select_model(ccm2, criterion='BIC', sparsity_factor=sparsity_factor, models_to_update='both'))
+  models_to_update <- 'none'
+  expect_error(select_model(ccm2, criterion='BIC', sparsity_factor=2.0, models_to_update=models_to_update))
+
+})
+
 
