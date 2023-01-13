@@ -986,8 +986,8 @@ new_cell_count_model <- function(ccs,
 #' @param criterion a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".
 #' @param sparsity_factor A positive number to control how sparse the PLN network
 #'    is. Larger values make the network sparser.
-#' @param models_to_update string The model to update. Must be one of "both", "full", "reduced".
-#' @return an updated cell_count_model object
+#' @param models_to_update string The model to update. Must be one of "both", "full", or "reduced".
+#' @return an updated cell_count_model object.
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
@@ -1066,11 +1066,22 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
 
 
 
-#' Builds a model formula for time series models based on the range of the data
-#'
-#' This is just a utility function that puts the knots in reasonable positions based on the range of the data
+#' Builds a model formula for time series models based on the range of the data.
+#' This is a utility function that puts the knots in reasonable positions based on the range of the data.
+#' @param numeric num_breaks Number of interval points.
+#' @param character interval_var
+#' @param numeric interval_start Interval start value.
+#' @param numeric interval_stop Interval stop value.
+#' @return An interval model formula.
 #' @export
 build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){
+
+  assertthat::assert_that(is(ccs, 'cell_count_set'))
+  assertthat::assert_that(is.numeric(num_breaks))
+  assertthat::assert_that(is.numeric(interval_start))
+  assertthat::assert_that(is.numeric(interval_stop))
+  assertthat::assert_that(is.character(interval_var))
+
   if (is.null(interval_start)){
     interval_start = as.numeric(min(colData(ccs@cds)[,interval_var]))
   }

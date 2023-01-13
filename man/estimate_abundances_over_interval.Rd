@@ -13,6 +13,20 @@ estimate_abundances_over_interval(
   ...
 )
 }
+\arguments{
+\item{ccm}{A cell_count_model.}
+
+\item{start}{numeric Interval start value.}
+
+\item{stop}{numeric Interval stop value.}
+
+\item{interval_col}{character Interval values are taken from the interval_col data. Default is "timepoint".}
+
+\item{interval_step}{numeric Interval size. Default is 2.}
+}
+\value{
+A tibble of cell abundance predictions.
+}
 \description{
 Predict cell type abundances given a PLN model over a range of time or other interval
 }

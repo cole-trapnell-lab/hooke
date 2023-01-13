@@ -25,6 +25,7 @@ new_cell_count_model(
   num_bootstraps = 10,
   inception = NULL,
   backend = c("nlopt", "torch"),
+  num_threads = 1,
   ...
 )
 }
