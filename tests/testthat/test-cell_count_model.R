@@ -99,7 +99,7 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 31)
+  expect_equal(model_list$nb_param, 32)
   expect_equal(model_list$loglik, -348.0, tol=1.0e-1)
   expect_equal(model_list$BIC, -396.0, tol=1.0e-1)
  
@@ -134,7 +134,7 @@ test_that('new_cell_count_model works', {
             'cell_count_model')
 
   model_list <- model(ccm, model_to_return='full')
-  expect_equal(model_list$nb_param, 31)
+  expect_equal(model_list$nb_param, 32)
   expect_equal(model_list$loglik, -348.0, tol=1.0e-1)
   expect_equal(model_list$BIC, -396.0, tol=1.0e-1)
 
