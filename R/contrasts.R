@@ -108,37 +108,37 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
 # To do : need better error message for when you are missing a column that needs to be specified for the model
 #' Predict cell type abundances given a PLN model over a range of time or other interval
 #' @param ccm A cell_count_model.
-#' @param start numeric Interval start value.
-#' @param stop numeric Interval stop value.
-#' @param interval_col character Interval values are taken from the interval_col data. Default is "timepoint".
+#' @param interval_start numeric Interval start value.
+#' @param interval_stop numeric Interval stop value.
+#' @param interval_var character Interval values are taken from the interval_var data. Default is "timepoint".
 #' @param interval_step numeric Interval size. Default is 2.
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="timepoint", interval_step=2, ...) {
+estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_var="timepoint", interval_step=2, ...) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(is.numeric(min_log_abund))
-  assertthat::assert_that(is.numeric(start))
-  assertthat::assert_that(is.numeric(stop))
-  assertthat::assert_that(stop >= start)
+  assertthat::assert_that(is.numeric(interval_start))
+  assertthat::assert_that(is.numeric(interval_stop))
+  assertthat::assert_that(interval_stop >= interval_start)
   assertthat::assert_that(is.numeric(interval_step))
 
-  assertthat::assert_that(interval_col %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
+  assertthat::assert_that(interval_var %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
 
-  timepoint_pred_df = tibble(IV= seq(start, stop, interval_step), ...)
-  colnames(timepoint_pred_df)[1] = interval_col
+  timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step), ...)
+  colnames(timepoint_pred_df)[1] = interval_var
 
   time_interval_pred_helper = function(tp, ...){
     tp_tbl = tibble(IV=tp, ...)
-    colnames(tp_tbl)[1] = interval_col
+    colnames(tp_tbl)[1] = interval_var
     estimate_abundances(ccm, tp_tbl)
   }
 
   timepoint_pred_df = timepoint_pred_df %>%
     dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
       .f = time_interval_pred_helper, NA_real_),
-      .x = !!sym(interval_col),
+      .x = !!sym(interval_var),
       ...)) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
