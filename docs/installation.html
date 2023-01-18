@@ -2,8 +2,8 @@
 permalink: /docs/installation/
 sidemenu: true
 description: "Installation instructions."
-modified: 2019-09-13
-tags: [monocle, manual, vignette]
+modified: 2023-01-17
+tags: [hooke, manual, vignette]
 ---
 
 <div class= "container">
@@ -16,8 +16,10 @@ tags: [monocle, manual, vignette]
         <li class="toc-entry toc-h2"><a class="active" href="{{ site.baseurl }}/docs/installation">Installing Hooke</a>
           <ul>
             <li class="toc-entry toc-h3"><a href="#required-software">Required software</a></li>
+<!--
             <li class="toc-entry toc-h3"><a href="#testing-installation">Testing the installation</a></li>
             <li class="toc-entry toc-h3"><a href="#troubleshooting">Installation troubleshooting</a></li>
+-->
           </ul>
         </li>
         <li class="toc-entry toc-h2"><a href="{{ site.baseurl }}/docs/help">Getting help</a></li>
@@ -38,50 +40,38 @@ tags: [monocle, manual, vignette]
 
       <h3 id="required-software"> Required software </h3>
 
-      <p>Monocle 3 runs in the <a href= "https://www.r-project.org/">R statistical
-        computing environment</a>. You will need R version 4.1.0 or higher,
-        <a href="https://bioconductor.org/">Bioconductor</a> version 3.14, and
-        monocle3 1.2.7 or higher to have access to the latest features.
+<!--
+required packages
+  o  Monocle3
+  o  torch
+  o  PLNmodels
+-->
+      <p>Hooke runs in the <a href= "https://www.r-project.org/">R statistical
+        computing environment</a>. You will need R version 4.2.0 or higher,
+        <a href="https://cole-trapnell-lab.github.io/monocle3/">Monocle 3</a> version 1.3.1 or
+        higher, <a href="https://cran.r-project.org/web/packages/torch/index.html">torch</a>
+        version 0.9.0 or higher, and <a href="https://github.com/PLN-team/PLNmodels">PLNmodels</a>
+        version 1.0.0-9020 or higher.
       </p>
 
-      <p>To install Bioconductor, open R and run:</p>
+      <p>To install Monocle 3, follow the on-line Monocle 3
+         <a href="https://cole-trapnell-lab.github.io/monocle3/docs/installation/">installation instructions.</a>
+     </p>
+
+      <p>Next, install <i>torch</i>
+         and <i>PLNmodels</i> using the command</p>
 {% highlight R %}
-if (!requireNamespace("BiocManager", quietly = TRUE))
-install.packages("BiocManager")
-BiocManager::install(version = "3.14")
+install_packages(c('torch', 'PLNmodels'))
 {% endhighlight %}
 
-      <p>Next, install a few Bioconductor dependencies that aren't automatically installed:</p>
-{% highlight R %}
-BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats',
-                       'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment',
-                       'SummarizedExperiment', 'batchelor', 'Matrix.utils',
-                       'HDF5Array', 'terra', 'ggrastr'))
-{% endhighlight %}
 
-      <p>Now, install monocle3 through the cole-trapnell-lab GitHub, execute:</p>
+      <p>If you wish to install the develop branch of hooke, execute:</p>
 
 {% highlight R %}
-install.packages("devtools")
-devtools::install_github('cole-trapnell-lab/monocle3')
+devtools::install_github('cole-trapnell-lab/hooke', ref="develop")
 {% endhighlight %}
 
-      <p>If you wish to install the develop branch of monocle3, execute:</p>
-
-{% highlight R %}
-devtools::install_github('cole-trapnell-lab/monocle3', ref="develop")
-{% endhighlight %}
-
-      <h3 id="testing-installation"> Testing the installation </h3>
-
-      <p> To ensure that Monocle 3 was installed correctly, start a new R session and
-        run:
-      </p>
-
-{% highlight R %}
-library(monocle3)
-{% endhighlight %}
-
+<!--
       <h3 id="troubleshooting">Installation troubleshooting</h3>
       <p>
         Below are a few of the most common errors that users encounter when installing
@@ -151,6 +141,8 @@ Error in system("which python", intern = TRUE) : 'which' not found
         are still getting errors relating to Python or Reticulate, please make sure you are attempting to install
         Monocle 3 version 0.2.0 or later.
       </p>
+-->
+
       <a href="{{ site.baseurl }}/docs/features" class="btn btn-info btn-sm btn-prev" role="button">Previous</a>
       <a href="{{ site.baseurl }}/docs/help" class="btn btn-success btn-sm btn-next" role="button">Next</a>
     </div>

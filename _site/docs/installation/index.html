@@ -93,8 +93,10 @@
         <li class="toc-entry toc-h2"><a class="active" href="/hooke/docs/installation">Installing Hooke</a>
           <ul>
             <li class="toc-entry toc-h3"><a href="#required-software">Required software</a></li>
+<!--
             <li class="toc-entry toc-h3"><a href="#testing-installation">Testing the installation</a></li>
             <li class="toc-entry toc-h3"><a href="#troubleshooting">Installation troubleshooting</a></li>
+-->
           </ul>
         </li>
         <li class="toc-entry toc-h2"><a href="/hooke/docs/help">Getting help</a></li>
@@ -115,40 +117,34 @@
 
       <h3 id="required-software"> Required software </h3>
 
-      <p>Monocle 3 runs in the <a href= "https://www.r-project.org/">R statistical
-        computing environment</a>. You will need R version 4.1.0 or higher,
-        <a href="https://bioconductor.org/">Bioconductor</a> version 3.14, and
-        monocle3 1.2.7 or higher to have access to the latest features.
+<!--
+required packages
+  o  Monocle3
+  o  torch
+  o  PLNmodels
+-->
+      <p>Hooke runs in the <a href= "https://www.r-project.org/">R statistical
+        computing environment</a>. You will need R version 4.2.0 or higher,
+        <a href="https://cole-trapnell-lab.github.io/monocle3/">Monocle 3</a> version 1.3.1 or
+        higher, <a href="https://cran.r-project.org/web/packages/torch/index.html">torch</a>
+        version 0.9.0 or higher, and <a href="https://github.com/PLN-team/PLNmodels">PLNmodels</a>
+        version 1.0.0-9020 or higher.
       </p>
 
-      <p>To install Bioconductor, open R and run:</p>
-<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">requireNamespace</span><span class="p">(</span><span class="s2">"BiocManager"</span><span class="p">,</span><span class="w"> </span><span class="n">quietly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">TRUE</span><span class="p">))</span><span class="w">
-</span><span class="n">install.packages</span><span class="p">(</span><span class="s2">"BiocManager"</span><span class="p">)</span><span class="w">
-</span><span class="n">BiocManager</span><span class="o">::</span><span class="n">install</span><span class="p">(</span><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"3.14"</span><span class="p">)</span></code></pre></figure>
+      <p>To install Monocle 3, follow the on-line Monocle 3
+         <a href="https://cole-trapnell-lab.github.io/monocle3/docs/installation/">installation instructions.</a>
+     </p>
 
-      <p>Next, install a few Bioconductor dependencies that aren't automatically installed:</p>
-<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">BiocManager</span><span class="o">::</span><span class="n">install</span><span class="p">(</span><span class="nf">c</span><span class="p">(</span><span class="s1">'BiocGenerics'</span><span class="p">,</span><span class="w"> </span><span class="s1">'DelayedArray'</span><span class="p">,</span><span class="w"> </span><span class="s1">'DelayedMatrixStats'</span><span class="p">,</span><span class="w">
-                       </span><span class="s1">'limma'</span><span class="p">,</span><span class="w"> </span><span class="s1">'lme4'</span><span class="p">,</span><span class="w"> </span><span class="s1">'S4Vectors'</span><span class="p">,</span><span class="w"> </span><span class="s1">'SingleCellExperiment'</span><span class="p">,</span><span class="w">
-                       </span><span class="s1">'SummarizedExperiment'</span><span class="p">,</span><span class="w"> </span><span class="s1">'batchelor'</span><span class="p">,</span><span class="w"> </span><span class="s1">'Matrix.utils'</span><span class="p">,</span><span class="w">
-                       </span><span class="s1">'HDF5Array'</span><span class="p">,</span><span class="w"> </span><span class="s1">'terra'</span><span class="p">,</span><span class="w"> </span><span class="s1">'ggrastr'</span><span class="p">))</span></code></pre></figure>
+      <p>Next, install <i>torch</i>
+         and <i>PLNmodels</i> using the command</p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">install_packages</span><span class="p">(</span><span class="nf">c</span><span class="p">(</span><span class="s1">'torch'</span><span class="p">,</span><span class="w"> </span><span class="s1">'PLNmodels'</span><span class="p">))</span></code></pre></figure>
 
-      <p>Now, install monocle3 through the cole-trapnell-lab GitHub, execute:</p>
 
-<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">install.packages</span><span class="p">(</span><span class="s2">"devtools"</span><span class="p">)</span><span class="w">
-</span><span class="n">devtools</span><span class="o">::</span><span class="n">install_github</span><span class="p">(</span><span class="s1">'cole-trapnell-lab/monocle3'</span><span class="p">)</span></code></pre></figure>
+      <p>If you wish to install the develop branch of hooke, execute:</p>
 
-      <p>If you wish to install the develop branch of monocle3, execute:</p>
+<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">devtools</span><span class="o">::</span><span class="n">install_github</span><span class="p">(</span><span class="s1">'cole-trapnell-lab/hooke'</span><span class="p">,</span><span class="w"> </span><span class="n">ref</span><span class="o">=</span><span class="s2">"develop"</span><span class="p">)</span></code></pre></figure>
 
-<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">devtools</span><span class="o">::</span><span class="n">install_github</span><span class="p">(</span><span class="s1">'cole-trapnell-lab/monocle3'</span><span class="p">,</span><span class="w"> </span><span class="n">ref</span><span class="o">=</span><span class="s2">"develop"</span><span class="p">)</span></code></pre></figure>
-
-      <h3 id="testing-installation"> Testing the installation </h3>
-
-      <p> To ensure that Monocle 3 was installed correctly, start a new R session and
-        run:
-      </p>
-
-<figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">library</span><span class="p">(</span><span class="n">monocle3</span><span class="p">)</span></code></pre></figure>
-
+<!--
       <h3 id="troubleshooting">Installation troubleshooting</h3>
       <p>
         Below are a few of the most common errors that users encounter when installing
@@ -212,6 +208,8 @@ ERROR: compilation failed <span class="k">for </span>package <span class="s1">'l
         are still getting errors relating to Python or Reticulate, please make sure you are attempting to install
         Monocle 3 version 0.2.0 or later.
       </p>
+-->
+
       <a href="/hooke/docs/features" class="btn btn-info btn-sm btn-prev" role="button">Previous</a>
       <a href="/hooke/docs/help" class="btn btn-success btn-sm btn-next" role="button">Next</a>
     </div>
