@@ -1,6 +1,8 @@
 setOldClass(c("igraph"), prototype=structure(list(), class="igraph"))
 setOldClass(c("PLNnetworkfamily"), prototype=structure(list(), class="PLNnetworkfamily"))
 setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit"))
+setOldClass(c("PLNfamily"), prototype=structure(list(), class="PLNfamily"))
+setOldClass(c("PLNfit"), prototype=structure(list(), class="PLNfit"))
 
 
 #' The cell_count_set class
@@ -48,8 +50,8 @@ setMethod("is.na", "cell_count_set", function(x) FALSE)
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
                    full_model_formula = "formula",
-                   full_model_family = "PLNnetworkfamily",
-                   best_full_model = "PLNnetworkfit",
+                   full_model_family = "PLNfit",
+                   best_full_model = "PLNfit",
                    reduced_model_formula = "formula",
                    reduced_model_family = "PLNnetworkfamily",
                    best_reduced_model = "PLNnetworkfit",
@@ -369,10 +371,6 @@ bootstrap_model = function(ccs,
                                                        control = PLNmodels::PLN_param(backend = 'torch',
                                                                                       trace = ifelse(FALSE, 2, 0),
                                                                                       inception = best_full_model,
-                                                                                      config_post = list(jackknife = FALSE,
-                                                                                                         bootstrap = 0,
-                                                                                                         variational_var = TRUE,
-                                                                                                         rsquared = TRUE),
                                                                                       config_optim = list(maxevel  = 10000,
                                                                                                           ftol_rel = 1e-8,
                                                                                                           xtol_rel = 1e-6))))
@@ -403,10 +401,6 @@ bootstrap_model = function(ccs,
                                                                                                     n_penalties = pln_num_penalties,
                                                                                                     min_ratio = pln_min_ratio,
                                                                                                     penalty_weights = initial_penalties,
-                                                                                                    config_post = list(jackknife = FALSE,
-                                                                                                                       bootstrap = 0,
-                                                                                                                       variational_var = TRUE,
-                                                                                                                       rsquared = TRUE),
                                                                                                     config_optim = list(algorithm = 'CCSAQ',
                                                                                                                         maxeval = 10000,
                                                                                                                         ftol_rel = 1e-8,
@@ -539,11 +533,11 @@ bootstrap_vhat = function(ccs,
 
     if (backend == "torch") {
       coef(bootstrapped_model) %>%
-        as.data.frame() %>%
+        as.data.frame() %>% t() %>% 
         tibble::rownames_to_column("cell_group")
     } else {
       best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
-      coef(best_bootstrapped_model) %>%
+      coef(best_bootstrapped_model) %>% t() %>% 
         as.data.frame() %>%
         tibble::rownames_to_column("cell_group")
     }
@@ -657,12 +651,14 @@ new_cell_count_model <- function(ccs,
                                  pln_num_penalties=30,
                                  norm_method = c("size_factors","TSS", "CSS",
                                                  "RLE", "GMPR", "Wrench", "none"),
-                                 vhat_method = c("wald", "sandwich", "louis", "bootstrap"),
+                                 vhat_method = c("variational_var", "jackknife", "bootstrap", "my_bootstrap"),
+                                 covariance_type = c("full", "diagonal", "spherical", "fixed"),
                                  size_factors = NULL,
                                  num_bootstraps = 10,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
                                  num_threads=1,
+                                 ftol_rel = 1e-8, 
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -727,12 +723,13 @@ new_cell_count_model <- function(ccs,
     msg = paste('Argument norm_method must be one of "size_factors",',
                 '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
   norm_method <- match.arg(norm_method)
-
+  
+  # TO DO: FIX THIS 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
              error = function(e) FALSE),
-    msg = paste( 'Argument vhat_method must be one of "wald", "sandwich",',
-                 '"louis", or "bootstrap".'))
+    msg = paste( 'Argument vhat_method must be one of "variational_var",',
+                 '"jackknife","bootstrap", or "my_bootstrap".'))
   vhat_method <- match.arg(vhat_method)
 
   assertthat::assert_that(
@@ -783,10 +780,10 @@ new_cell_count_model <- function(ccs,
                             as.formula(full_model_formula_str)
                           },
                           error = function(condition) {
-                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condition, '.')
                           },
                           warn = function(condition) {
-                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condition, '.')
                           })
 
   reduced_model_formula_str = paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
@@ -796,10 +793,10 @@ new_cell_count_model <- function(ccs,
                             as.formula(reduced_model_formula_str)
                           },
                           error = function(condition) {
-                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condition, '.')
                           },
                           warn = function(condition) {
-                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condition, '.')
                           })
 
   #pln_data <- as.name(deparse(substitute(pln_data)))
@@ -857,13 +854,9 @@ new_cell_count_model <- function(ccs,
                                                                                                         n_penalties = pln_num_penalties,
                                                                                                         min_ratio = pln_min_ratio,
                                                                                                         penalty_weights = initial_penalties,
-                                                                                                        config_post = list(jackknife = FALSE,
-                                                                                                                           bootstrap = 0,
-                                                                                                                           variational_var = TRUE,
-                                                                                                                           rsquared = TRUE),
                                                                                                         config_optim = list(algorithm = 'CCSAQ',
                                                                                                                             maxeval = 10000,
-                                                                                                                            ftol_rel = 1e-8,
+                                                                                                                            ftol_rel = ftol_rel,
                                                                                                                             xtol_rel = 1e-6,
                                                                                                                             ftol_out = 1e-6,
                                                                                                                             maxit_out = 50,
@@ -871,6 +864,7 @@ new_cell_count_model <- function(ccs,
                                                                                                                             xtol_abs = 0.0,
                                                                                                                             maxtime = -1)),
                                                                   ...),)
+    
 
 # bge (20221227): notes:
 #                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
@@ -885,28 +879,73 @@ new_cell_count_model <- function(ccs,
 # bge (20221227): notes:
 #                   o I am trying to track the code in the PLNmodels master branch at Github
 #                   o I revert to the original because the PLNmodels changes break hooke.
-    full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-                                                                 data=pln_data,
-                                                                 penalties = reduced_pln_model$penalties,
-                                                                 control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
-                                                                                                       trace = ifelse(verbose, 2, 0),
-                                                                                                       n_penalties = pln_num_penalties,
-                                                                                                       min_ratio = pln_min_ratio,
-                                                                                                       penalty_weights = initial_penalties,
-                                                                                                       config_post = list(jackknife = FALSE,
-                                                                                                                          bootstrap = 0,
-                                                                                                                          variational_var = TRUE,
-                                                                                                                          rsquared = TRUE),
-                                                                                                       config_optim = list(algorithm = 'CCSAQ',
-                                                                                                                           maxeval = 10000,
-                                                                                                                           ftol_rel = 1e-8,
-                                                                                                                           xtol_rel = 1e-6,
-                                                                                                                           ftol_out = 1e-6,
-                                                                                                                           maxit_out = 50,
-                                                                                                                           ftol_abs = 0.0,
-                                                                                                                           xtol_abs = 0.0,
-                                                                                                                           maxtime = -1)),
+    # full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+    #                                                              data=pln_data,
+    #                                                              penalties = reduced_pln_model$penalties,
+    #                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+    #                                                                                                    trace = ifelse(verbose, 2, 0),
+    #                                                                                                    n_penalties = pln_num_penalties,
+    #                                                                                                    min_ratio = pln_min_ratio,
+    #                                                                                                    penalty_weights = initial_penalties,
+    #                                                                                                    config_post = list(jackknife = FALSE,
+    #                                                                                                                       bootstrap = 0,
+    #                                                                                                                       variational_var = TRUE,
+    #                                                                                                                       rsquared = TRUE),
+    #                                                                                                    config_optim = list(algorithm = 'CCSAQ',
+    #                                                                                                                        maxeval = 10000,
+    #                                                                                                                        ftol_rel = 1e-8,
+    #                                                                                                                        xtol_rel = 1e-6,
+    #                                                                                                                        ftol_out = 1e-6,
+    #                                                                                                                        maxit_out = 50,
+    #                                                                                                                        ftol_abs = 0.0,
+    #                                                                                                                        xtol_abs = 0.0,
+    #                                                                                                                        maxtime = -1)),
+    #                                                            ...),)
+    
+    variational_var = TRUE
+    sandwich_var = FALSE
+    jackknife = FALSE
+    bootstrap = FALSE
+    my_bootstrap = FALSE
+    
+    if (vhat_method == "variation_var" | vhat_method == "my_bootstrap") {
+      variational_var = TRUE
+    } 
+    
+    if (vhat_method == "sandwich_var") {
+      sandwich_var = TRUE
+    } 
+    
+    if (vhat_method == "jackknife") {
+      jackknife = TRUE
+    }
+    
+    if (vhat_method == "bootstrap") {
+      bootstrap = num_bootstraps
+    }
+    
+    
+    full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
+                                                               data=pln_data,
+                                                               control = PLNmodels::PLN_param(backend = 'nlopt',
+                                                                                              
+                                                                                              trace = ifelse(verbose, 2, 0),
+                                                                                              config_post = list(jackknife = jackknife,
+                                                                                                                 bootstrap = bootstrap,
+                                                                                                                 variational_var = variational_var,
+                                                                                                                 sandwich_var = sandwich_var,
+                                                                                                                 rsquared = TRUE),
+                                                                                              config_optim = list(algorithm = 'CCSAQ',
+                                                                                                                  maxeval = 10000,
+                                                                                                                  ftol_rel = ftol_rel,
+                                                                                                                  xtol_rel = 1e-6,
+                                                                                                                  ftol_out = 1e-6,
+                                                                                                                  maxit_out = 50,
+                                                                                                                  ftol_abs = 0.0,
+                                                                                                                  xtol_abs = 0.0,
+                                                                                                                  maxtime = -1)),
                                                                ...),)
+    
   
 # bge (20221227): notes:
 #                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
@@ -933,9 +972,10 @@ new_cell_count_model <- function(ccs,
 
   # Choose a model that isn't very aggressively sparsified
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
-  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
-
-  if (vhat_method == "bootstrap") {
+  # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
+  best_full_model <- full_pln_model
+  
+  if (vhat_method == "my_bootstrap") {
     vhat = bootstrap_vhat(ccs,
                           full_model_formula_str,
                           best_full_model,
@@ -949,11 +989,29 @@ new_cell_count_model <- function(ccs,
                           norm_method,
                           num_bootstraps,
                           backend)
-  } else {
-#    vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
-    vhat <- vcov(best_full_model,  type = "covariance")
+    
+  } else if (vhat_method == "jackknife") {
+    
+    vhat_coef = coef(best_full_model, type = "main")
+    var_jack = attributes(vhat_coef)[["variance_jackknife"]]
+    var_jack_mat = var_jack %>% as.data.frame %>% 
+      tibble::rownames_to_column("term") %>% 
+      tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>% 
+      arrange(cell_group) %>% 
+      mutate(rowname = paste0(cell_group, "_", term)) %>% 
+      select(-term, -cell_group) %>% 
+      mutate(colname = rowname) %>% 
+      tidyr::pivot_wider(values_from = var, names_from = colname) %>% 
+      replace(is.na(.), 0) %>% 
+      column_to_rownames("rowname") %>% 
+      as.matrix()
+    vhat <- methods::as(var_jack_mat, "dgCMatrix")
+    
+  }else {
+    vhat <- vcov(best_full_model, type= "main")
     vhat <- methods::as(vhat, "dgCMatrix")
   }
+  
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,

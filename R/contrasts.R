@@ -62,10 +62,10 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   #   v_hat = ccm@bootstrapped_vhat
   # }
 
-  vhat_coef <- coef(model(ccm), type="main")
+  # vhat_coef <- coef(model(ccm), type="main")
 
-  vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
-  v_hat <- attr(vhat_coef, vcov_type)
+  # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
+  v_hat <- ccm@vhat
   v_hat_method <- ccm@vhat_method   
 
   if (v_hat_method == "wald") {
