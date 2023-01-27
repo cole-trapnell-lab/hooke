@@ -7,11 +7,11 @@ URL: https://jekyllrb.com/docs/installation/#guides
 from package installer available at:
 https://nodejs.org/en/
 
-3. Build the site:
+3. Build the site from the hooke/gh-pages directory:
 bundle exec jekyll build --incremental --watch
 
-4. Serve the site (in a second terminal window)
+4. Serve the site (in a second terminal) window from the hooke/gh-pages directory
 bundle exec jekyll serve --watch
 
-5. Load the site in chrome:
+5. Load the site in browser:
 http://127.0.0.1:4000/hooke/

@@ -91,7 +91,7 @@
         <li class="toc-entry toc-h2"><a href="/hooke/docs/features">Major features in Hooke</a></li>
         <li class="toc-entry toc-h2"><a href="/hooke/docs/installation">Installing Hooke</a></li>
         <li class="toc-entry toc-h2"><a href="/hooke/docs/help">Getting help</a></li>
-        <li class="toc-entry toc-h2"><a href="/hooke/docs/starting">Getting started with Hooke</a></li>
+        <li class="toc-entry toc-h2"><a href="/hooke/docs/getting_started">Getting started with Hooke</a></li>
         <li class="toc-entry toc-h2"><a class="active" href="/hooke/docs/citations">Citations and acknowledgments</a>
           <ul>
             <li class="toc-entry toc-h3"><a href="#citations">Cite your analysis using get_citations</a></li>
@@ -115,13 +115,14 @@
       
       <h3 id="citations">Cite your analysis using <code>get_citations</code></h3>
       <p>
-        Monocle 3 utilizes methods published by other groups. Please be sure to cite those original 
+        hooke utilizes methods published by other groups. Please be sure to cite those original 
         methods papers when you use them in your analyses. To make this easier, we provide a function
         <code>get_citations</code> that will print a data frame with the methods and citations that you 
         used in constructing your CDS object. As you use new methods, they will be added to your citation 
         metadata.
       </p>
-      
+
+<!--      
 <figure class="highlight"><pre><code class="language-r" data-lang="r"><span class="n">get_citations</span><span class="p">(</span><span class="n">cds</span><span class="p">)</span><span class="w">
 
 </span><span class="c1"># Your analysis used methods from the following recent work. Please cite them wherever you are presenting your analyses.
@@ -130,29 +131,25 @@
 # 2 Monocle       Qiu, X. et. al. Reversed graph embedding resolves complex single-cell trajectories. Nat. Methods 14, 979–982 (2017). https://doi.org/10.1038/nmeth.4402
 # 3 Monocle       Cao, J. et. al. The single-cell transcriptional landscape of mammalian organogenesis. Nature 566, 496–502 (2019). https://doi.org/10.1038/s41586-019-0969-x
 </span><span class="err">#</span><span class="w"> </span><span class="m">4</span><span class="w">    </span><span class="n">UMAP</span><span class="w">       </span><span class="n">McInnes</span><span class="p">,</span><span class="w"> </span><span class="n">L.</span><span class="p">,</span><span class="w"> </span><span class="n">Healy</span><span class="p">,</span><span class="w"> </span><span class="n">J.</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">Melville</span><span class="p">,</span><span class="w"> </span><span class="n">J.</span><span class="w"> </span><span class="n">UMAP</span><span class="o">:</span><span class="w"> </span><span class="n">Uniform</span><span class="w"> </span><span class="n">Manifold</span><span class="w"> </span><span class="n">Approximation</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="n">Projection</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">dimension</span><span class="w"> </span><span class="n">reduction.</span><span class="w"> </span><span class="n">Preprint</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="n">https</span><span class="o">://</span><span class="n">arxiv.org</span><span class="o">/</span><span class="n">abs</span><span class="o">/</span><span class="m">1802.03426</span><span class="w"> </span><span class="p">(</span><span class="m">2018</span><span class="p">)</span><span class="n">.</span></code></pre></figure>
+-->
       
       <h3 id="acknowledgments">Acknowledgements </h3>
       
       <p>
-        Monocle was originally built by Cole Trapnell and Davide Cacchiarelli, with substantial design input from John Rinn and 
-        Tarjei Mikkelsen. We are grateful to Sharif Bordbar, Chris Zhu, Amy Wagers and the Broad RNAi platform for technical 
+        hooke was originally built by Maddy Duran and Cole Trapnell.
+<!--
+        We are grateful to Sharif Bordbar, Chris Zhu, Amy Wagers and the Broad RNAi platform for technical 
         assistance, and Magali Soumillon for helpful discussions. Cole Trapnell was supported by a Damon Runyon Postdoctoral 
         Fellowship. Davide Cacchiarelli was supported by a Human Frontier Science Program Fellowship. Cacchiarelli and Mikkelsen 
         were also supported by the Harvard Stem Cell Institute. John Rinn was the Alvin and Esta Star Associate Professor. This work 
         was supported by NIH grants 1DP2OD00667, P01GM099117, and P50HG006193-01. This work was also supported in part by the Single 
         Cell Genomics initiative, a collaboration between the Broad Institute and Fluidigm Inc.
+-->
       </p>
       
-      <p>
-        Monocle versions 2 and 3 were developed by Cole Trapnell's lab. Significant portions were written by Xiaojie Qiu and Hannah 
-        Pliner. The work was supported by NIH grant 1DP2HD088158, the W. M. Keck Foundation, as well as an Alfred P. Sloan 
-        Foundation Research Fellowship. Hannah Pliner is supported by the 
-        <a href="https://brotmanbaty.org/">Brotman Baty Institute</a>.
-      </p>
-      
-
       <h2>References </h2>
 
+<!--
       <ol>
         <li>Cole Trapnell*, Davide Cacchiarelli*, Jonna Grimsby, Prapti Pokharel, Shuqiang Li, Michael Morse, Niall J. Lennon, Kenneth J. Livak, Tarjei S. Mikkelsen, and John L. Rinn.<br/>
         <a href = "https://www.nature.com/nbt/journal/v32/n4/abs/nbt.2859.html">
@@ -198,6 +195,7 @@
                 Single-cell mrna quantification and differential analysis with census</a>.<br/>Nature methods, 2017<br/><br/>  </li>
       
       </ol>
+-->
       <a href="/hooke/docs/getting_started" class="btn btn-info btn-sm btn-prev" role="button">Previous</a>
       <a href="#" class="btn btn-success btn-sm btn-next" role="button" disabled>Next</a>
 
