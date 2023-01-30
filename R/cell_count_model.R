@@ -990,10 +990,10 @@ new_cell_count_model <- function(ccs,
                           num_bootstraps,
                           backend)
     
-  } else if (vhat_method == "jackknife") {
+  } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
     
     vhat_coef = coef(best_full_model, type = "main")
-    var_jack = attributes(vhat_coef)[["variance_jackknife"]]
+    var_jack = attributes(vhat_coef)[[paste0("variance_", vhat_method)]]
     var_jack_mat = var_jack %>% as.data.frame %>% 
       tibble::rownames_to_column("term") %>% 
       tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>% 
@@ -1007,7 +1007,7 @@ new_cell_count_model <- function(ccs,
       as.matrix()
     vhat <- methods::as(var_jack_mat, "dgCMatrix")
     
-  }else {
+  } else {
     vhat <- vcov(best_full_model, type= "main")
     vhat <- methods::as(vhat, "dgCMatrix")
   }
