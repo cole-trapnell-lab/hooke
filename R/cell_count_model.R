@@ -4,7 +4,6 @@ setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit
 setOldClass(c("PLNfamily"), prototype=structure(list(), class="PLNfamily"))
 setOldClass(c("PLNfit"), prototype=structure(list(), class="PLNfit"))
 
-
 #' The cell_count_set class
 #'
 #' The main class used by Hooke to hold cell abundances data.
@@ -853,6 +852,7 @@ new_cell_count_model <- function(ccs,
                                                                                                         trace = ifelse(verbose, 2, 0),
                                                                                                         n_penalties = pln_num_penalties,
                                                                                                         min_ratio = pln_min_ratio,
+                                                                                                        # covariance = covariance_type, 
                                                                                                         penalty_weights = initial_penalties,
                                                                                                         config_optim = list(algorithm = 'CCSAQ',
                                                                                                                             maxeval = 10000,
@@ -928,7 +928,7 @@ new_cell_count_model <- function(ccs,
     full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                                data=pln_data,
                                                                control = PLNmodels::PLN_param(backend = 'nlopt',
-                                                                                              
+                                                                                              covariance = covariance_type, 
                                                                                               trace = ifelse(verbose, 2, 0),
                                                                                               config_post = list(jackknife = jackknife,
                                                                                                                  bootstrap = bootstrap,
