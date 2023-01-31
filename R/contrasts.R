@@ -66,7 +66,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
 
   # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
   v_hat <- ccm@vhat
-  v_hat_method <- ccm@vhat_method   
+  v_hat_method <- ccm@vhat_method
 
   if (v_hat_method == "wald") {
     se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
@@ -118,7 +118,6 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
 estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_var="timepoint", interval_step=2, ...) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
-  assertthat::assert_that(is.numeric(min_log_abund))
   assertthat::assert_that(is.numeric(interval_start))
   assertthat::assert_that(is.numeric(interval_stop))
   assertthat::assert_that(interval_stop >= interval_start)

@@ -360,7 +360,7 @@ bootstrap_model = function(ccs,
   if (backend == "torch") {
 # bge (20221227): notes:
 #                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o the PLNmodels::PLN() function versions that I see do not include 
+#                   o the PLNmodels::PLN() function versions that I see do not include
 #                     the arguments min.ratio, nPenalties, vcov_est, and penalty_weights. I
 #                     am confused...
 #                   o I revert to the original because the PLNmodels changes break hooke.
@@ -430,34 +430,34 @@ bootstrap_model = function(ccs,
 # Removed 20230104 bge PLNmodels v1.0.0 removed get_vcov_hat
 #' @noRd
 # compute_vhat = function(model, model_family, type) {
-# 
+#
 #     if (model$d > 0) {
 #       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
 #       ## safe inversion using Matrix::solve and Matrix::diag and error handling
-# 
+#
 #       X = model_family$responses
 #       Y = model_family$covariates
 #       model$get_vcov_hat(type, X, Y)
-# 
+#
 #       vhat = vcov(model)
-# 
+#
 #       # zero out everything not on block diagonal
 #       if (type == "sandwich") {
-# 
+#
 #         num_coef = dim(coef(model))[2]
 #         num_blocks =dim(vhat)[1]/num_coef
-# 
+#
 #         blocks = lapply(1:num_blocks, function(i) {
 #           start = num_coef*(i-1) + 1
 #           end = num_coef*i
 #           vhat[start:end,start:end]
 #         })
-# 
+#
 #         vhat = Matrix::bdiag(blocks) %>% as.matrix()
 #       }
-# 
+#
 #       # vcov_mat = vcov(model)
-# 
+#
 #     #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
 #     #
 #     #   #dimnames(vhat) <- dimnames(vcov_mat)
@@ -532,11 +532,11 @@ bootstrap_vhat = function(ccs,
 
     if (backend == "torch") {
       coef(bootstrapped_model) %>%
-        as.data.frame() %>% t() %>% 
+        as.data.frame() %>% t() %>%
         tibble::rownames_to_column("cell_group")
     } else {
       best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
-      coef(best_bootstrapped_model) %>% t() %>% 
+      coef(best_bootstrapped_model) %>% t() %>%
         as.data.frame() %>%
         tibble::rownames_to_column("cell_group")
     }
@@ -657,7 +657,7 @@ new_cell_count_model <- function(ccs,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
                                  num_threads=1,
-                                 ftol_rel = 1e-8, 
+                                 ftol_rel = 1e-8,
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -722,8 +722,8 @@ new_cell_count_model <- function(ccs,
     msg = paste('Argument norm_method must be one of "size_factors",',
                 '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
   norm_method <- match.arg(norm_method)
-  
-  # TO DO: FIX THIS 
+
+  # TO DO: FIX THIS
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
              error = function(e) FALSE),
@@ -852,7 +852,7 @@ new_cell_count_model <- function(ccs,
                                                                                                         trace = ifelse(verbose, 2, 0),
                                                                                                         n_penalties = pln_num_penalties,
                                                                                                         min_ratio = pln_min_ratio,
-                                                                                                        # covariance = covariance_type, 
+                                                                                                        # covariance = covariance_type,
                                                                                                         penalty_weights = initial_penalties,
                                                                                                         config_optim = list(algorithm = 'CCSAQ',
                                                                                                                             maxeval = 10000,
@@ -864,7 +864,7 @@ new_cell_count_model <- function(ccs,
                                                                                                                             xtol_abs = 0.0,
                                                                                                                             maxtime = -1)),
                                                                   ...),)
-    
+
 
 # bge (20221227): notes:
 #                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
@@ -901,34 +901,34 @@ new_cell_count_model <- function(ccs,
     #                                                                                                                        xtol_abs = 0.0,
     #                                                                                                                        maxtime = -1)),
     #                                                            ...),)
-    
+
     variational_var = TRUE
     sandwich_var = FALSE
     jackknife = FALSE
     bootstrap = FALSE
     my_bootstrap = FALSE
-    
+
     if (vhat_method == "variation_var" | vhat_method == "my_bootstrap") {
       variational_var = TRUE
-    } 
-    
+    }
+
     if (vhat_method == "sandwich_var") {
       sandwich_var = TRUE
-    } 
-    
+    }
+
     if (vhat_method == "jackknife") {
       jackknife = TRUE
     }
-    
+
     if (vhat_method == "bootstrap") {
       bootstrap = num_bootstraps
     }
-    
-    
+
+
     full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                                data=pln_data,
                                                                control = PLNmodels::PLN_param(backend = 'nlopt',
-                                                                                              covariance = covariance_type, 
+                                                                                              covariance = covariance_type,
                                                                                               trace = ifelse(verbose, 2, 0),
                                                                                               config_post = list(jackknife = jackknife,
                                                                                                                  bootstrap = bootstrap,
@@ -945,8 +945,8 @@ new_cell_count_model <- function(ccs,
                                                                                                                   xtol_abs = 0.0,
                                                                                                                   maxtime = -1)),
                                                                ...),)
-    
-  
+
+
 # bge (20221227): notes:
 #                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
 #   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
@@ -974,7 +974,7 @@ new_cell_count_model <- function(ccs,
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
   # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
   best_full_model <- full_pln_model
-  
+
   if (vhat_method == "my_bootstrap") {
     vhat = bootstrap_vhat(ccs,
                           full_model_formula_str,
@@ -989,29 +989,29 @@ new_cell_count_model <- function(ccs,
                           norm_method,
                           num_bootstraps,
                           backend)
-    
+
   } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
-    
+
     vhat_coef = coef(best_full_model, type = "main")
     var_jack = attributes(vhat_coef)[[paste0("variance_", vhat_method)]]
-    var_jack_mat = var_jack %>% as.data.frame %>% 
-      tibble::rownames_to_column("term") %>% 
-      tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>% 
-      arrange(cell_group) %>% 
-      mutate(rowname = paste0(cell_group, "_", term)) %>% 
-      select(-term, -cell_group) %>% 
-      mutate(colname = rowname) %>% 
-      tidyr::pivot_wider(values_from = var, names_from = colname) %>% 
-      replace(is.na(.), 0) %>% 
-      column_to_rownames("rowname") %>% 
+    var_jack_mat = var_jack %>% as.data.frame %>%
+      tibble::rownames_to_column("term") %>%
+      tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>%
+      arrange(cell_group) %>%
+      mutate(rowname = paste0(cell_group, "_", term)) %>%
+      select(-term, -cell_group) %>%
+      mutate(colname = rowname) %>%
+      tidyr::pivot_wider(values_from = var, names_from = colname) %>%
+      replace(is.na(.), 0) %>%
+      column_to_rownames("rowname") %>%
       as.matrix()
     vhat <- methods::as(var_jack_mat, "dgCMatrix")
-    
+
   } else {
     vhat <- vcov(best_full_model, type= "main")
     vhat <- methods::as(vhat, "dgCMatrix")
   }
-  
+
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
@@ -1075,8 +1075,8 @@ select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_fa
 
   #if (models_to_update == "full" || models_to_update == "both"){
   #  best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
-    best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
-    ccm@best_full_model = best_full_model
+  #  best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
+  #  ccm@best_full_model = best_full_model
   #}
 
   ccm@sparsity = sparsity_factor
