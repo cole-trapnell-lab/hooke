@@ -49,8 +49,8 @@ setMethod("is.na", "cell_count_set", function(x) FALSE)
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
                    full_model_formula = "formula",
-                   full_model_family = "PLNfit",
-                   best_full_model = "PLNfit",
+                   full_model_family = "ANY", # this is probably unsafe
+                   best_full_model = "ANY", # this is probably unsafe
                    reduced_model_formula = "formula",
                    reduced_model_family = "PLNnetworkfamily",
                    best_reduced_model = "PLNnetworkfit",
