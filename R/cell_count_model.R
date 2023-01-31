@@ -843,26 +843,37 @@ new_cell_count_model <- function(ccs,
       print (paste("fitting model with", 1, "threads"))
     }
 
+    if (backend == "torch") {
+      control_optim_args = list(
+        # algorithm = 'CCSAQ',
+        maxeval = 10000,
+        ftol_rel = ftol_rel,
+        xtol_rel = 1e-6)
+    } else {
+      control_optim_args = list(
+        algorithm = 'CCSAQ',
+        maxeval = 10000,
+        ftol_rel = ftol_rel,
+        xtol_rel = 1e-6,
+        ftol_out = 1e-6,
+        maxit_out = 50,
+        ftol_abs = 0.0,
+        xtol_abs = 0.0,
+        maxtime = -1)
+
+    }
+
 # bge (20221227): notes:
 #                   o I am trying to track the code in the PLNmodels master branch at Github
 #                   o I revert to the original because the PLNmodels changes break hooke.
     reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                   data=pln_data,
-                                                                  control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+                                                                  control = PLNmodels::PLNnetwork_param(backend = "nlopt",
                                                                                                         trace = ifelse(verbose, 2, 0),
                                                                                                         n_penalties = pln_num_penalties,
                                                                                                         min_ratio = pln_min_ratio,
-                                                                                                        # covariance = covariance_type,
                                                                                                         penalty_weights = initial_penalties,
-                                                                                                        config_optim = list(algorithm = 'CCSAQ',
-                                                                                                                            maxeval = 10000,
-                                                                                                                            ftol_rel = ftol_rel,
-                                                                                                                            xtol_rel = 1e-6,
-                                                                                                                            ftol_out = 1e-6,
-                                                                                                                            maxit_out = 50,
-                                                                                                                            ftol_abs = 0.0,
-                                                                                                                            xtol_abs = 0.0,
-                                                                                                                            maxtime = -1)),
+                                                                                                        config_optim = control_optim_args),
                                                                   ...),)
 
 
@@ -927,7 +938,7 @@ new_cell_count_model <- function(ccs,
 
     full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                                data=pln_data,
-                                                               control = PLNmodels::PLN_param(backend = 'nlopt',
+                                                               control = PLNmodels::PLN_param(backend = backend,
                                                                                               covariance = covariance_type,
                                                                                               trace = ifelse(verbose, 2, 0),
                                                                                               config_post = list(jackknife = jackknife,
@@ -935,15 +946,7 @@ new_cell_count_model <- function(ccs,
                                                                                                                  variational_var = variational_var,
                                                                                                                  sandwich_var = sandwich_var,
                                                                                                                  rsquared = TRUE),
-                                                                                              config_optim = list(algorithm = 'CCSAQ',
-                                                                                                                  maxeval = 10000,
-                                                                                                                  ftol_rel = ftol_rel,
-                                                                                                                  xtol_rel = 1e-6,
-                                                                                                                  ftol_out = 1e-6,
-                                                                                                                  maxit_out = 50,
-                                                                                                                  ftol_abs = 0.0,
-                                                                                                                  xtol_abs = 0.0,
-                                                                                                                  maxtime = -1)),
+                                                                                              config_optim = control_optim_args),
                                                                ...),)
 
 
