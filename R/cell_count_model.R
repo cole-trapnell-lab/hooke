@@ -657,7 +657,8 @@ new_cell_count_model <- function(ccs,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
                                  num_threads=1,
-                                 ftol_rel = 1e-8,
+                                 ftol_rel = 1e-6,
+                                 penalize_by_distance=TRUE,
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -805,30 +806,36 @@ new_cell_count_model <- function(ccs,
   #       arguments in the call to init_penalty_matrix() are unused there.
   #       This is so that the whitelist and blacklist penalties are applied
   #       to the user supplied penalty matrix.
-  if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
-    initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
-  }else{
-    initial_penalties = penalty_matrix
-  }
+    if (is.null(penalty_matrix)){
+      if (penalize_by_distance){
+        initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
+        initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+      }else{
+        initial_penalties = NULL
+      }
+    }else{
+      initial_penalties = penalty_matrix
+    }
 
   # FIXME: This might only actually work when grouping cells by clusters and cluster names are
   # integers. We should make sure this generalizes when making white/black lists of cell groups
   # by type or other groupings.
   # Note: this appears to work when the cell contents are character strings of cell.
   #       group names.
-  if (is.null(whitelist) == FALSE){
-    initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
-    initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
-  }
+  if (is.null(initial_penalties) == FALSE){
+    if (is.null(whitelist) == FALSE){
+      initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
+      initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
+    }
 
-  if (is.null(blacklist) == FALSE){
-    initial_penalties[as.matrix(blacklist[,c(1,2)])] = max_penalty
-    initial_penalties[as.matrix(blacklist[,c(2,1)])] = max_penalty
-  }
+    if (is.null(blacklist) == FALSE){
+      initial_penalties[as.matrix(blacklist[,c(1,2)])] = max_penalty
+      initial_penalties[as.matrix(blacklist[,c(2,1)])] = max_penalty
+    }
 
-  #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
-  initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+    #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
+    initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+  }
 
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula

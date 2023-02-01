@@ -40,7 +40,7 @@ cds <- function( ccm ) {
 #' @export
 centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
   # TODO: checks that reduction_method is valid, exists in cds, etc.
-  coord_matrix = reducedDim(ccs@cds, reduction_method) %>% as.data.frame
+  coord_matrix = ccs@cds_reduced_dims[[reduction_method]] %>% as.data.frame #reducedDim(ccs@cds, reduction_method) %>% as.data.frame
 
   if (is.null(switch_group)==FALSE) {
     grp_assign = ccs@cds_coldata %>% as.data.frame %>% dplyr::select(!!sym(switch_group))

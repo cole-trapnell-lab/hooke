@@ -61,27 +61,10 @@ return_igraph <- function(model, type = "partial_cor", remove.isolated=FALSE,
   if (output == "igraph") {
 
     G <- igraph::graph_from_adjacency_matrix(net, mode = "undirected", weighted = TRUE, diag = FALSE)
-    igraph::V(G)$label <- colnames(net)
-
-    ## Nice nodes
-    V.deg <- igraph::degree(G)/sum(igraph::degree(G))
-    igraph::V(G)$label.cex <- V.deg / max(V.deg) + .5
-    igraph::V(G)$size <- V.deg * 100
-    igraph::V(G)$label.color <- rgb(0, 0, .2, .8)
-    igraph::V(G)$frame.color <- NA
-
-    ## Nice edges
-    igraph::E(G)$color <- ifelse(igraph::E(G)$weight > 0, edge.color[1], edge.color[2])
-    if (type == "support")
-      igraph::E(G)$width <- abs(igraph::E(G)$weight)
-    else
-      igraph::E(G)$width <- 15*abs(igraph::E(G)$weight)
-
 
     if (remove.isolated) {
       G <- igraph::delete.vertices(G, which(igraph::degree(G) == 0))
     }
-    G$layout <- igraph::layout_in_circle
   }
   if (output == "corrplot") {
 
@@ -361,7 +344,11 @@ init_pathfinding_graph <- function(ccm,
     message("Initializing pathfinding graph from partially correlated pairs linked in PAGA")
     paga_graph = initial_pcor_graph(ccm@ccs) %>% igraph::graph_from_data_frame(directed = FALSE, vertices=node_metadata) %>% igraph::as.directed()
     cov_graph = hooke:::return_igraph(model(ccm, "reduced"))
-    cov_graph_edges = igraph::as_data_frame(cov_graph, what="edges") %>% dplyr::rename(pcor=weight) %>% dplyr::filter(pcor != 0.00)
+    cov_graph_edges = igraph::as_data_frame(cov_graph, what="edges") %>%
+      dplyr::rename(pcor=weight) %>%
+      dplyr::filter(pcor != 0.00)
+    cov_graph_edges$to = as.character(cov_graph_edges$to)
+    cov_graph_edges$from = as.character(cov_graph_edges$from)
 
     weighted_edges = hooke:::weigh_edges_by_umap_dist(ccm, cov_graph_edges)
 
@@ -788,10 +775,11 @@ build_timeseries_transition_graph <- function(ccm,
     }
 
     time_contrasts = expand.grid("t1" = timepoints, "t2" = timepoints) %>%
-      filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval)
+      filter(t1 < t2 & (t2-t1) >= min_interval & (t2-t1) <= max_interval) %>%
+      tibble::as_tibble()
 
     message(paste("Comparing abundances over",  nrow(time_contrasts), "timepoint contrasts"))
-    relevant_comparisons = time_contrasts %>%
+    relevant_comparisons = time_contrasts %>% as_tibble() %>%
       mutate(comp_abund = furrr::future_map2(.f = select_timepoints,
                                              .x = t1,
                                              .y = t2,
