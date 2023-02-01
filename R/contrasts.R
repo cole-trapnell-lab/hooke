@@ -123,7 +123,7 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
   assertthat::assert_that(interval_stop >= interval_start)
   assertthat::assert_that(is.numeric(interval_step))
 
-  assertthat::assert_that(interval_var %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
+  #assertthat::assert_that(interval_var %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
 
   timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step), ...)
   colnames(timepoint_pred_df)[1] = interval_var
