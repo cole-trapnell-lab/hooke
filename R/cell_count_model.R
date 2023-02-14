@@ -197,7 +197,7 @@ new_cell_count_set <- function(cds,
   cds_covariates_df = coldata_df %>%
     dplyr::select(-cell_group) %>%
     dplyr::group_by(sample) %>%
-    dplyr::summarize(across(where(is.numeric), mean),
+    dplyr::summarize(across(where(is.numeric), function(x){mean(x)}),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
                      across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) } ))
 
@@ -870,64 +870,16 @@ new_cell_count_model <- function(ccs,
 
     }
 
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o I revert to the original because the PLNmodels changes break hooke.
-    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
-                                                                  data=pln_data,
-                                                                  control = PLNmodels::PLNnetwork_param(backend = "nlopt",
-                                                                                                        trace = ifelse(verbose, 2, 0),
-                                                                                                        n_penalties = pln_num_penalties,
-                                                                                                        min_ratio = pln_min_ratio,
-                                                                                                        penalty_weights = initial_penalties,
-                                                                                                        config_optim = control_optim_args),
-                                                                  ...),)
-
-
-# bge (20221227): notes:
-#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
-#   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
-#                                                                 data=pln_data,
-#                                                                 control_init=list(min.ratio=pln_min_ratio,
-#                                                                                   nPenalties=pln_num_penalties,
-#                                                                                   penalty_weights=initial_penalties),
-#                                                                 control_main=list(trace = ifelse(verbose, 2, 0)),
-#                                                                 ...),)
-
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o I revert to the original because the PLNmodels changes break hooke.
-    # full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-    #                                                              data=pln_data,
-    #                                                              penalties = reduced_pln_model$penalties,
-    #                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
-    #                                                                                                    trace = ifelse(verbose, 2, 0),
-    #                                                                                                    n_penalties = pln_num_penalties,
-    #                                                                                                    min_ratio = pln_min_ratio,
-    #                                                                                                    penalty_weights = initial_penalties,
-    #                                                                                                    config_post = list(jackknife = FALSE,
-    #                                                                                                                       bootstrap = 0,
-    #                                                                                                                       variational_var = TRUE,
-    #                                                                                                                       rsquared = TRUE),
-    #                                                                                                    config_optim = list(algorithm = 'CCSAQ',
-    #                                                                                                                        maxeval = 10000,
-    #                                                                                                                        ftol_rel = 1e-8,
-    #                                                                                                                        xtol_rel = 1e-6,
-    #                                                                                                                        ftol_out = 1e-6,
-    #                                                                                                                        maxit_out = 50,
-    #                                                                                                                        ftol_abs = 0.0,
-    #                                                                                                                        xtol_abs = 0.0,
-    #                                                                                                                        maxtime = -1)),
-    #                                                            ...),)
-
     variational_var = TRUE
     sandwich_var = FALSE
     jackknife = FALSE
     bootstrap = FALSE
     my_bootstrap = FALSE
 
-    if (vhat_method == "variation_var" | vhat_method == "my_bootstrap") {
+    if (vhat_method == "variational_var" | vhat_method == "my_bootstrap") {
       variational_var = TRUE
+    }else{
+      variational_var = FALSE # Don't compute the variational variance unless we have to, because it sometimes throws exceptions
     }
 
     if (vhat_method == "sandwich_var") {
@@ -943,6 +895,24 @@ new_cell_count_model <- function(ccs,
     }
 
 
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
+    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+                                                                  data=pln_data,
+                                                                  control = PLNmodels::PLNnetwork_param(backend = backend,
+                                                                                                        trace = ifelse(verbose, 2, 0),
+                                                                                                        n_penalties = pln_num_penalties,
+                                                                                                        min_ratio = pln_min_ratio,
+                                                                                                        penalty_weights = initial_penalties,
+                                                                                                        config_post = list(jackknife = FALSE,  # never jackknife the reduced model
+                                                                                                                           bootstrap = FALSE, # never bootstrap the reduced model
+                                                                                                                           variational_var = FALSE, # never compute variational variances on the reduced model
+                                                                                                                           sandwich_var = FALSE,  # never bootstrap the reduced model
+                                                                                                                           rsquared = FALSE),
+                                                                                                        config_optim = control_optim_args),
+                                                                  ...),)
+
     full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                                data=pln_data,
                                                                control = PLNmodels::PLN_param(backend = backend,
@@ -952,7 +922,7 @@ new_cell_count_model <- function(ccs,
                                                                                                                  bootstrap = bootstrap,
                                                                                                                  variational_var = variational_var,
                                                                                                                  sandwich_var = sandwich_var,
-                                                                                                                 rsquared = TRUE),
+                                                                                                                 rsquared = FALSE),
                                                                                               config_optim = control_optim_args),
                                                                ...),)
 
@@ -1003,18 +973,18 @@ new_cell_count_model <- function(ccs,
   } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
 
     vhat_coef = coef(best_full_model, type = "main")
-    var_jack = attributes(vhat_coef)[[paste0("variance_", vhat_method)]]
-    var_jack_mat = var_jack %>% as.data.frame %>%
-      tibble::rownames_to_column("term") %>%
-      tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>%
-      arrange(cell_group) %>%
-      mutate(rowname = paste0(cell_group, "_", term)) %>%
-      select(-term, -cell_group) %>%
-      mutate(colname = rowname) %>%
-      tidyr::pivot_wider(values_from = var, names_from = colname) %>%
-      replace(is.na(.), 0) %>%
-      column_to_rownames("rowname") %>%
-      as.matrix()
+    var_jack_mat = attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
+    # var_jack_mat = var_jack %>% as.data.frame %>%
+    #   tibble::rownames_to_column("term") %>%
+    #   tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>%
+    #   arrange(cell_group) %>%
+    #   mutate(rowname = paste0(cell_group, "_", term)) %>%
+    #   select(-term, -cell_group) %>%
+    #   mutate(colname = rowname) %>%
+    #   tidyr::pivot_wider(values_from = var, names_from = colname) %>%
+    #   replace(is.na(.), 0) %>%
+    #   tibble::column_to_rownames("rowname") %>%
+    #   as.matrix()
     vhat <- methods::as(var_jack_mat, "dgCMatrix")
 
   } else {
