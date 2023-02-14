@@ -10,7 +10,7 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
   #if (!is.null(O))
   #  EZ <- EZ + O
-  EZ <- sweep(EZ, 2, 0.5 * diag(model(ccm)$model_par$Sigma), "+")
+  EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm)$model_par$Sigma), "+")
   colnames(EZ) <- colnames(model(ccm)$model_par$Sigma)
   results <- switch(type, link = EZ, response = exp(EZ))
   attr(results, "type") <- type
@@ -69,16 +69,16 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   v_hat_method <- ccm@vhat_method
 
   if (v_hat_method == "wald") {
-    se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
+    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
   } else {
-    se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
   }
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
   #log_abund = pred_out[1,]
   log_abund = as.numeric(pred_out)
-  log_abund_sd = sqrt(diag(coef(model(ccm), type="covariance")))
+  log_abund_sd = sqrt(Matrix::diag(coef(model(ccm), type="covariance")))
   log_abund_se = se_fit
 
   below_thresh = log_abund < min_log_abund
