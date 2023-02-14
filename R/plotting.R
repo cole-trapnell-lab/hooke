@@ -387,14 +387,11 @@ get_colors <- function(num_colors, type = "rainbow") {
 
 
 #' @noRd
-my_plot_cells <- function(data,
+#' plot a cds in the same style as plot_contras
+my_plot_cells <- function(cds,
                           color_cells_by = NULL,
                           cell_size=1,
                           legend_position="none",
-                          coefficients = NULL,
-                          effect_sizes = NULL,
-                          cond_b_vs_a_tbl = NULL,
-                          cell_group = NULL,
                           q_value_thresh = 1.0,
                           fc_limits = c(-3,3),
                           plot_labels = TRUE,
@@ -407,65 +404,11 @@ my_plot_cells <- function(data,
                           x = 1,
                           y = 2) {
 
-  if (class(data) == "cell_count_set") {
-    cds = data@cds
-    ccs = data
-    plot_df = as.data.frame(colData(cds))
-    plot_df$cell_group = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
-  } else if (class(data) == "cell_data_set") {
-    cds = data
-    plot_df = as.data.frame(colData(cds))
-    if (is.null(color_cells_by)) {
-      color_cells_by = "cluster"
-    }
-    plot_df$cell_group = plot_df[[color_cells_by]]
-  } else if (class(data) == "cell_count_model") {
-    ccs = data@ccs
-    cds = data@ccs@cds
-    plot_df = as.data.frame(colData(cds))
-    plot_df$cell_group = data@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
-  } else {
-    print("some error message")
-  }
-
-  if (is.null(color_cells_by)) {
-    color_cells_by = ccs@info$cell_group
-  }
-
+  plot_df = as.data.frame(colData(cds))
+  
   plot_df$cell = row.names(plot_df)
   plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
   plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
-
-
-  # could be an vector that corresponds to a label
-  if (!is.null(coefficients)) {
-    res_df = data.frame("coefficients" = coefficients) %>% tibble::rownames_to_column("cell_group")
-    plot_df = plot_df %>% left_join(res_df, by="cell_group")
-
-    if (is.null(color_cells_by))
-      color_cells_by = "coefficients"
-
-  }
-
-  else if (!is.null(effect_sizes)) {
-
-    plot_df = plot_df %>% left_join(effect_sizes, by="cell_group")
-    color_cells_by = "delta_log_needed"
-
-  }
-
-  else if (!is.null(cond_b_vs_a_tbl)) {
-
-    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>%
-      dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
-
-    plot_df = dplyr::left_join(plot_df,
-                               cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
-                               by=c("cell_group"="cell_group"))
-
-    color_cells_by = "delta_log_abund"
-
-  }
 
   plot_df$color_cells_by = plot_df[[color_cells_by]]
 
@@ -528,8 +471,6 @@ my_plot_cells <- function(data,
   } else if (grepl("dose", color_cells_by)) {
 
     # plot_df$color_cells_by
-
-
     gp =  gp  +
       # geom_point(
       #   data = plot_df %>% filter(is.na(color_cells_by)),
@@ -630,32 +571,30 @@ my_plot_cells <- function(data,
 
   if (plot_labels) {
 
-    label_df = centroids(ccs)
-
-    # if the ccs is grouped on something else, by default label it like this
-    # if it is currently not defined
-    if (color_cells_by != ccs@info$cell_group & is.null(label_cells_by))
-      label_cells_by = color_cells_by
-
-    if (is.null(label_cells_by) == FALSE) {
-
-      label_df = convert_to_col(ccs, label_df, label_cells_by)
-
+    coord_matrix = as.data.frame(reducedDim(cds, "UMAP"))
+    grp_assign = cds@colData %>% as.data.frame %>% dplyr::select(all_of(color_cells_by))
+    coord_matrix = cbind(grp_assign, coord_matrix[row.names(grp_assign), ])
+    colnames(coord_matrix)[1] = "cell_group"
+    centroid_coords = aggregate(. ~ cell_group, data = coord_matrix, FUN = mean)
+    
+    if (dim(coord_matrix)[2] ==3) {
+      colnames(centroid_coords) = c(color_cells_by, "umap2D_1", "umap2D_2")
+    } else {
+      colnames(centroid_coords) = c(color_cells_by, "umap2D_1", "umap2D_2", "umap2D_3")
     }
-
-
+    
     if (repel_labels) {
-      gp = gp + ggrepel::geom_label_repel(data = label_df,
-                                          mapping = aes(get(paste0("umap_", x)),
-                                                        get(paste0("umap_", y)),
-                                                        label=cell_group),
+      gp = gp + ggrepel::geom_label_repel(data = centroid_coords,
+                                          mapping = aes(get(paste0("umap2D_", x)),
+                                                        get(paste0("umap2D_", y)),
+                                                        label=get(color_cells_by)),
                                           size=I(group_label_size),
                                           fill = "white")
     } else {
-      gp = gp + geom_text(data = label_df,
-                          mapping = aes(get(paste0("umap_", x)),
-                                        get(paste0("umap_", y)),
-                                        label=cell_group),
+      gp = gp + geom_text(data = centroid_coords,
+                          mapping = aes(get(paste0("umap2D_", x)),
+                                        get(paste0("umap2D_", y)),
+                                        label=get(color_cells_by)),
                           size=I(group_label_size))
     }
 
