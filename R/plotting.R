@@ -1299,7 +1299,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                     interval_col,
                                     log_abund_detection_thresh,
                                     q_val,
-                                    loss_time = c("largest_loss", "largest_loss_time", "earliest_time", "latest_time", "peak_loss_time"),
+                                    loss_time = c("largest_loss", "largest_loss_time", "earliest_time", "latest_time", "peak_loss_time", "delta_log_abund_at_peak"),
                                     label_nodes_by=NULL,
                                     group_nodes_by=NULL,
                                     label_edges_by=NULL,
@@ -1388,9 +1388,9 @@ plot_state_graph_losses <- function(perturbation_ccm,
   if (is.null(edge_weights) == FALSE){
     bezier_df = left_join(bezier_df, edges)
     bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
-                                     edge_thickness = edge_size * edge_score)
+                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size)
   }else{
-    bezier_df$edge_thickness = edge_size
+    bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
   }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
@@ -1444,13 +1444,22 @@ plot_state_graph_losses <- function(perturbation_ccm,
 
   # if numerical
 
+  min_delta_log_abund = -3
+  max_delta_log_abund = 3
+  g = g %>% mutate(fill_val = !!sym(loss_time))
+
+  if (loss_time %in% c("largest_loss", "delta_log_abund_at_peak")){
+    g = g %>% mutate(fill_val = ifelse(fill_val < min_delta_log_abund, min_delta_log_abund, fill_val),
+                     fill_val = ifelse(fill_val > max_delta_log_abund, max_delta_log_abund, fill_val))
+  }
+
   p = p + ggnewscale::new_scale_fill() +
     ggnetwork::geom_nodelabel(data = g,
                               aes(x, y,
-                                  fill = !!sym(loss_time),
+                                  fill = fill_val,
                                   label = label_nodes_by),
                               size = node_size)
-  if (loss_time == "largest_loss"){
+  if (loss_time %in% c("largest_loss", "delta_log_abund_at_peak")){
     p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
   }else{
     p = p + scale_fill_stepsn(n.breaks=5, colours = terrain.colors(5)) #+ scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
