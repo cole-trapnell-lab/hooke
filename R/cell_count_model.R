@@ -651,7 +651,7 @@ new_cell_count_model <- function(ccs,
                                  norm_method = c("size_factors","TSS", "CSS",
                                                  "RLE", "GMPR", "Wrench", "none"),
                                  vhat_method = c("variational_var", "jackknife", "bootstrap", "my_bootstrap"),
-                                 covariance_type = c(NULL, "fixed", "spherical", "diagonal"),
+                                 covariance_type = c("spherical", "diagonal"),
                                  size_factors = NULL,
                                  num_bootstraps = 10,
                                  inception = NULL,
@@ -737,6 +737,8 @@ new_cell_count_model <- function(ccs,
              error = function(e) FALSE),
     msg = paste( 'Argument backend must be one of "nlopt" or "torch".'))
   backend <- match.arg(backend)
+  
+  covariance_type = match.arg(covariance_type)
 
   #
   # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
