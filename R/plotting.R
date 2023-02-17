@@ -405,7 +405,7 @@ my_plot_cells <- function(cds,
                           y = 2) {
 
   plot_df = as.data.frame(colData(cds))
-  
+
   plot_df$cell = row.names(plot_df)
   plot_df$umap2D_1 <- reducedDim(cds, type="UMAP")[plot_df$cell,x]
   plot_df$umap2D_2 <- reducedDim(cds, type="UMAP")[plot_df$cell,y]
@@ -576,13 +576,13 @@ my_plot_cells <- function(cds,
     coord_matrix = cbind(grp_assign, coord_matrix[row.names(grp_assign), ])
     colnames(coord_matrix)[1] = "cell_group"
     centroid_coords = aggregate(. ~ cell_group, data = coord_matrix, FUN = mean)
-    
+
     if (dim(coord_matrix)[2] ==3) {
       colnames(centroid_coords) = c(color_cells_by, "umap2D_1", "umap2D_2")
     } else {
       colnames(centroid_coords) = c(color_cells_by, "umap2D_1", "umap2D_2", "umap2D_3")
     }
-    
+
     if (repel_labels) {
       gp = gp + ggrepel::geom_label_repel(data = centroid_coords,
                                           mapping = aes(get(paste0("umap2D_", x)),
@@ -1082,7 +1082,9 @@ plot_state_graph_annotations <- function(ccm,
   if (is.null(edge_weights) == FALSE){
     bezier_df = left_join(bezier_df, edges)
     bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
-                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size)
+                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size,
+                                     unsupported_edge = ifelse(is.na(weight), TRUE, FALSE),
+                                     edge_thickness = replace_na(edge_thickness, min_edge_size))
   }else{
     bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
   }
@@ -1090,7 +1092,7 @@ plot_state_graph_annotations <- function(ccm,
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
   p <- ggplot() +
-    ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
+    ggplot2::geom_path(aes(x, y, group=edge_name, size=edge_thickness, linetype=unsupported_edge), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
 
   # draw activator edges
   #ggforce::geom_bezier(aes(x = x, y = y, group=edge_name, linetype = "cubic"),
@@ -1259,9 +1261,17 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                     legend_position = "none",
                                     con_colour = "darkgrey",
                                     group_outline=FALSE,
+                                    control_ccm=perturbation_ccm,
+                                    control_start_time=NULL,
+                                    control_stop_time=NULL,
                                     ...)
 {
   loss_time = match.arg(loss_time)
+
+  if (is.null(control_start_time))
+    control_start_time = start_time
+  if (is.null(control_stop_time))
+    control_stop_time = stop_time
 
   if (is(state_graph, "igraph")){
     edges = state_graph %>% igraph::as_data_frame()
@@ -1297,6 +1307,8 @@ plot_state_graph_losses <- function(perturbation_ccm,
     #print(edges)
   }
 
+
+
   earliest_loss_tbl = hooke:::estimate_loss_timing(perturbation_ccm,
                                                    start_time=start_time,
                                                    stop_time=stop_time,
@@ -1304,7 +1316,12 @@ plot_state_graph_losses <- function(perturbation_ccm,
                                                    interval_col=interval_col,
                                                    log_abund_detection_thresh=log_abund_detection_thresh,
                                                    q_val = q_val,
+                                                   control_ccm=control_ccm,
+                                                   control_start_time=control_start_time,
+                                                   control_stop_time=control_stop_time,
                                                    ...)
+
+  #earliest_loss_tbl = earliest_loss_tbl %>% mutate(fill_alpha = ifelse(peak_time_in_ctrl_within_perturb_time_range, 1.0, 0.3))
   #print (earliest_loss_tbl)
   node_metadata = node_metadata %>% left_join(earliest_loss_tbl, by=c("id" ="cell_group"))
 
@@ -1316,7 +1333,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
     edge_labels = igraph::E(G)$label
     names(edge_labels) = edge_names
     #print(edge_labels)
-    edge_labels = NULL
+    #edge_labels = NULL
   }else{
     edge_labels=NULL
   }
@@ -1389,31 +1406,57 @@ plot_state_graph_losses <- function(perturbation_ccm,
 
   if (loss_time %in% c("largest_loss", "delta_log_abund_at_peak")){
     g = g %>% mutate(fill_val = ifelse(fill_val < min_delta_log_abund, min_delta_log_abund, fill_val),
-                     fill_val = ifelse(fill_val > max_delta_log_abund, max_delta_log_abund, fill_val))
+                     fill_val = ifelse(fill_val > max_delta_log_abund, max_delta_log_abund, fill_val),
+                     fill_val = ifelse(peak_time_in_ctrl_within_perturb_time_range, fill_val, NA),
+                     fill_border_color = ifelse(peak_time_in_ctrl_within_perturb_time_range == FALSE,
+                                                "out-of-range",
+                                                ifelse(is_lost_at_peak,
+                                                  "significant",
+                                                  "notsignificant")
+                                                ))
   }
 
   p = p + ggnewscale::new_scale_fill() +
     ggnetwork::geom_nodelabel(data = g,
                               aes(x, y,
                                   fill = fill_val,
+                                  color = fill_border_color,
                                   label = label_nodes_by),
                               size = node_size)
+  p = p + scale_color_manual(values=c("out-of-range"="black", "significant"="black", "notsignificant"="lightgrey"))
+
   if (loss_time %in% c("largest_loss", "delta_log_abund_at_peak")){
-    p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
+    p = p + scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3",
+                                 limits=c(min_delta_log_abund - abs(min_delta_log_abund)*0.05,
+                                          max_delta_log_abund + abs(max_delta_log_abund)*0.05))
   }else{
     p = p + scale_fill_stepsn(n.breaks=5, colours = terrain.colors(5)) #+ scale_fill_gradient2(low = "royalblue3", mid = "white", high="orangered3")
   }
 
-  # if (is.null(edge_labels) == FALSE) {
-  #   label_df = layout_info$label_df
-  #   p = p +  ggnetwork::geom_nodetext(data = label_df,
-  #                                     aes(x,y, label = label), size=3)
-  # }
+  p = p + guides(color = "none")
+
+  #p = p + guides(fill = guide_legend(position=legend_position))
+
+  if (is.null(edge_labels) == FALSE) {
+    label_df = layout_info$bezier_df %>%
+      group_by(edge_name) %>%
+      summarize(x = mean(x), y=mean(y))
+    label_df$label = edge_labels[label_df$edge_name]
+    #label_df = layout_info$label_df
+    #p = p +  ggnetwork::geom_nodetext(data = label_df,
+    #                                  aes(x,y, label = label))
+    #p = p + geom_text(data = label_df,
+    #                  aes(x,y, label = label),
+    #                  size=edge_label_font_size)
+    p = p + ggrepel::geom_text_repel(data = label_df,
+                                     mapping = aes(x, y, label=label),
+                                     size=edge_label_font_size)
+  }
 
   p = p + scale_size_identity() +
     ggnetwork::theme_blank() +
-    hooke_theme_opts() +
-    theme(legend.position=legend_position)
+    hooke_theme_opts() #+
+    #theme(legend.position=legend_position)
   return(p)
 }
 
