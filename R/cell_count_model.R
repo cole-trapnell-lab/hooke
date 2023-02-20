@@ -737,7 +737,7 @@ new_cell_count_model <- function(ccs,
              error = function(e) FALSE),
     msg = paste( 'Argument backend must be one of "nlopt" or "torch".'))
   backend <- match.arg(backend)
-  
+
   covariance_type = match.arg(covariance_type)
 
   #

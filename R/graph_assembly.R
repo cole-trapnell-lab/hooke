@@ -344,9 +344,14 @@ init_pathfinding_graph <- function(ccm,
     message("Initializing pathfinding graph from partially correlated pairs linked in PAGA")
     paga_graph = initial_pcor_graph(ccm@ccs) %>% igraph::graph_from_data_frame(directed = FALSE, vertices=node_metadata) %>% igraph::as.directed()
     cov_graph = hooke:::return_igraph(model(ccm, "reduced"))
-    cov_graph_edges = igraph::as_data_frame(cov_graph, what="edges") %>%
-      dplyr::rename(pcor=weight) %>%
-      dplyr::filter(pcor != 0.00)
+    cov_graph_edges = igraph::as_data_frame(cov_graph, what="edges")
+
+    if (nrow(cov_graph_edges) > 0 & "weight" %in% colnames(cov_graph_edges)){
+      cov_graph_edges = cov_graph_edges %>%
+        dplyr::rename(pcor=weight) %>%
+        dplyr::filter(pcor != 0.00)
+    }
+
     cov_graph_edges$to = as.character(cov_graph_edges$to)
     cov_graph_edges$from = as.character(cov_graph_edges$from)
 
@@ -465,7 +470,11 @@ get_discordant_loss_pairs <- function(perturbation_ccm,
 
   lost_cell_groups = earliest_loss_tbl %>% filter (is_lost_at_peak) %>% pull(cell_group) %>% unique
 
-  unaffected_cell_groups = setdiff(row.names(rowData(control_timeseries_ccm@ccs)), lost_cell_groups)
+  cell_groups_that_peak_within_perturb_window = earliest_loss_tbl %>%
+    filter (peak_time_in_ctrl_within_perturb_time_range) %>%
+    pull(cell_group) %>% unique
+
+  unaffected_cell_groups = setdiff(cell_groups_that_peak_within_perturb_window, lost_cell_groups)
 
   # Exclude states that peak outside the window of this perturbation experiment,
   # as we may simply have not yet seen their loss.
@@ -1832,9 +1841,9 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
     G_total_path_score_supporting[is.na(G_total_path_score_supporting)] = 0
     igraph::edge_attr(G, "total_path_score_supporting") = G_total_path_score_supporting
 
-    G_label = igraph::edge_attr(G, "label")
+    G_label = igraph::edge_attr(G, "support_label")
     G_label[is.na(G_label)] = ""
-    igraph::edge_attr(G, "label") = G_label
+    igraph::edge_attr(G, "support_label") = G_label
 
     return (G)
   }, error = function(e){
