@@ -589,7 +589,8 @@ add_covariate <- function(ccs, pb_cds, covariate) {
     distinct()
   
   pb_coldata = colData(pb_cds) %>%
-    as.data.frame %>%
+    as.data.frame %>% 
+    mutate(group_id = gsub("_cell_group", "", pseudobulk_id)) %>% 
     left_join(group_to_covariate, by = "group_id")
   
   colData(pb_cds)[[covariate]] =  pb_coldata[[covariate]]
