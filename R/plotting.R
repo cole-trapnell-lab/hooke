@@ -931,26 +931,44 @@ layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
   edge_weights = unlist(graph::edgeWeights(G_nel))
   names(edge_weights) = stringr::str_replace_all(names(edge_weights), "\\.", "~")
 
-  make_subgraphs_for_groups <- function(grouping_set, G_nel, node_meta_df){
-    nodes = node_meta_df %>% filter(group_nodes_by == grouping_set) %>% pull(id) %>% as.character
-    sg = list(graph=graph::subGraph(snodes=nodes, graph=G_nel))
+  # make_subgraphs_for_groups <- function(grouping_set, G_nel, node_meta_df){
+  #   nodes = node_meta_df %>% filter(group_nodes_by == grouping_set) %>% pull(id) %>% as.character %>% unique()
+  #   #sg = list(graph=graph::subGraph(snodes=nodes, graph=G_nel))
+  #   sg = graph::subGraph(snodes=nodes, graph=G_nel)
+  #   return (sg)
+  # }
+
+  make_subgraphs_for_groups <- function(subgraph_ids, G_nel){
+    nodes = subgraph_ids %>% pull(id) %>% as.character %>% unique()
+    sg = list(graph=graph::subGraph(snodes=nodes, graph=G_nel), cluster=TRUE)
+    #sg = graph::subGraph(snodes=nodes, graph=G_nel)
     return (sg)
   }
 
-  subgraph_df = node_metadata %>% group_by(group_nodes_by) %>%
+  subgraph_df = node_metadata %>%
+    select(group_nodes_by, id) %>%
+    group_by(group_nodes_by) %>%
+    tidyr::nest(subgraph_ids = id) %>%
     summarize(subgraph = purrr::map(.f = purrr::possibly(make_subgraphs_for_groups, NULL),
-                                    .x = group_nodes_by,
-                                    G_nel,
-                                    node_metadata))
+                                    .x = subgraph_ids,
+                                    G_nel))
+  subgraphs = subgraph_df$subgraph
+  names(subgraphs) = subgraph_df$group_nodes_by
+
+    #summarize(subgraph = graph::subGraph(id,graph=G_nel)
+    # summarize(subgraph = purrr::map(.f = purrr::possibly(make_subgraphs_for_groups, NULL),
+    #                                 .x = group_nodes_by,
+    #                                 G_nel,
+    #                                 node_metadata))
 
   if (is.null(edge_labels)== FALSE) {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, edgeAttrs=list(label=edge_labels), recipEdges="distinct")
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraphs, edgeAttrs=list(label=edge_labels), recipEdges="distinct")
     label_df = data.frame("x" = gvizl@renderInfo@edges$labelX, "y" = gvizl@renderInfo@edges$labelY) %>%
       tibble::rownames_to_column("edge_name") %>%
       left_join(tibble("edge_name" = names(edge_labels), label=edge_labels))
 
   } else {
-    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraph_df$subgraph, recipEdges="distinct")
+    gvizl = Rgraphviz::layoutGraph(G_nel, layoutType="dot", subGList=subgraphs, recipEdges="distinct")
     label_df=NULL
   }
 

@@ -631,8 +631,7 @@ get_discordant_loss_pairs <- function(perturbation_ccm,
 
 
 get_perturbation_paths <- function(perturbation_ccm,
-                                   perturb_summary_tbl,
-                                   pathfinding_graph){
+                                   perturb_summary_tbl){
 
   # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
   old_omp_num_threads = single_thread_omp()
