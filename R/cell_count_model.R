@@ -173,8 +173,6 @@ new_cell_count_set <- function(cds,
     cds = cds[, !is.na(colData(cds)[[cell_group]])]
   }
 
-
-
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
@@ -247,14 +245,14 @@ new_cell_count_set <- function(cds,
 
   cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide),,drop=FALSE]
   ccs = methods::new("cell_count_set",
-               monocle3::new_cell_data_set(cell_counts_wide,
-                                           cell_metadata=cds_covariates_df,
-                                           gene_metadata=cell_metadata_subset),
-               cds=ccs_cds,
-               cds_coldata=cds_coldata,
-               cds_reduced_dims=cds_reducedDims,
-               info=SimpleList(sample_group=sample_group,
-                               cell_group=cell_group))
+                     monocle3::new_cell_data_set(cell_counts_wide,
+                                                 cell_metadata=cds_covariates_df,
+                                                 gene_metadata=cell_metadata_subset),
+                     cds=ccs_cds,
+                     cds_coldata=cds_coldata,
+                     cds_reduced_dims=cds_reducedDims,
+                     info=SimpleList(sample_group=sample_group,
+                                     cell_group=cell_group))
 
   if (keep_cds == FALSE)
     ccs@cds = new_cell_data_set(empty_sparse_matrix(format="C"))
@@ -872,6 +870,64 @@ new_cell_count_model <- function(ccs,
 
     }
 
+    if (run_split_model) {
+
+    }
+
+<<<<<<< HEAD
+=======
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
+    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+                                                                  data=pln_data,
+                                                                  control = PLNmodels::PLNnetwork_param(backend = "nlopt",
+                                                                                                        covariance = covariance_type,
+                                                                                                        trace = ifelse(verbose, 2, 0),
+                                                                                                        n_penalties = pln_num_penalties,
+                                                                                                        min_ratio = pln_min_ratio,
+                                                                                                        penalty_weights = initial_penalties,
+                                                                                                        config_optim = control_optim_args),
+                                                                  ...),)
+
+
+# bge (20221227): notes:
+#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
+#   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
+#                                                                 data=pln_data,
+#                                                                 control_init=list(min.ratio=pln_min_ratio,
+#                                                                                   nPenalties=pln_num_penalties,
+#                                                                                   penalty_weights=initial_penalties),
+#                                                                 control_main=list(trace = ifelse(verbose, 2, 0)),
+#                                                                 ...),)
+
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
+    # full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+    #                                                              data=pln_data,
+    #                                                              penalties = reduced_pln_model$penalties,
+    #                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+    #                                                                                                    trace = ifelse(verbose, 2, 0),
+    #                                                                                                    n_penalties = pln_num_penalties,
+    #                                                                                                    min_ratio = pln_min_ratio,
+    #                                                                                                    penalty_weights = initial_penalties,
+    #                                                                                                    config_post = list(jackknife = FALSE,
+    #                                                                                                                       bootstrap = 0,
+    #                                                                                                                       variational_var = TRUE,
+    #                                                                                                                       rsquared = TRUE),
+    #                                                                                                    config_optim = list(algorithm = 'CCSAQ',
+    #                                                                                                                        maxeval = 10000,
+    #                                                                                                                        ftol_rel = 1e-8,
+    #                                                                                                                        xtol_rel = 1e-6,
+    #                                                                                                                        ftol_out = 1e-6,
+    #                                                                                                                        maxit_out = 50,
+    #                                                                                                                        ftol_abs = 0.0,
+    #                                                                                                                        xtol_abs = 0.0,
+    #                                                                                                                        maxtime = -1)),
+    #                                                            ...),)
+
+>>>>>>> fd19294 (support covariance type in reduced model)
     variational_var = TRUE
     sandwich_var = FALSE
     jackknife = FALSE
@@ -1136,4 +1192,3 @@ build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", in
   return(interval_formula_str)
 }
 #debug(build_interval_formula)
-
