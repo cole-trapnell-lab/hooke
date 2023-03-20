@@ -631,7 +631,8 @@ get_discordant_loss_pairs <- function(perturbation_ccm,
 
 
 get_perturbation_paths <- function(perturbation_ccm,
-                                   perturb_summary_tbl){
+                                   perturb_summary_tbl,
+                                   pathfinding_graph){
 
   # Temporarily set the number of threads OpenMP & the BLAS library can use to be 1
   old_omp_num_threads = single_thread_omp()
@@ -2001,21 +2002,25 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
       stop("Error: timeseries graph assembly failed. Aborting.")
     }
 
-    perturbation_ccm_tbl = assess_perturbation_effects(control_timeseries_ccm,
-                                                       perturbation_ccm_tbl,
-                                                       q_val=q_val,
-                                                       start_time = start_time,
-                                                       stop_time = stop_time,
-                                                       perturbation_col=perturbation_col,
-                                                       interval_col=interval_col,
-                                                       batch_col=batch_col,
-                                                       interval_step = interval_step,
-                                                       min_interval = min_interval,
-                                                       max_interval = max_interval,
-                                                       log_abund_detection_thresh=log_abund_detection_thresh,
-                                                       min_lfc=min_pathfinding_lfc,
-                                                       verbose=verbose,
-                                                       ...)
+    if (is.null(perturbation_ccm_tbl$perturb_summary_tbl)){
+      if (verbose)
+        message ("Assessing perturbation effects")
+      perturbation_ccm_tbl = assess_perturbation_effects(control_timeseries_ccm,
+                                                         perturbation_ccm_tbl,
+                                                         q_val=q_val,
+                                                         start_time = start_time,
+                                                         stop_time = stop_time,
+                                                         perturbation_col=perturbation_col,
+                                                         interval_col=interval_col,
+                                                         batch_col=batch_col,
+                                                         interval_step = interval_step,
+                                                         min_interval = min_interval,
+                                                         max_interval = max_interval,
+                                                         log_abund_detection_thresh=log_abund_detection_thresh,
+                                                         min_lfc=min_pathfinding_lfc,
+                                                         verbose=verbose,
+                                                         ...)
+    }
 
     pathfinding_graph = igraph::intersection(pathfinding_graph, timeseries_graph)
 
