@@ -924,8 +924,6 @@ new_cell_count_model <- function(ccs,
     #                                                                                                                        xtol_abs = 0.0,
     #                                                                                                                        maxtime = -1)),
     #                                                            ...),)
-
->>>>>>> fd19294 (support covariance type in reduced model)
     variational_var = TRUE
     sandwich_var = FALSE
     jackknife = FALSE
