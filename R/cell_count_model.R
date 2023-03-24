@@ -870,12 +870,10 @@ new_cell_count_model <- function(ccs,
 
     }
 
-    if (run_split_model) {
+    # if (run_split_model) {
+    #
+    # }
 
-    }
-
-<<<<<<< HEAD
-=======
 # bge (20221227): notes:
 #                   o I am trying to track the code in the PLNmodels master branch at Github
 #                   o I revert to the original because the PLNmodels changes break hooke.
