@@ -102,6 +102,10 @@ empty_sparse_matrix = function (nrow = 0L, ncol = 0L, format = "R", dtype = "d")
 #'    retained cell_groups.
 #' @param upper_threshold numeric Maximum number of cells in
 #'    retained cell_groups.
+#' @param norm_method string Normalization method used to compute scaling
+#'    factors used as offset during PLN inference.
+#' @param size_factors numeric vector or matrix User supplied vector or matrix of
+#'    offsets passed the PLNmodels::prepare_data() method.
 #' @return a new cell_data_set object
 #' @importFrom dplyr summarize
 #' @importFrom dplyr %>%
@@ -113,7 +117,11 @@ new_cell_count_set <- function(cds,
                                cell_metadata = NULL,
                                lower_threshold = NULL,
                                upper_threshold = NULL,
-                               keep_cds=TRUE) {
+                               keep_cds=TRUE,
+                               norm_method = c("size_factors","TSS", "CSS",
+                                               "RLE", "GMPR", "Wrench", "none"),
+                               size_factors = NULL,
+                               pseudocount = 0) {
 
   assertthat::assert_that(is(cds, 'cell_data_set'),
                           msg = paste('Argument cds must be a cell_data_set.'))
@@ -155,6 +163,13 @@ new_cell_count_set <- function(cds,
 
   assertthat::assert_that(is.null(upper_threshold) || is.numeric(upper_threshold),
                           msg = paste('Argument upper_threshold must be numeric.'))
+
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument norm_method must be one of "size_factors",',
+                '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
+  norm_method <- match.arg(norm_method)
 
   if(sample_group != 'sample')
     colData(cds)$sample = NULL
@@ -254,8 +269,48 @@ new_cell_count_set <- function(cds,
                      info=SimpleList(sample_group=sample_group,
                                      cell_group=cell_group))
 
+  #
+  # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
+  # which were calculate in new_cell_count_set() where rows are
+  # sample groups and the columns are cell groups, (2) covariates,
+  # where is a copy of colData(cds), and (3) offsets, which are
+  # calculated by PLNmodels::prepare_data.
+  if (norm_method == "size_factors") {
+    if (!is.null(size_factors)) {
+      assertthat::assert_that(
+        tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
+                 error = function(e) FALSE),
+        msg = "Argument size factor names must match ccs column names.")
+
+      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                          covariates = colData(ccs) %>% as.data.frame,
+                                          offset = size_factors)
+    } else {
+      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                          covariates = colData(ccs) %>% as.data.frame,
+                                          offset = monocle3::size_factors(ccs))
+    }
+  } else if (norm_method == "RLE") {
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs),
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = norm_method,
+                                        type="poscounts")
+  } else {
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = norm_method)
+
+    if (norm_method == "none") {
+      pln_data$Offset = 1
+    }
+  }
+
+  if (norm_method != "size_factors")
+    colData(ccs)$Size_Factor = pln_data$Offset
+
   if (keep_cds == FALSE)
     ccs@cds = new_cell_data_set(empty_sparse_matrix(format="C"))
+
 
   # if (!is.null(cell_metadata)) {
   #   assertthat::assert_that(!is.null(row.names(cell_metadata)) &
@@ -617,11 +672,7 @@ bootstrap_vhat = function(ccs,
 #' @param pln_min_ratio numeric Used in the definition of the sparsity penalty grid.
 #' @param pln_num_penalties integer Number of penalty values for the internally
 #'    generated penalty grid.
-#' @param norm_method string Normalization method used to compute scaling
-#'    factors used as offset during PLN inference.
 #' @param vhat_method string Method used to compute covariance matrix?
-#' @param size_factors numeric vector or matrix User supplied vector or matrix of
-#'    offsets passed the PLNmodels::prepare_data() method.
 #' @param num_bootstraps positive integer Number of iterations used with the
 #'    bootstrap vhat_method.
 #' @param inception Not used.
@@ -646,11 +697,8 @@ new_cell_count_model <- function(ccs,
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
-                                 norm_method = c("size_factors","TSS", "CSS",
-                                                 "RLE", "GMPR", "Wrench", "none"),
                                  vhat_method = c("variational_var", "jackknife", "bootstrap", "my_bootstrap"),
                                  covariance_type = c("spherical", "diagonal"),
-                                 size_factors = NULL,
                                  num_bootstraps = 10,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
@@ -715,13 +763,6 @@ new_cell_count_model <- function(ccs,
 
   assertthat::assert_that(assertthat::is.flag(verbose))
 
-  assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste('Argument norm_method must be one of "size_factors",',
-                '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
-  norm_method <- match.arg(norm_method)
-
   # TO DO: FIX THIS
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
@@ -738,37 +779,9 @@ new_cell_count_model <- function(ccs,
 
   covariance_type = match.arg(covariance_type)
 
-  #
-  # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
-  # which were calculate in new_cell_count_set() where rows are
-  # sample groups and the columns are cell groups, (2) covariates,
-  # where is a copy of colData(cds), and (3) offsets, which are
-  # calculated by PLNmodels::prepare_data.
-  if (norm_method == "size_factors") {
-    if (!is.null(size_factors)) {
-
-      assertthat::assert_that(
-        tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
-                 error = function(e) FALSE),
-        msg = "Argument size factor names must match ccs column names.")
-
-      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                          covariates = colData(ccs) %>% as.data.frame,
-                                          offset = size_factors)
-    } else {
-      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                          covariates = colData(ccs) %>% as.data.frame,
-                                          offset = monocle3::size_factors(ccs))
-    }
-  } else {
-    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                        covariates = colData(ccs) %>% as.data.frame,
-                                        offset = norm_method)
-
-    if (norm_method == "none") {
-      pln_data$Offset = 1
-    }
-  }
+  pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                      covariates = colData(ccs) %>% as.data.frame,
+                                      offset = monocle3::size_factors(ccs))
 
   main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
   nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
@@ -870,64 +883,6 @@ new_cell_count_model <- function(ccs,
 
     }
 
-    if (run_split_model) {
-
-    }
-
-<<<<<<< HEAD
-=======
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o I revert to the original because the PLNmodels changes break hooke.
-    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
-                                                                  data=pln_data,
-                                                                  control = PLNmodels::PLNnetwork_param(backend = "nlopt",
-                                                                                                        covariance = covariance_type,
-                                                                                                        trace = ifelse(verbose, 2, 0),
-                                                                                                        n_penalties = pln_num_penalties,
-                                                                                                        min_ratio = pln_min_ratio,
-                                                                                                        penalty_weights = initial_penalties,
-                                                                                                        config_optim = control_optim_args),
-                                                                  ...),)
-
-
-# bge (20221227): notes:
-#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
-#   reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
-#                                                                 data=pln_data,
-#                                                                 control_init=list(min.ratio=pln_min_ratio,
-#                                                                                   nPenalties=pln_num_penalties,
-#                                                                                   penalty_weights=initial_penalties),
-#                                                                 control_main=list(trace = ifelse(verbose, 2, 0)),
-#                                                                 ...),)
-
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o I revert to the original because the PLNmodels changes break hooke.
-    # full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-    #                                                              data=pln_data,
-    #                                                              penalties = reduced_pln_model$penalties,
-    #                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
-    #                                                                                                    trace = ifelse(verbose, 2, 0),
-    #                                                                                                    n_penalties = pln_num_penalties,
-    #                                                                                                    min_ratio = pln_min_ratio,
-    #                                                                                                    penalty_weights = initial_penalties,
-    #                                                                                                    config_post = list(jackknife = FALSE,
-    #                                                                                                                       bootstrap = 0,
-    #                                                                                                                       variational_var = TRUE,
-    #                                                                                                                       rsquared = TRUE),
-    #                                                                                                    config_optim = list(algorithm = 'CCSAQ',
-    #                                                                                                                        maxeval = 10000,
-    #                                                                                                                        ftol_rel = 1e-8,
-    #                                                                                                                        xtol_rel = 1e-6,
-    #                                                                                                                        ftol_out = 1e-6,
-    #                                                                                                                        maxit_out = 50,
-    #                                                                                                                        ftol_abs = 0.0,
-    #                                                                                                                        xtol_abs = 0.0,
-    #                                                                                                                        maxtime = -1)),
-    #                                                            ...),)
-
->>>>>>> fd19294 (support covariance type in reduced model)
     variational_var = TRUE
     sandwich_var = FALSE
     jackknife = FALSE
