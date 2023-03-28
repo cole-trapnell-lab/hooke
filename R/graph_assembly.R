@@ -159,6 +159,7 @@ get_extant_cell_types <- function(ccm,
     mutate(max_abundance = max(exp(log_abund)),
            percent_max_abund = exp(log_abund) / max_abundance,
            cell_type_range = max(log_abund)-(min(log_abund)),
+           percent_cell_type_range = (log_abund - min(log_abund)) / cell_type_range,
            above_log_abund_thresh = (log_abund - 2*log_abund_se > log_abund_detection_thresh) | cell_type_range < min_cell_range,
            present_flag = ifelse(above_log_abund_thresh, TRUE, NA)) %>%
     ungroup()
@@ -201,6 +202,7 @@ get_extant_cell_types <- function(ccm,
            cell_group,
            log_abund,
            max_abundance,
+           percent_cell_type_range,
            longest_contig_start,
            longest_contig_end,
            present_above_thresh)
@@ -650,14 +652,18 @@ get_perturbation_paths <- function(perturbation_ccm,
     # We will do pathfinding to nodes that are lost, starting from nodes that
     # are either lost and have no parents that are also lost, or nodes that are
     # gained.
+    if (length(lost_cell_groups) == 0)
+      return (NA)
     loss_neighborhood_graph = igraph::subgraph(pathfinding_graph, lost_cell_groups)
-    #loss_neighborhood_graph = do.call(igraph::union,igraph::make_ego_graph(pathfinding_graph, order = 1,
-    #                                                                       nodes = lost_cell_groups,
-    #                                                                       mode = "in"))
-    gain_neighborhood_graph = do.call(igraph::union,igraph::make_ego_graph(pathfinding_graph, order = 1,
-                                                                           nodes = gained_cell_groups,
-                                                                           mode = "out"))
-    perturb_pathfinding_graph = igraph::union(loss_neighborhood_graph, gain_neighborhood_graph)
+    perturb_pathfinding_graph = loss_neighborhood_graph
+
+    if (length(gained_cell_groups) > 0){
+      gain_neighborhood_graph = do.call(igraph::union,igraph::make_ego_graph(pathfinding_graph, order = 1,
+                                                                             nodes = gained_cell_groups,
+                                                                             mode = "out"))
+      perturb_pathfinding_graph = igraph::union(perturb_pathfinding_graph, gain_neighborhood_graph)
+    }
+
     perturb_pathfinding_graph = igraph::subgraph(pathfinding_graph, igraph::V(perturb_pathfinding_graph)$name)
 
     perturb_pathfinding_graph = igraph::as_data_frame(perturb_pathfinding_graph) %>% select(from, to) %>% distinct()
@@ -700,7 +706,9 @@ get_perturbation_paths <- function(perturbation_ccm,
     paths_between_concordant_fwd_loss_pairs = paths_between_concordant_fwd_loss_pairs %>%
       filter(is.na(path) == FALSE)
 
-    message ("\tscoring paths between loss pairs")
+    if (nrow(paths_between_concordant_fwd_loss_pairs) == 0)
+      return(NA)
+    message (paste("\tscoring", nrow(paths_between_concordant_fwd_loss_pairs),"paths between loss pairs"))
     paths_between_concordant_fwd_loss_pairs = score_paths_for_perturbations(perturbation_ccm,
                                                                             paths_between_concordant_fwd_loss_pairs,
                                                                             loss_tbl=perturb_summary_tbl)
@@ -1395,6 +1403,30 @@ get_pcor_between_pair <- function(perturb_model_pcor_matrix, from, to){
   return(pcor_vals)
 }
 
+score_path_for_loss = function(path, loss_tbl){
+  cell_groups_on_path = tibble(cell_group=unique(c(path$from, path$to)))
+  cell_groups_on_path = inner_join(cell_groups_on_path, loss_tbl, by="cell_group")
+
+  # FIXME: we should find a way to incorporate effects from all the nodes along the path.
+  cell_groups_on_path = cell_groups_on_path %>% filter(is_lost_when_present)
+  if (nrow(cell_groups_on_path) > 0){
+    cell_loss_stats_on_path = cell_groups_on_path %>%
+      summarize(perturb_dist_effect = mean(loss_when_present, na.rm=TRUE),
+                perturb_dist_effect_pval = mean(loss_when_present_q_val, na.rm=TRUE),
+                perturb_dist_model_adj_rsq = NA,
+                perturb_dist_model_ncells = NA)
+  }else{
+    cell_loss_stats_on_path = tibble(perturb_dist_effect = NA,
+                                     perturb_dist_effect_pval = 1,
+                                     perturb_dist_model_adj_rsq = NA,
+                                     perturb_dist_model_ncells = NA)
+  }
+
+
+  return(cell_loss_stats_on_path)
+}
+
+
 #' @noRd
 score_paths_for_perturbations <- function(perturbation_ccm,
                                           paths_between_recip_time_nodes,
@@ -1407,18 +1439,6 @@ score_paths_for_perturbations <- function(perturbation_ccm,
   tryCatch({
     paths_between_perturb_vs_wt_node_pairs = paths_between_recip_time_nodes %>%
       filter(!is.na(path))
-
-    score_path_for_loss = function(path, loss_tbl){
-      cell_groups_on_path = tibble(cell_group=unique(c(path$from, path$to)))
-      cell_groups_on_path = inner_join(cell_groups_on_path, loss_tbl, by="cell_group")
-      cell_loss_stats_on_path = cell_groups_on_path %>%
-        summarize(perturb_dist_effect = mean(largest_loss_when_present_in_wt),
-                  perturb_dist_effect_pval = min(loss_when_present_q_val),
-                  perturb_dist_model_adj_rsq = NA,
-                  perturb_dist_model_ncells = NA)
-
-      return(cell_loss_stats_on_path)
-    }
 
     paths_between_perturb_vs_wt_node_pairs = paths_between_recip_time_nodes %>%
       #mutate(pcor_between_node_pair =  get_pcor_between_pair(perturb_model_pcor_matrix, from, to)) %>%
@@ -1451,6 +1471,7 @@ compare_ko_to_wt_at_timepoint <- function(tp, perturbation_ccm, wt_pred_df, ko_p
 }
 
 #' @noRd
+
 estimate_loss_timing <- function(perturbation_ccm,
                                  start_time,
                                  stop_time,
@@ -1465,6 +1486,7 @@ estimate_loss_timing <- function(perturbation_ccm,
                                  with_ties=FALSE,
                                  ...){
 
+  fraction_of_presence_window_lost_thresh = 0.5
 
     wt_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=FALSE, interval_col=interval_col, interval_step=interval_step, ...)
     ko_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=TRUE, interval_col=interval_col, interval_step=interval_step, ...)
@@ -1499,96 +1521,208 @@ estimate_loss_timing <- function(perturbation_ccm,
                                           knockout=FALSE,
                                           ...)
 
-    loss_when_present_in_wt = right_join(perturb_vs_wt_nodes %>% select(cell_group,
+    changes_when_present_in_wt = left_join(perturb_vs_wt_nodes %>% select(cell_group,
                                                                         wt_time_present=t1,
                                                                         delta_log_abund_when_present=delta_log_abund,
+                                                                        delta_log_abund_when_present_se=delta_log_abund_se,
                                                                         log_abund_wt=log_abund_x,
                                                                         delta_q_value),
                                             extant_wt_tbl,
-                                           by=c("cell_group")) %>%
+                                           by=c("cell_group"="cell_group", "wt_time_present"="timepoint")) %>%
       #mutate(peak_time_in_ctrl_within_perturb_time_range = tidyr::replace_na(peak_time_in_ctrl_within_perturb_time_range, FALSE)) %>%
-      mutate(is_lost_when_present = present_above_thresh & delta_log_abund_when_present < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val,
-             loss_when_present_time = ifelse(is_lost_when_present, wt_time_present, NA)) %>%
-      mutate(is_gained_when_present = present_above_thresh & delta_log_abund_when_present > -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val,
-             gain_when_present_time = ifelse(is_gained_when_present, wt_time_present, NA))
+      mutate(delta_q_value = ifelse(is.na(delta_q_value), 1, delta_q_value),
+             delta_log_abund_when_present = ifelse(is.na(delta_log_abund_when_present), 1, delta_log_abund_when_present)) %>%
+      mutate(is_lost_when_present = present_above_thresh & delta_log_abund_when_present < -abs(delta_log_abund_loss_thresh)) %>%
+      mutate(is_gained_when_present = present_above_thresh & delta_log_abund_when_present > -abs(delta_log_abund_loss_thresh))
     #loss_when_present_in_wt = loss_when_present_in_wt %>% group_by(cell_group) %>% slice_min(peak_wt_time, n=1, with_ties=with_ties)
 
-    loss_when_present_in_wt = loss_when_present_in_wt %>% select(cell_group,
-                                                                 present_above_thresh,
-                                                                     #peak_time_in_ctrl_within_perturb_time_range,
-                                                                 wt_time_present,
-                                                                 log_abund_wt,
-                                                                 delta_log_abund_when_present,
-                                                                 delta_q_value,
-                                                                 is_lost_when_present,
-                                                                 loss_when_present_time,
-                                                                 is_gained_when_present,
-                                                                 gain_when_present_time)
-    loss_when_present_in_wt = loss_when_present_in_wt %>% group_by(cell_group) %>%
-      filter(present_above_thresh) %>%
-      summarize(loss_when_present_q_val = min(p.adjust(delta_q_value[is_lost_when_present & log_abund_wt == max(log_abund_wt)]), na.rm=TRUE),
-                is_lost_when_present = sum(is_lost_when_present) > 0,
-                largest_loss_when_present_in_wt = min(delta_log_abund_when_present, na.rm=TRUE),
-                earliest_loss_when_present_in_wt = min(loss_when_present_time, na.rm=TRUE),
-                latest_loss_when_present_in_wt = max(loss_when_present_time, na.rm=TRUE),
-                gain_when_present_q_val = min(p.adjust(delta_q_value[is_gained_when_present & log_abund_wt == max(log_abund_wt)]), na.rm=TRUE),
-                is_gained_when_present = sum(is_gained_when_present) > 0,
-                largest_gain_when_present_in_wt = max(delta_log_abund_when_present, na.rm=TRUE),
-                earliest_gain_when_present_in_wt = min(gain_when_present_time, na.rm=TRUE),
-                latest_gain_when_present_in_wt = max(gain_when_present_time, na.rm=TRUE)) %>%
-      mutate(largest_loss_when_present_in_wt = ifelse(is.infinite(largest_loss_when_present_in_wt), NA, largest_loss_when_present_in_wt),
-             earliest_loss_when_present_in_wt = ifelse(is.infinite(earliest_loss_when_present_in_wt), NA, earliest_loss_when_present_in_wt),
-             latest_loss_when_present_in_wt = ifelse(is.infinite(latest_loss_when_present_in_wt), NA, latest_loss_when_present_in_wt),
-             largest_gain_when_present_in_wt = ifelse(is.infinite(largest_gain_when_present_in_wt), NA, largest_gain_when_present_in_wt),
-             earliest_gain_when_present_in_wt = ifelse(is.infinite(earliest_gain_when_present_in_wt), NA, earliest_gain_when_present_in_wt),
-             latest_gain_when_present_in_wt = ifelse(is.infinite(latest_gain_when_present_in_wt), NA, latest_gain_when_present_in_wt))
+    loss_summary_tbl = changes_when_present_in_wt %>%
+      filter(is_lost_when_present) %>%
+      group_by(cell_group) %>%
+      summarize(loss_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
+                #loss_when_present_se = mean(delta_log_abund_when_present_se, na.rm=T),
+                loss_when_present_q_val = weighted.mean(delta_q_value, percent_cell_type_range, na.rm=T))
+    gain_summary_tbl = changes_when_present_in_wt %>%
+      filter(is_gained_when_present) %>%
+      group_by(cell_group) %>%
+      summarize(gain_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
+                #gain_when_present_se = mean(delta_log_abund_when_present_se, na.rm=T),
+                gain_when_present_q_val = weighted.mean(delta_q_value, percent_cell_type_range, na.rm=T))
+
+
+    change_summary_tbl = changes_when_present_in_wt %>% select(cell_group) %>% distinct()
+    change_summary_tbl = left_join(change_summary_tbl, loss_summary_tbl, by="cell_group")
+    change_summary_tbl = left_join(change_summary_tbl, gain_summary_tbl, by="cell_group")
+    change_summary_tbl = change_summary_tbl %>%
+      mutate(loss_when_present_q_val = ifelse(is.na(loss_when_present_q_val), 1, loss_when_present_q_val),
+             loss_when_present = ifelse(is.na(loss_when_present), NA, loss_when_present),
+             is_lost_when_present = loss_when_present_q_val < q_val,
+             gain_when_present_q_val = ifelse(is.na(gain_when_present_q_val), 1, gain_when_present_q_val),
+             gain_when_present = ifelse(is.na(gain_when_present), NA, gain_when_present),
+             is_gained_when_present = gain_when_present_q_val < q_val)
 
     peak_wt_abundance = estimate_abundances_over_interval(control_ccm, control_start_time, control_stop_time, interval_col=interval_col, knockout=FALSE, interval_step=interval_step, ...) %>%
-      group_by(cell_group) %>% slice_max(log_abund, n=1) %>%
-      mutate(peak_time_in_ctrl_within_perturb_time_range = !!sym(interval_col) >= start_time & !!sym(interval_col) <= stop_time) %>%
-      select(cell_group, !!sym(interval_col), peak_time_in_ctrl_within_perturb_time_range)
+          group_by(cell_group) %>% slice_max(log_abund, n=1) %>%
+          select(cell_group, peak_wt_time=!!sym(interval_col))
 
-    loss_at_peak_wt_abundance = right_join(perturb_vs_wt_nodes %>% select(cell_group,
-                                                                 peak_wt_time=t1,
-                                                                 delta_log_abund_at_peak=delta_log_abund,
-                                                                 delta_q_value),
-                                  peak_wt_abundance,
-                                  by=c("cell_group", "peak_wt_time"=interval_col)) %>%
-      mutate(peak_time_in_ctrl_within_perturb_time_range = tidyr::replace_na(peak_time_in_ctrl_within_perturb_time_range, FALSE)) %>%
-      mutate(is_lost_at_peak = peak_time_in_ctrl_within_perturb_time_range & delta_log_abund_at_peak < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val,
-             peak_loss_time = ifelse(is_lost_at_peak, peak_wt_time, NA))
-    loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% group_by(cell_group) %>% slice_min(peak_wt_time, n=1, with_ties=with_ties)
+    change_summary_tbl = left_join(change_summary_tbl,
+                                   peak_wt_abundance,
+                                   by=c("cell_group"))
 
-    loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% select(cell_group,
-                                                                     peak_time_in_ctrl_within_perturb_time_range,
-                                                                     peak_wt_time,
-                                                                     delta_log_abund_at_peak,
-                                                                     is_lost_at_peak,
-                                                                     peak_loss_time)
-
-    #loss_at_peak_wt_abundance %>% filter(cell_group == "1") %>% print()
-
-    largest_losses = perturb_vs_wt_nodes %>%
-      filter(delta_log_abund < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val) %>%
-      group_by(cell_group) %>%
-      #arrange(!!sym(paste(interval_col, "_x", sep="")), )
-      slice_min(delta_log_abund, n=1, with_ties=with_ties) %>% select(cell_group, largest_loss_time=!!sym(paste(interval_col, "_x", sep="")), largest_loss=delta_log_abund)
-
-    #print (largest_losses)
-    earliest_loss_tbl = earliest_loss_tbl %>%
-      group_by(cell_group) %>%
-      #mutate(largest_loss = min(delta_log_abund),
-      #       largest_loss_time = !!sym(paste(interval_col, "_x", sep=""))[which(delta_log_abund == largest_loss)]) %>%
-      summarize(#largest_loss_time = min(largest_loss_time),
-        earliest_time = min(!!sym(paste(interval_col, "_x", sep=""))),
-        latest_time = max(!!sym(paste(interval_col, "_x", sep=""))))
-
-    loss_tbl = earliest_loss_tbl %>% left_join(largest_losses, by="cell_group")
-    loss_tbl = loss_tbl %>% left_join(loss_at_peak_wt_abundance, by="cell_group")
-    loss_tbl = loss_tbl %>% left_join(loss_when_present_in_wt, by="cell_group")
-
-    return(loss_tbl)
+    return(change_summary_tbl)
 }
+
+# estimate_loss_timing <- function(perturbation_ccm,
+#                                  start_time,
+#                                  stop_time,
+#                                  interval_step,
+#                                  control_ccm=perturbation_ccm,
+#                                  control_start_time=start_time,
+#                                  control_stop_time=stop_time,
+#                                  log_abund_detection_thresh=-5,
+#                                  delta_log_abund_loss_thresh=0,
+#                                  interval_col="timepoint",
+#                                  q_val=0.01,
+#                                  with_ties=FALSE,
+#                                  ...){
+#
+#   fraction_of_presence_window_lost_thresh = 0.5
+#
+#     wt_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=FALSE, interval_col=interval_col, interval_step=interval_step, ...)
+#     ko_timepoint_pred_df = estimate_abundances_over_interval(perturbation_ccm, start_time, stop_time, knockout=TRUE, interval_col=interval_col, interval_step=interval_step, ...)
+#
+#     #print (wt_timepoint_pred_df)
+#     #print (ko_timepoint_pred_df)
+#     timepoints = seq(start_time, stop_time, interval_step)
+#
+#     # Find the pairs of nodes that are both lost in the perturbation at the same time
+#     perturb_vs_wt_nodes = tibble(t1=timepoints) %>%
+#       mutate(comp_abund = purrr::map(.f = compare_ko_to_wt_at_timepoint,
+#                                             .x = t1,
+#                                             perturbation_ccm=perturbation_ccm,
+#                                             interval_col=interval_col,
+#                                             wt_pred_df = wt_timepoint_pred_df,
+#                                             ko_pred_df = ko_timepoint_pred_df)) %>% tidyr::unnest(comp_abund)
+#
+#     earliest_loss_tbl =  perturb_vs_wt_nodes %>%
+#       mutate(delta_q_value = p.adjust(delta_p_value, method="BH")) %>%
+#       filter(delta_log_abund < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val)
+#
+#     #print (earliest_loss_tbl)
+#
+#
+#
+#     #peak_wt_abundance = perturb_vs_wt_nodes %>% group_by(cell_group) %>% slice_max(log_abund_x, n=1, with_ties=with_ties)
+#
+#     extant_wt_tbl = get_extant_cell_types(control_ccm,
+#                                           control_start_time,
+#                                           control_stop_time,
+#                                           log_abund_detection_thresh=log_abund_detection_thresh,
+#                                           knockout=FALSE,
+#                                           ...)
+#
+#     loss_when_present_in_wt = left_join(perturb_vs_wt_nodes %>% select(cell_group,
+#                                                                         wt_time_present=t1,
+#                                                                         delta_log_abund_when_present=delta_log_abund,
+#                                                                         delta_log_abund_when_present_se=delta_log_abund_se,
+#                                                                         log_abund_wt=log_abund_x,
+#                                                                         delta_q_value),
+#                                             extant_wt_tbl,
+#                                            by=c("cell_group"="cell_group", "wt_time_present"="timepoint")) %>%
+#       #mutate(peak_time_in_ctrl_within_perturb_time_range = tidyr::replace_na(peak_time_in_ctrl_within_perturb_time_range, FALSE)) %>%
+#       mutate(delta_q_value = ifelse(is.na(delta_q_value), 1, delta_q_value),
+#              delta_log_abund_when_present = ifelse(is.na(delta_log_abund_when_present), 1, delta_log_abund_when_present)) %>%
+#       mutate(is_lost_when_present = present_above_thresh & delta_log_abund_when_present < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val,
+#              loss_when_present_time = ifelse(is_lost_when_present, wt_time_present, NA)) %>%
+#       mutate(is_gained_when_present = present_above_thresh & delta_log_abund_when_present > -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val,
+#              gain_when_present_time = ifelse(is_gained_when_present, wt_time_present, NA))
+#     #loss_when_present_in_wt = loss_when_present_in_wt %>% group_by(cell_group) %>% slice_min(peak_wt_time, n=1, with_ties=with_ties)
+#
+#     loss_when_present_in_wt = loss_when_present_in_wt %>% select(cell_group,
+#                                                                  present_above_thresh,
+#                                                                      #peak_time_in_ctrl_within_perturb_time_range,
+#                                                                  wt_time_present,
+#                                                                  log_abund_wt,
+#                                                                  delta_log_abund_when_present,
+#                                                                  delta_log_abund_when_present_se,
+#                                                                  delta_q_value,
+#                                                                  is_lost_when_present,
+#                                                                  loss_when_present_time,
+#                                                                  is_gained_when_present,
+#                                                                  gain_when_present_time) %>% distinct()
+#     loss_when_present_in_wt = loss_when_present_in_wt %>% group_by(cell_group) %>%
+#       filter(present_above_thresh) %>%
+#       summarize(loss_when_present_q_val = min(p.adjust(delta_q_value[is_lost_when_present & log_abund_wt == max(log_abund_wt)]), na.rm=TRUE),
+#                 #is_lost_when_present = sum(is_lost_when_present) / sum(present_above_thresh) > fraction_of_presence_window_lost_thresh,
+#                 is_lost_when_present = sum(is_lost_when_present) > 0,
+#                 largest_loss_when_present_in_wt = min(delta_log_abund_when_present, na.rm=TRUE),
+#                 earliest_loss_when_present_in_wt = min(loss_when_present_time, na.rm=TRUE),
+#                 latest_loss_when_present_in_wt = max(loss_when_present_time, na.rm=TRUE),
+#                 gain_when_present_q_val = min(p.adjust(delta_q_value[is_gained_when_present & log_abund_wt == max(log_abund_wt)]), na.rm=TRUE),
+#                 is_gained_when_present = sum(is_gained_when_present) > 0,
+#                 largest_gain_when_present_in_wt = max(delta_log_abund_when_present, na.rm=TRUE),
+#                 earliest_gain_when_present_in_wt = min(gain_when_present_time, na.rm=TRUE),
+#                 latest_gain_when_present_in_wt = max(gain_when_present_time, na.rm=TRUE)) %>%
+#       mutate(loss_when_present_q_val = ifelse(is.infinite(loss_when_present_q_val), 1, loss_when_present_q_val),
+#              gain_when_present_q_val = ifelse(is.infinite(gain_when_present_q_val), 1, gain_when_present_q_val),
+#              largest_loss_when_present_in_wt = ifelse(is.infinite(largest_loss_when_present_in_wt), NA, largest_loss_when_present_in_wt),
+#              earliest_loss_when_present_in_wt = ifelse(is.infinite(earliest_loss_when_present_in_wt), NA, earliest_loss_when_present_in_wt),
+#              latest_loss_when_present_in_wt = ifelse(is.infinite(latest_loss_when_present_in_wt), NA, latest_loss_when_present_in_wt),
+#              largest_gain_when_present_in_wt = ifelse(is.infinite(largest_gain_when_present_in_wt), NA, largest_gain_when_present_in_wt),
+#              earliest_gain_when_present_in_wt = ifelse(is.infinite(earliest_gain_when_present_in_wt), NA, earliest_gain_when_present_in_wt),
+#              latest_gain_when_present_in_wt = ifelse(is.infinite(latest_gain_when_present_in_wt), NA, latest_gain_when_present_in_wt))
+#
+#     peak_wt_abundance = estimate_abundances_over_interval(control_ccm, control_start_time, control_stop_time, interval_col=interval_col, knockout=FALSE, interval_step=interval_step, ...) %>%
+#       group_by(cell_group) %>% slice_max(log_abund, n=1) %>%
+#       mutate(peak_time_in_ctrl_within_perturb_time_range = !!sym(interval_col) >= start_time & !!sym(interval_col) <= stop_time) %>%
+#       select(cell_group, !!sym(interval_col), peak_time_in_ctrl_within_perturb_time_range)
+#
+#     loss_at_peak_wt_abundance = right_join(perturb_vs_wt_nodes %>% select(cell_group,
+#                                                                  peak_wt_time=t1,
+#                                                                  delta_log_abund_at_peak=delta_log_abund,
+#                                                                  delta_q_value),
+#                                   peak_wt_abundance,
+#                                   by=c("cell_group", "peak_wt_time"=interval_col)) %>%
+#       mutate(peak_time_in_ctrl_within_perturb_time_range = tidyr::replace_na(peak_time_in_ctrl_within_perturb_time_range, FALSE)) %>%
+#       mutate(is_lost_at_peak = peak_time_in_ctrl_within_perturb_time_range & delta_log_abund_at_peak < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val,
+#              peak_loss_time = ifelse(is_lost_at_peak, peak_wt_time, NA))
+#     loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% group_by(cell_group) %>% slice_min(peak_wt_time, n=1, with_ties=with_ties)
+#
+#     loss_at_peak_wt_abundance = loss_at_peak_wt_abundance %>% select(cell_group,
+#                                                                      peak_time_in_ctrl_within_perturb_time_range,
+#                                                                      peak_wt_time,
+#                                                                      delta_log_abund_at_peak,
+#                                                                      is_lost_at_peak,
+#                                                                      peak_loss_time)
+#
+#     #loss_at_peak_wt_abundance %>% filter(cell_group == "1") %>% print()
+#
+#     largest_losses = perturb_vs_wt_nodes %>%
+#       filter(delta_log_abund < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val) %>%
+#       group_by(cell_group) %>%
+#       #arrange(!!sym(paste(interval_col, "_x", sep="")), )
+#       slice_min(delta_log_abund, n=1, with_ties=with_ties) %>% select(cell_group, largest_loss_time=!!sym(paste(interval_col, "_x", sep="")), largest_loss=delta_log_abund)
+#
+#     #print (largest_losses)
+#     earliest_loss_tbl = earliest_loss_tbl %>%
+#       group_by(cell_group) %>%
+#       #mutate(largest_loss = min(delta_log_abund),
+#       #       largest_loss_time = !!sym(paste(interval_col, "_x", sep=""))[which(delta_log_abund == largest_loss)]) %>%
+#       summarize(#largest_loss_time = min(largest_loss_time),
+#         earliest_time = min(!!sym(paste(interval_col, "_x", sep=""))),
+#         latest_time = max(!!sym(paste(interval_col, "_x", sep=""))))
+#
+#     loss_tbl = loss_when_present_in_wt
+#     loss_tbl = loss_tbl %>% left_join(largest_losses, by="cell_group")
+#     loss_tbl = loss_tbl %>% left_join(loss_at_peak_wt_abundance, by="cell_group")
+#     loss_tbl = loss_tbl %>% left_join(earliest_loss_tbl, by="cell_group")
+#
+#     #loss_tbl = earliest_loss_tbl %>% left_join(largest_losses, by="cell_group")
+#     #loss_tbl = loss_tbl %>% left_join(loss_at_peak_wt_abundance, by="cell_group")
+#     #loss_tbl = loss_tbl %>% left_join(loss_when_present_in_wt, by="cell_group")
+#
+#     return(loss_tbl)
+# }
 
 #' Identify the possible origins for each destination
 #'
@@ -2003,8 +2137,6 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
     }
 
     if (is.null(perturbation_ccm_tbl$perturb_summary_tbl)){
-      if (verbose)
-        message ("Assessing perturbation effects")
       perturbation_ccm_tbl = assess_perturbation_effects(control_timeseries_ccm,
                                                          perturbation_ccm_tbl,
                                                          q_val=q_val,
