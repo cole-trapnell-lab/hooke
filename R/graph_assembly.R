@@ -1504,16 +1504,6 @@ estimate_loss_timing <- function(perturbation_ccm,
                                             wt_pred_df = wt_timepoint_pred_df,
                                             ko_pred_df = ko_timepoint_pred_df)) %>% tidyr::unnest(comp_abund)
 
-    earliest_loss_tbl =  perturb_vs_wt_nodes %>%
-      mutate(delta_q_value = p.adjust(delta_p_value, method="BH")) %>%
-      filter(delta_log_abund < -abs(delta_log_abund_loss_thresh) & delta_q_value <= q_val)
-
-    #print (earliest_loss_tbl)
-
-
-
-    #peak_wt_abundance = perturb_vs_wt_nodes %>% group_by(cell_group) %>% slice_max(log_abund_x, n=1, with_ties=with_ties)
-
     extant_wt_tbl = get_extant_cell_types(control_ccm,
                                           control_start_time,
                                           control_stop_time,
@@ -1536,18 +1526,30 @@ estimate_loss_timing <- function(perturbation_ccm,
       mutate(is_gained_when_present = present_above_thresh & delta_log_abund_when_present > -abs(delta_log_abund_loss_thresh))
     #loss_when_present_in_wt = loss_when_present_in_wt %>% group_by(cell_group) %>% slice_min(peak_wt_time, n=1, with_ties=with_ties)
 
+    # FIXME: maybe should refactor the code below into another function that summarizes contrast over intervals:
+    # num samples
+    n = nrow(model(perturbation_ccm)$fitted)
+    # num parameters
+    k = length(rownames(coef(perturbation_ccm@best_full_model)))
+    df.r = n - k - 1
+
     loss_summary_tbl = changes_when_present_in_wt %>%
       filter(is_lost_when_present) %>%
       group_by(cell_group) %>%
       summarize(loss_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
-                #loss_when_present_se = mean(delta_log_abund_when_present_se, na.rm=T),
-                loss_when_present_q_val = weighted.mean(delta_q_value, percent_cell_type_range, na.rm=T))
+                loss_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
+                loss_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
+                loss_when_present_p_value = 2 * pt(-abs(loss_when_present_tvalue), df.r)) %>%
+      mutate(loss_when_present_q_val = p.adjust(loss_when_present_p_value, method="BH"))
+
     gain_summary_tbl = changes_when_present_in_wt %>%
       filter(is_gained_when_present) %>%
       group_by(cell_group) %>%
       summarize(gain_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
-                #gain_when_present_se = mean(delta_log_abund_when_present_se, na.rm=T),
-                gain_when_present_q_val = weighted.mean(delta_q_value, percent_cell_type_range, na.rm=T))
+                gain_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
+                gain_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
+                gain_when_present_p_value = 2 * pt(-abs(gain_when_present_tvalue), df.r)) %>%
+      mutate(gain_when_present_q_val = p.adjust(gain_when_present_p_value, method="BH"))
 
 
     change_summary_tbl = changes_when_present_in_wt %>% select(cell_group) %>% distinct()
