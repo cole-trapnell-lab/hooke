@@ -179,7 +179,8 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni"
   df.r = n - k - 1
 
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
-                                                tvalue = delta_log_abund/(sqrt(log_abund_se_y^2 + log_abund_se_x^2)),
+                                                delta_log_abund_se = sqrt(log_abund_se_y^2 + log_abund_se_x^2),
+                                                tvalue = delta_log_abund/delta_log_abund_se,
                                                 delta_p_value = 2 * pt(-abs(tvalue), df.r),
                                                 delta_p_value = ifelse(is.nan(delta_p_value), 1, delta_p_value),
                                                 # delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
