@@ -1539,7 +1539,8 @@ estimate_loss_timing <- function(perturbation_ccm,
       summarize(loss_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
                 loss_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
                 loss_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
-                loss_when_present_p_value = 2 * pt(-abs(loss_when_present_tvalue), df.r)) %>%
+                loss_when_present_tvalue_df = df.r + n(),
+                loss_when_present_p_value = 2 * pt(-abs(loss_when_present_tvalue), loss_when_present_tvalue_df)) %>%
       mutate(loss_when_present_q_val = p.adjust(loss_when_present_p_value, method="BH"))
 
     gain_summary_tbl = changes_when_present_in_wt %>%
@@ -1548,7 +1549,8 @@ estimate_loss_timing <- function(perturbation_ccm,
       summarize(gain_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
                 gain_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
                 gain_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
-                gain_when_present_p_value = 2 * pt(-abs(gain_when_present_tvalue), df.r)) %>%
+                gain_when_present_tvalue_df = df.r + n(),
+                gain_when_present_p_value = 2 * pt(-abs(gain_when_present_tvalue), gain_when_present_tvalue_df)) %>%
       mutate(gain_when_present_q_val = p.adjust(gain_when_present_p_value, method="BH"))
 
 
