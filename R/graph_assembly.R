@@ -143,14 +143,29 @@ get_extant_cell_types <- function(ccm,
                                   interval_step = 2,
                                   log_abund_detection_thresh = -5,
                                   pct_dynamic_range = 0.25,
+                                  pct_range_detection_thresh = pct_dynamic_range,
                                   min_cell_range = 2,
                                   ...){
 
   timepoint_pred_df = estimate_abundances_over_interval(ccm, start, stop, interval_col=interval_col, interval_step=interval_step, ...)
 
+  norm_mat = normalized_counts(ccm@ccs, "size_only")
+  norm_mat[norm_mat == 0] = NA
+  count_quantiles = sparseMatrixStats::rowQuantiles(norm_mat, probs = seq(from = 0, to = 1, by = pct_range_detection_thresh), na.rm=T)
+  count_ranges = sparseMatrixStats::rowRanges(norm_mat, na.rm=T)
+  row.names(count_ranges) = row.names(count_quantiles)
+
+  #abund_range = range(timepoint_pred_df$log_abund)
+  #dynamic_range = abund_range[2]-abund_range[1]
+
+  cell_type_thresh_df = tibble(cell_group = timepoint_pred_df %>% pull(cell_group) %>% unique,
+                               cell_group_pct_range_detection_thresh = count_quantiles[cell_group, 2],
+                               min_count = count_ranges[cell_group, 1],
+                               max_count = count_ranges[cell_group, 2])
+
+  timepoint_pred_df = timepoint_pred_df %>% left_join(cell_type_thresh_df)
+
   if (is.null(log_abund_detection_thresh)) {
-    abund_range = range(timepoint_pred_df$log_abund)
-    dynamic_range = abund_range[2]-abund_range[1]
     log_abund_detection_thresh = abund_range[1] + pct_dynamic_range*dynamic_range
   }
 
@@ -158,9 +173,9 @@ get_extant_cell_types <- function(ccm,
     group_by(cell_group) %>%
     mutate(max_abundance = max(exp(log_abund)),
            percent_max_abund = exp(log_abund) / max_abundance,
-           cell_type_range = max(log_abund)-(min(log_abund)),
-           percent_cell_type_range = (log_abund - min(log_abund)) / cell_type_range,
-           above_log_abund_thresh = (log_abund - 2*log_abund_se > log_abund_detection_thresh) | cell_type_range < min_cell_range,
+           cell_type_prediction_range = max(log_abund)-(min(log_abund)),
+           percent_cell_type_range = (log_abund - min(log_abund)) / cell_type_prediction_range,
+           above_log_abund_thresh = (log_abund - 2*log_abund_se > log_abund_detection_thresh & log_abund - 2*log_abund_se > log(cell_group_pct_range_detection_thresh)) | cell_type_prediction_range < min_cell_range,
            present_flag = ifelse(above_log_abund_thresh, TRUE, NA)) %>%
     ungroup()
 
