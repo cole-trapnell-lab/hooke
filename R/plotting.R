@@ -1064,6 +1064,7 @@ plot_state_graph_annotations <- function(ccm,
 
   if (is.null(edge_weights)){
     edges = edges %>% select(from, to)
+    edges$weight = 1
   }else{
     edges = edges %>% select(from, to, weight=!!sym(edge_weights))
   }
@@ -1105,6 +1106,7 @@ plot_state_graph_annotations <- function(ccm,
                                      edge_thickness = replace_na(edge_thickness, min_edge_size))
   }else{
     bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
+    bezier_df$unsupported_edge = FALSE
   }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
