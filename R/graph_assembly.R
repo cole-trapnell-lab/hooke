@@ -252,7 +252,8 @@ weigh_edges <- function(ccm, edges) {
 #' @noRd
 add_cross_component_pathfinding_links = function(ccm,
                                                  pathfinding_graph,
-                                                 type=c("strongest-pcor", "strong-pcor"),
+                                                 extant_cell_type_df,
+                                                 type=c("strongest-pcor", "strong-pcor", "ctp"),
                                                  surprise_thresh=2){
 
   pcor_graph = tibble(cell_group = row.names(counts(ccm@ccs)))
@@ -271,13 +272,34 @@ add_cross_component_pathfinding_links = function(ccm,
   clusters_by_partition = clusters_by_partition %>% group_by(cell_group) %>% slice_max(cells_from_group_in_partition, n=1)
   clusters_by_partition = clusters_by_partition %>% select(cell_group, partition)
 
+  #FIXME: we should be indexing extant_cell_type_df by name, but this function doesn't know what the
+  # timepoint column is called yet
+  start_time = min(extant_cell_type_df[,1])
+  clusters_by_partition = clusters_by_partition %>% left_join(extant_cell_type_df, by="cell_group")
+  partitions_present_at_start = clusters_by_partition %>%
+    filter(timepoint == start_time & present_above_thresh) %>%
+    pull(partition) %>% unique
+  partitions_absent_at_start = setdiff(clusters_by_partition$partition, partitions_present_at_start)
+  cell_groups_in_emergent_partitions = clusters_by_partition %>%
+    filter(partition %in% partitions_absent_at_start) %>% pull(cell_group) %>% unique
+
+  # only add cross-partition links between cell groups that aren't present
+  # at the start of the assembly time window
   cross_partition_map = clusters_by_partition %>% ungroup() %>% select(cell_group) %>% tidyr::expand(cell_group, cell_group)
   colnames(cross_partition_map) = c("from", "to")
   cross_partition_map = cross_partition_map %>% filter(from != to)
+  # Only allow cross partition links when one cell group is in an emergent partition
+  cross_partition_map = cross_partition_map %>% filter(from %in% cell_groups_in_emergent_partitions |
+                                                       to %in% cell_groups_in_emergent_partitions)
   cross_partition_map = dplyr::left_join(cross_partition_map, clusters_by_partition %>% setNames(paste0('to_', names(.))), by=c("to"="to_cell_group")) #%>%
   cross_partition_map = dplyr::left_join(cross_partition_map, clusters_by_partition %>% setNames(paste0('from_', names(.))), by=c("from"="from_cell_group")) #%>%
-
   cross_partition_map = cross_partition_map %>% filter (from_partition != to_partition)
+
+  # only add cross-partition links between cell groups that are present
+  # at the same time
+  cross_partition_map = cross_partition_map %>% filter (from_timepoint == to_timepoint &
+                                                          from_present_above_thresh &
+                                                          to_present_above_thresh)
 
   #pcor_graph = pcor_graph %>% tidyr::replace_na(list(pcor = 0))
 
@@ -321,6 +343,13 @@ add_cross_component_pathfinding_links = function(ccm,
     cross_partition_edges =  cross_partition_map %>%
       filter (pcor < model_fit_lower | pcor > model_fit_upper) %>%
       select(from, to, weight=umap_dist)
+  }else if (type == "ctp"){
+    cross_partition_edges =  cross_partition_map %>%
+      group_by(to_partition) %>%
+      slice_min(to_timepoint) %>%
+      slice_min(umap_dist) %>%
+      ungroup() %>%
+      select(from, to, weight=umap_dist)
   }
 
   cross_partition_graph = igraph::graph_from_data_frame(cross_partition_edges, directed=FALSE, vertices=data.frame(id=row.names(counts(ccm@ccs)))) %>% igraph::as.directed()
@@ -343,7 +372,7 @@ add_cross_component_pathfinding_links = function(ccm,
 #' @export
 init_pathfinding_graph <- function(ccm,
                                    extant_cell_type_df,
-                                   links_between_components=c("none", "strongest-pcor", "strong-pcor"),
+                                   links_between_components=c("ctp", "none", "strongest-pcor", "strong-pcor"),
                                    weigh_by_pcor=F,
                                    edge_whitelist=NULL,
                                    edge_blacklist=NULL){
@@ -394,7 +423,10 @@ init_pathfinding_graph <- function(ccm,
 
 
   if (links_between_components != "none"){
-    pathfinding_graph = add_cross_component_pathfinding_links(ccm, pathfinding_graph, type=links_between_components)
+    pathfinding_graph = add_cross_component_pathfinding_links(ccm,
+                                                              pathfinding_graph,
+                                                              extant_cell_type_df,
+                                                              type=links_between_components)
     pathfinding_graph = igraph::as_data_frame(pathfinding_graph) %>%  select(from, to)
     pathfinding_graph = hooke:::weigh_edges_by_umap_dist(ccm, pathfinding_graph) %>%
       igraph::graph_from_data_frame(directed=FALSE, vertices=node_metadata) %>%
@@ -1392,6 +1424,9 @@ break_cycles_in_state_transition_graph <- function(state_graph, support_attribut
 
   cycle_breaking_scores = igraph::edge_attr(state_graph, support_attribute)
   cycle_breaking_scores[is.na(cycle_breaking_scores)] = 0
+
+  # NOTE: squaring the scores should ensure that the cycle breaking procedure prefers to keep a few well supported edges even if that means removing lots of edges with lower support
+  cycle_breaking_scores = cycle_breaking_scores^2
   #igraph::edge_attr(state_graph, "support") = cycle_breaking_scores
 
   #print (igraph::edge_attr(state_graph, "support"))
@@ -1948,7 +1983,7 @@ assemble_timeseries_transitions <- function(ccm,
                                             log_abund_detection_thresh=-5,
                                             min_pathfinding_lfc=0,
                                             make_dag=FALSE,
-                                            links_between_components=c("none", "strongest-pcor", "strong-pcor"),
+                                            links_between_components=c("ctp", "none", "strongest-pcor", "strong-pcor"),
                                             edge_whitelist=NULL,
                                             edge_blacklist=NULL,
                                             ...){
@@ -2099,7 +2134,7 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
                                                          max_interval = 24,
                                                          log_abund_detection_thresh=-5,
                                                          min_pathfinding_lfc=0,
-                                                         links_between_components=c("none", "strongest-pcor", "strong-pcor"),
+                                                         links_between_components=c("ctp", "none", "strongest-pcor", "strong-pcor"),
                                                          verbose=FALSE,
                                                          edge_whitelist=NULL,
                                                          edge_blacklist=NULL,
