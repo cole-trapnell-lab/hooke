@@ -42,7 +42,6 @@ js_dist_to_pattern <- function (x, pattern)
 {
   stopifnot(ncol(x) == length(pattern))
   avg_x_pattern = sweep(x, 2, pattern, "+") / 2
-
   JSdiv = shannon_entropy(avg_x_pattern) -
     (shannon_entropy(x) + shannon_entropy(matrix(pattern, nrow=1))) * 0.5
   JSdiv[is.infinite(JSdiv)] = 1
@@ -50,6 +49,26 @@ js_dist_to_pattern <- function (x, pattern)
   JSdist <- sqrt(JSdiv)
   pattern_match_score = 1 - JSdist
   return(pattern_match_score)
+}
+
+# Measure the degree of upregulation
+#' @noRd
+measure_upregulation_effect <- function (self_estimate, other_estimates)
+{
+  effect_size = self_estimate - matrixStats::rowMaxs(other_estimates)
+  return(effect_size)
+}
+
+measure_downregulation_effect <- function (self_estimate, other_estimates)
+{
+  effect_size = matrixStats::rowMaxs(other_estimates) - self_estimate
+  return(effect_size)
+}
+
+measure_maintenance_effect <- function (self_estimate, other_estimates)
+{
+  effect_size = 1/matrixStats::rowMaxs(abs(other_estimates - as.vector(self_estimate)))
+  return(effect_size)
 }
 
 #' @noRd
@@ -68,10 +87,15 @@ score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_
 
   expr_df = tibble(gene_id=row.names(estimate_matrix))
 
-
+  self_estimates = estimate_matrix[gene_patterns$gene_id, cell_state, drop=FALSE]
+  parents_estimates = estimate_matrix[gene_patterns$gene_id, c(parents), drop=FALSE]
+  parents_and_sib_estimates = estimate_matrix[gene_patterns$gene_id, c(parents, siblings), drop=FALSE]
 
   self_and_parent = exp(estimate_matrix[gene_patterns$gene_id, c(cell_state, parents), drop=FALSE])
+  self_and_parent = self_and_parent / Matrix::rowSums(self_and_parent) #normalize so that rows sum to 1
+
   self_parent_sibs = exp(estimate_matrix[gene_patterns$gene_id, c(cell_state, parents, siblings), drop=FALSE])
+  self_parent_sibs = self_parent_sibs / Matrix::rowSums(self_parent_sibs) #normalize so that rows sum to 1
 
   num_parents = length(parents)
   num_siblings = length(siblings)
@@ -87,7 +111,18 @@ score_genes_for_expression_pattern <- function(cell_state, gene_patterns, state_
                        interpretation %in% c("Downregulated", "Dectivated") ~ js_dist_to_pattern(self_and_parent, c(0, rep(1, num_parents))),
                        interpretation %in% c("Selectively downregulated", "Specifically downregulated", "Selectively deactivated", "Specifically deactivated") ~ js_dist_to_pattern(self_parent_sibs, c(0, rep(1, num_parents), rep(0, num_siblings))),
                        TRUE ~ 0)
-           )
+           ) %>%
+    #group_by(interpretation) %>%
+    mutate(pattern_activity_score =
+             case_when(interpretation %in% c("Absent") ~ 0,
+                       interpretation %in% c("Maintained") ~ measure_maintenance_effect(self_estimates, parents_estimates),
+                       interpretation %in% c("Selectively maintained", "Specifically maintained") ~ measure_maintenance_effect(self_estimates, parents_and_sib_estimates),
+                       interpretation %in% c("Upregulated", "Activated") ~ measure_upregulation_effect(self_estimates, parents_estimates),
+                       interpretation %in% c("Selectively upregulated", "Specifically upregulated", "Selectively activated", "Specifically activated") ~ measure_upregulation_effect(self_estimates, parents_and_sib_estimates),
+                       interpretation %in% c("Downregulated", "Dectivated") ~ measure_downregulation_effect(self_estimates, parents_estimates),
+                       interpretation %in% c("Selectively downregulated", "Specifically downregulated", "Selectively deactivated", "Specifically deactivated") ~ measure_downregulation_effect(self_estimates, parents_and_sib_estimates),
+                       TRUE ~ 0)
+    )
   return(gene_patterns_and_scores)
 }
 
@@ -222,8 +257,8 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
               # Higher than parent, but lower than siblings
               return("Upregulated")
             }
-            else { # same as parent, same as siblings
-              return("Maintained")
+            else { # higher than parent, same as siblings
+              return("Upregulated")
             }
           }
           else if(pat_df$lower_than_parents){
@@ -263,7 +298,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
         }
 
       }else{
-        # Expressed in self but not in parent
+        # expressed in self but not in parent
         if (is.na(pat_df$expressed_in_siblings)){
           # Expressed in self, not in parent and there are no siblings
           if (pat_df$higher_than_parents)
@@ -271,10 +306,10 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
           else if(pat_df$lower_than_parents)
             return("Downregulated") # shouldn't happen
           else
-            return("Maintained") # shouldn't happen
+            return("Activated") # might happen if its above threshold but not significantly above parent (and parent is below thresh)
         } else {
-          # Expressed in self and not in parent and there are siblings
-          if (pat_df$higher_than_parents){
+          # expressed in self and there are siblings
+          if (pat_df$higher_than_parents){ # Expressed in self and higher than parent and there are siblings
             if (pat_df$expressed_in_siblings == FALSE | pat_df$higher_than_all_siblings){
               # Higher than parent, and higher than all siblings
               return("Specifically activated")
@@ -283,19 +318,19 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
               return("Selectively activated")
             }
             else if(pat_df$lower_than_all_siblings){
-              # Higher than parent, but lower than all siblings
+              # Higher than parent (which is off), but lower than all siblings
               return("Activated")
             }
             if(pat_df$lower_than_siblings){
-              # Higher than parent, but lower than some siblings
+              # Higher than parent (which is off), but lower than some siblings
               return("Activated")
             }
-            else { # same as parent, same as siblings
-              return("Maintained")
+            else { # Higher than parent (which is off), same as siblings
+              return("Activated")
             }
           }
           else if(pat_df$lower_than_parents){
-            # if the gene is lower in the parent, which is off, just mark the gene absent
+            # gene is expressed, lower in the parent (which is off)
             if (pat_df$higher_than_all_siblings){
               # Lower than parent, and higher than all siblings
               return("Absent") # shouldn't happen
@@ -312,7 +347,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
               # Lower than parent and  lower than some siblings
               return("Absent")
             }
-            else { # same as parent, same as siblings
+            else { # Lower than parent, same as siblings
               return("Absent")
             }
           }
