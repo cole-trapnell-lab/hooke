@@ -2510,6 +2510,7 @@ assess_support_for_transition_graph <- function(control_timeseries_ccm,
 }
 
 #' Simplify a directed state transition graph by grouping nodes according to a specified label
+#' assumes the graphs over nodes corresponding to groups in the ccm
 #' @export
 contract_state_graph <- function(ccm, state_graph, group_nodes_by){
   # Create simplified cell state graph just on cell type (not cluster):
@@ -2528,7 +2529,7 @@ contract_state_graph <- function(ccm, state_graph, group_nodes_by){
     dplyr::group_by(cell_group) %>% slice_max(n, with_ties=FALSE) %>% dplyr::select(-n)
   colnames(group_by_metadata) = c("cell_group", "group_nodes_by")
   node_metadata = left_join(node_metadata, group_by_metadata, by=c("id"="cell_group"))
-
+  node_metadata = node_metadata %>% mutate(id = as.numeric(id)) %>% arrange(id)
   contraction_mapping = as.factor(node_metadata$group_nodes_by)
   contraction_mapping_names = as.character(levels(contraction_mapping))
   contraction_mapping = as.numeric(contraction_mapping)
