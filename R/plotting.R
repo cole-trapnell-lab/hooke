@@ -1776,6 +1776,7 @@ plot_state_graph_gene_expression <- function(ccm,
                                              fract_expr=0.0,
                                              mean_expr=0.0,
                                              scale_to_range = FALSE,
+                                             color_nodes_by=NULL,
                                              label_nodes_by=NULL,
                                              group_nodes_by=NULL,
                                              label_edges_by=NULL,
@@ -1783,11 +1784,11 @@ plot_state_graph_gene_expression <- function(ccm,
                                              arrow.gap=0.03,
                                              arrow_unit = 2,
                                              bar_unit = .075,
-                                             node_size = 6,
+                                             min_node_size = 0.25,
+                                             max_node_size = 2,
                                              min_edge_size=0.1,
                                              max_edge_size=2,
                                              unlabeled_groups = c("Unknown"),
-                                             label_subset = NULL,
                                              label_groups=TRUE,
                                              hide_unlinked_nodes=TRUE,
                                              group_label_font_size=6,
@@ -1846,15 +1847,17 @@ plot_state_graph_gene_expression <- function(ccm,
   }
 
   layout_info = layout_state_graph(G, node_metadata, NULL, weighted=FALSE)
-
   gvizl_coords = layout_info$gvizl_coords
   bezier_df = layout_info$bezier_df
   if (is.null(edge_weights) == FALSE){
     bezier_df = left_join(bezier_df, edges)
     bezier_df = bezier_df %>% mutate(edge_score =  (weight - min(weight, na.rm=TRUE)) / max(weight, na.rm=TRUE),
-                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size)
+                                     edge_thickness = ((max_edge_size - min_edge_size) * edge_score) + min_edge_size,
+                                     unsupported_edge = ifelse(is.na(weight), TRUE, FALSE),
+                                     edge_thickness = replace_na(edge_thickness, min_edge_size))
   }else{
     bezier_df$edge_thickness = (max_edge_size + min_edge_size) / 2
+    bezier_df$unsupported_edge = FALSE
   }
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
@@ -1913,11 +1916,11 @@ plot_state_graph_gene_expression <- function(ccm,
     ggplot2::geom_path(aes(x, y, group=edge_name), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
 
 
-  if (is.null(label_subset)) {
-    label_subset = unique(node_metadata$group_nodes_by)
-  }
-
-  label_subset = label_subset[label_subset != unlabeled_groups]
+  # if (is.null(label_subset)) {
+  #   label_subset = unique(node_metadata$group_nodes_by)
+  # }
+  #
+  # label_subset = label_subset[label_subset != unlabeled_groups]
 
   if (is.null(group_nodes_by) == FALSE){
     p = p + ggforce::geom_mark_rect(aes(x, y,
@@ -1933,36 +1936,23 @@ plot_state_graph_gene_expression <- function(ccm,
                                     label.fontface="plain",
                                     con.linetype=label_conn_linetype,
                                     con.colour=con_colour,
-                                    show.legend = F) +
-      ggforce::geom_mark_rect(aes(x, y,
-                                  fill = gene_short_name,
-                                  color = group_nodes_by,
-                                  label = group_nodes_by,
-                                  filter = group_nodes_by %in% label_subset),
-                              size=0.5,
-                              expand = unit(2, "mm"),
-                              label.buffer=unit(1, "mm"),
-                              radius = unit(1.5, "mm"),
-                              label.margin = margin(1, 1, 1, 1, "mm"),
-                              label.fontsize=group_label_font_size,
-                              label.fontface="plain",
-                              con.linetype=label_conn_linetype,
-                              con.colour=con_colour,
-                              show.legend = F)
-    # p = p + ggforce::geom_mark_rect(aes(x, y,
-    #                                     fill = gene_short_name,
-    #                                     color = group_nodes_by,
-    #                                     label = group_nodes_by,
-    #                                     filter = group_nodes_by %in% unlabeled_groups == FALSE),
-    #                                 size=0.5,
-    #                                 expand = unit(2, "mm"),
-    #                                 label.buffer=unit(1, "mm"),
-    #                                 radius = unit(1.5, "mm"),
-    #                                 label.margin = margin(1, 1, 1, 1, "mm"),
-    #                                 label.fontsize=group_label_font_size,
-    #                                 label.fontface="plain",
-    #                                 con.linetype=label_conn_linetype,
-    #                                 con.colour=con_colour)
+                                    show.legend = F) #+
+      # ggforce::geom_mark_rect(aes(x, y,
+      #                             fill = gene_short_name,
+      #                             color = group_nodes_by,
+      #                             label = group_nodes_by,
+      #                             filter = group_nodes_by %in% label_subset),
+      #                         size=0.5,
+      #                         expand = unit(2, "mm"),
+      #                         label.buffer=unit(1, "mm"),
+      #                         radius = unit(1.5, "mm"),
+      #                         label.margin = margin(1, 1, 1, 1, "mm"),
+      #                         label.fontsize=group_label_font_size,
+      #                         label.fontface="plain",
+      #                         con.linetype=label_conn_linetype,
+      #                         con.colour=con_colour,
+      #                         show.legend = F)
+
     p = p + scale_fill_manual(values=rep("white", length(unique(g$gene_short_name))))
 
   }
@@ -1987,7 +1977,7 @@ plot_state_graph_gene_expression <- function(ccm,
 
   p = p + facet_wrap(~gene_short_name)
 
-  p = p + scale_size_continuous(labels = scales::percent, range=c(1, node_size)) +
+  p = p + scale_size_continuous(labels = scales::percent, range=c(min_node_size, max_node_size)) +
     ggnetwork::theme_blank() +
     hooke_theme_opts() +
     theme(legend.position=legend_position) + guides(fill = "none")
