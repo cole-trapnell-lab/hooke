@@ -7,10 +7,10 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
                          xlev = ccm@model_aux[["xlevels"]])
   #O <- model.offset(ccm@model_aux[["model_frame"]])
-  EZ <- tcrossprod(X, model(ccm)$model_par$Theta)
+  EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
   #if (!is.null(O))
   #  EZ <- EZ + O
-  EZ <- sweep(EZ, 2, 0.5 * diag(model(ccm)$model_par$Sigma), "+")
+  EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm)$model_par$Sigma), "+")
   colnames(EZ) <- colnames(model(ccm)$model_par$Sigma)
   results <- switch(type, link = EZ, response = exp(EZ))
   attr(results, "type") <- type
@@ -20,15 +20,16 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 
 #' Predict cell type abundances given a PLN model and a set of inputs for its covariates
 #'
-#' @param ccm A cell_count_model
-#' @param newdata tibble Needs to be suitable input to pln_model
-#' @param min_log_abund numeric
-#' @return tibble Cell abundance predictions.
+#' @param ccm A cell_count_model.
+#' @param newdata tibble A tibble of variables used for the prediction.
+#' @param min_log_abund numeric Minimum log abundance value.
+#' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
+estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(tibble::is_tibble(newdata))
   assertthat::assert_that(is.numeric(min_log_abund))
 
   # check that all terms in new data have been specified
@@ -50,7 +51,6 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
                          xlev = ccm@model_aux[["xlevels"]])
 
-
   #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
   #                  xlev = ccm@model_aux[["xlevels"]])
   X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
@@ -62,20 +62,23 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #   v_hat = ccm@bootstrapped_vhat
   # }
 
-  v_hat = ccm@vhat
-  v_hat_method = ccm@vhat_method
+  # vhat_coef <- coef(model(ccm), type="main")
+
+  # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
+  v_hat <- ccm@vhat
+  v_hat_method <- ccm@vhat_method
 
   if (v_hat_method == "wald") {
-    se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
+    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
   } else {
-    se_fit = sqrt(diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
   }
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
   #log_abund = pred_out[1,]
   log_abund = as.numeric(pred_out)
-  log_abund_sd = sqrt(diag(coef(model(ccm), type="covariance")))
+  log_abund_sd = sqrt(Matrix::diag(coef(model(ccm), type="covariance")))
   log_abund_se = se_fit
 
   below_thresh = log_abund < min_log_abund
@@ -96,18 +99,33 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5){
   #percent_range)
   newdata$Offset = NULL
   pred_out_tbl = cbind(newdata, pred_out_tbl)
+  pred_out_tbl <- tibble::tibble(pred_out_tbl)
+
   return(pred_out_tbl)
 }
 
 
 # To do : need better error message for when you are missing a column that needs to be specified for the model
 #' Predict cell type abundances given a PLN model over a range of time or other interval
-#'
+#' @param ccm A cell_count_model.
+#' @param interval_start numeric Interval start value.
+#' @param interval_stop numeric Interval stop value.
+#' @param interval_col character Interval values are taken from the interval_var data. Default is "timepoint".
+#' @param interval_step numeric Interval size. Default is 2.
+#' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="timepoint", interval_step=2, ...) {
+estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, ...) {
 
-  timepoint_pred_df = tibble(IV= seq(start, stop, interval_step), ...)
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(is.numeric(interval_start))
+  assertthat::assert_that(is.numeric(interval_stop))
+  assertthat::assert_that(interval_stop >= interval_start)
+  assertthat::assert_that(is.numeric(interval_step))
+
+  #assertthat::assert_that(interval_col %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
+
+  timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step), ...)
   colnames(timepoint_pred_df)[1] = interval_col
 
   time_interval_pred_helper = function(tp, ...){
@@ -131,19 +149,19 @@ estimate_abundances_over_interval <- function(ccm, start, stop, interval_col="ti
 #' Compare two estimates of cell abundances from a Hooke model.
 #'
 #' @param ccm A cell_count_model.
-#' @param cond_x tibble An estimate from estimate_abundances().
-#' @param cond_y tibble An estimate from estimate_abundances().
+#' @param cond_x tibble A cell type abundance estimate from estimate_abundances().
+#' @param cond_y tibble A cell type abundance estimate from estimate from estimate_abundances().
 #' @param method string A method for correcting P-value multiple comparisons.
 #'    This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 #'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
-#' @return A table contrasting cond_x and cond_y (interpret as Y/X).
+#' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X).
 #' @importFrom dplyr full_join
 #' @export
 compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni", "hochberg", "hommel", "BY")){
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
-  assertthat::assert_that(is.data.frame(cond_x))
-  assertthat::assert_that(is.data.frame(cond_y))
+  assertthat::assert_that(tibble::is_tibble(cond_x))
+  assertthat::assert_that(tibble::is_tibble(cond_y))
 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(method) == "", TRUE, TRUE),
@@ -157,12 +175,14 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni"
   # num samples
   n = nrow(model(ccm)$fitted)
   # num parameters
-  k = length(colnames(coef(ccm@best_full_model)))
+  k = length(rownames(coef(ccm@best_full_model)))
   df.r = n - k - 1
 
   contrast_tbl = contrast_tbl %>% dplyr::mutate(delta_log_abund = log_abund_y - log_abund_x,
-                                                tvalue = delta_log_abund/(sqrt(log_abund_se_y^2 + log_abund_se_x^2)),
+                                                delta_log_abund_se = sqrt(log_abund_se_y^2 + log_abund_se_x^2),
+                                                tvalue = delta_log_abund/delta_log_abund_se,
                                                 delta_p_value = 2 * pt(-abs(tvalue), df.r),
+                                                delta_p_value = ifelse(is.nan(delta_p_value), 1, delta_p_value),
                                                 # delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
                                                 delta_q_value = p.adjust(delta_p_value, method = method)) %>% select(-tvalue)
   return(contrast_tbl)

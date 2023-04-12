@@ -6,11 +6,10 @@
 experiment.}
 \usage{
 get_discordant_loss_pairs(
-  control_timeseries_ccm,
   perturbation_ccm,
-  control_time_window,
   perturb_time_window,
-  pathfinding_graph,
+  control_timeseries_ccm,
+  control_time_window,
   interval_step,
   interval_col,
   log_abund_detection_thresh,

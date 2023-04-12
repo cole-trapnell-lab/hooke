@@ -1,7 +1,8 @@
 setOldClass(c("igraph"), prototype=structure(list(), class="igraph"))
 setOldClass(c("PLNnetworkfamily"), prototype=structure(list(), class="PLNnetworkfamily"))
 setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit"))
-
+setOldClass(c("PLNfamily"), prototype=structure(list(), class="PLNfamily"))
+setOldClass(c("PLNfit"), prototype=structure(list(), class="PLNfit"))
 
 #' The cell_count_set class
 #'
@@ -48,8 +49,8 @@ setMethod("is.na", "cell_count_set", function(x) FALSE)
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
                    full_model_formula = "formula",
-                   full_model_family = "PLNnetworkfamily",
-                   best_full_model = "PLNnetworkfit",
+                   full_model_family = "ANY", # this is probably unsafe
+                   best_full_model = "ANY", # this is probably unsafe
                    reduced_model_formula = "formula",
                    reduced_model_family = "PLNnetworkfamily",
                    best_reduced_model = "PLNnetworkfit",
@@ -101,6 +102,10 @@ empty_sparse_matrix = function (nrow = 0L, ncol = 0L, format = "R", dtype = "d")
 #'    retained cell_groups.
 #' @param upper_threshold numeric Maximum number of cells in
 #'    retained cell_groups.
+#' @param norm_method string Normalization method used to compute scaling
+#'    factors used as offset during PLN inference.
+#' @param size_factors numeric vector or matrix User supplied vector or matrix of
+#'    offsets passed the PLNmodels::prepare_data() method.
 #' @return a new cell_data_set object
 #' @importFrom dplyr summarize
 #' @importFrom dplyr %>%
@@ -112,7 +117,11 @@ new_cell_count_set <- function(cds,
                                cell_metadata = NULL,
                                lower_threshold = NULL,
                                upper_threshold = NULL,
-                               keep_cds=TRUE) {
+                               keep_cds=TRUE,
+                               norm_method = c("size_factors","TSS", "CSS",
+                                               "RLE", "GMPR", "Wrench", "none"),
+                               size_factors = NULL,
+                               pseudocount = 0) {
 
   assertthat::assert_that(is(cds, 'cell_data_set'),
                           msg = paste('Argument cds must be a cell_data_set.'))
@@ -155,6 +164,13 @@ new_cell_count_set <- function(cds,
   assertthat::assert_that(is.null(upper_threshold) || is.numeric(upper_threshold),
                           msg = paste('Argument upper_threshold must be numeric.'))
 
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument norm_method must be one of "size_factors",',
+                '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
+  norm_method <- match.arg(norm_method)
+
   if(sample_group != 'sample')
     colData(cds)$sample = NULL
 
@@ -171,8 +187,6 @@ new_cell_count_set <- function(cds,
     message(paste(num_cell_group_NAs, "NAs found in cell group. Dropping NAs."))
     cds = cds[, !is.na(colData(cds)[[cell_group]])]
   }
-
-
 
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
@@ -196,7 +210,7 @@ new_cell_count_set <- function(cds,
   cds_covariates_df = coldata_df %>%
     dplyr::select(-cell_group) %>%
     dplyr::group_by(sample) %>%
-    dplyr::summarize(across(where(is.numeric), mean),
+    dplyr::summarize(across(where(is.numeric), function(x){mean(x)}),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
                      across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) } ))
 
@@ -246,17 +260,57 @@ new_cell_count_set <- function(cds,
 
   cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide),,drop=FALSE]
   ccs = methods::new("cell_count_set",
-               monocle3::new_cell_data_set(cell_counts_wide,
-                                           cell_metadata=cds_covariates_df,
-                                           gene_metadata=cell_metadata_subset),
-               cds=ccs_cds,
-               cds_coldata=cds_coldata,
-               cds_reduced_dims=cds_reducedDims,
-               info=SimpleList(sample_group=sample_group,
-                               cell_group=cell_group))
+                     monocle3::new_cell_data_set(cell_counts_wide,
+                                                 cell_metadata=cds_covariates_df,
+                                                 gene_metadata=cell_metadata_subset),
+                     cds=ccs_cds,
+                     cds_coldata=cds_coldata,
+                     cds_reduced_dims=cds_reducedDims,
+                     info=SimpleList(sample_group=sample_group,
+                                     cell_group=cell_group))
+
+  #
+  # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
+  # which were calculate in new_cell_count_set() where rows are
+  # sample groups and the columns are cell groups, (2) covariates,
+  # where is a copy of colData(cds), and (3) offsets, which are
+  # calculated by PLNmodels::prepare_data.
+  if (norm_method == "size_factors") {
+    if (!is.null(size_factors)) {
+      assertthat::assert_that(
+        tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
+                 error = function(e) FALSE),
+        msg = "Argument size factor names must match ccs column names.")
+
+      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                          covariates = colData(ccs) %>% as.data.frame,
+                                          offset = size_factors)
+    } else {
+      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                          covariates = colData(ccs) %>% as.data.frame,
+                                          offset = monocle3::size_factors(ccs))
+    }
+  } else if (norm_method == "RLE") {
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs),
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = norm_method,
+                                        type="poscounts")
+  } else {
+    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                        covariates = colData(ccs) %>% as.data.frame,
+                                        offset = norm_method)
+
+    if (norm_method == "none") {
+      pln_data$Offset = 1
+    }
+  }
+
+  if (norm_method != "size_factors")
+    colData(ccs)$Size_Factor = pln_data$Offset
 
   if (keep_cds == FALSE)
     ccs@cds = new_cell_data_set(empty_sparse_matrix(format="C"))
+
 
   # if (!is.null(cell_metadata)) {
   #   assertthat::assert_that(!is.null(row.names(cell_metadata)) &
@@ -357,88 +411,133 @@ bootstrap_model = function(ccs,
   # as the original, non bootstrapped model
 
   if (backend == "torch") {
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o the PLNmodels::PLN() function versions that I see do not include
+#                     the arguments min.ratio, nPenalties, vcov_est, and penalty_weights. I
+#                     am confused...
+#                   o I revert to the original because the PLNmodels changes break hooke.
     sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                        data = sub_pln_data,
                                                        # penalties = reduced_pln_model$penalties,
-                                                       control = list(min.ratio=pln_min_ratio,
-                                                                      nPenalties=pln_num_penalties,
-                                                                      vcov_est = "none",
-                                                                      inception = best_full_model,
-                                                                      backend = "torch",
-                                                                      penalty_weights=initial_penalties,
-                                                                      trace = ifelse(FALSE, 2, 0))))
+                                                       control = PLNmodels::PLN_param(backend = 'torch',
+                                                                                      trace = ifelse(FALSE, 2, 0),
+                                                                                      inception = best_full_model,
+                                                                                      config_optim = list(maxevel  = 10000,
+                                                                                                          ftol_rel = 1e-8,
+                                                                                                          xtol_rel = 1e-6))))
+
+# bge (20221227): notes
+#                   o I restore the PLN call for the earlier PLNmodels version commit 022d59d
+#                   o the earlier version of PLNmodels was 'PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)'
+#     sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
+#                                                        data = sub_pln_data,
+#                                                        # penalties = reduced_pln_model$penalties,
+#                                                        control = list(min.ratio=pln_min_ratio,
+#                                                                       nPenalties=pln_num_penalties,
+#                                                                       vcov_est = "none",
+#                                                                       inception = best_full_model,
+#                                                                       backend = "torch",
+#                                                                       penalty_weights=initial_penalties,
+#                                                                       trace = ifelse(FALSE, 2, 0))))
 
   } else {
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
     sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
                                                               data = sub_pln_data,
                                                               penalties = reduced_pln_model$penalties,
-                                                              control_init=list(min.ratio=pln_min_ratio,
-                                                                                nPenalties=pln_num_penalties,
-                                                                                penalty_weights=initial_penalties),
-                                                              control_main=list(trace = ifelse(FALSE, 2, 0))))
+                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
+                                                                                                    trace = ifelse(FALSE, 2, 0),
+                                                                                                    n_penalties = pln_num_penalties,
+                                                                                                    min_ratio = pln_min_ratio,
+                                                                                                    penalty_weights = initial_penalties,
+                                                                                                    config_optim = list(algorithm = 'CCSAQ',
+                                                                                                                        maxeval = 10000,
+                                                                                                                        ftol_rel = 1e-8,
+                                                                                                                        xtol_rel = 1e-6,
+                                                                                                                        ftol_out = 1e-6,
+                                                                                                                        maxit_out = 50,
+                                                                                                                        ftol_abs = 0.0,
+                                                                                                                        xtol_abs = 0.0,
+                                                                                                                        maxtime = -1))))
+
+# bge (20221227): notes
+#                   o I restore the PLN call for the earlier PLNmodels version commit 022d59d
+#                   o the earlier version of PLNmodels was 'PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)'
+#     sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+#                                                               data = sub_pln_data,
+#                                                               penalties = reduced_pln_model$penalties,
+#                                                               control_init=list(min.ratio=pln_min_ratio,
+#                                                                                 nPenalties=pln_num_penalties,
+#                                                                                 penalty_weights=initial_penalties),
+#                                                               control_main=list(trace = ifelse(FALSE, 2, 0))))
   }
 
   return(sub_full_model)
 }
 
 
+#
+# Removed 20230104 bge PLNmodels v1.0.0 removed get_vcov_hat
 #' @noRd
-compute_vhat = function(model, model_family, type) {
-
-    if (model$d > 0) {
-      ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
-      ## safe inversion using Matrix::solve and Matrix::diag and error handling
-
-      X = model_family$responses
-      Y = model_family$covariates
-      model$get_vcov_hat(type, X, Y)
-
-      vhat = vcov(model)
-
-      # zero out everything not on block diagonal
-      if (type == "sandwich") {
-
-        num_coef = dim(coef(model))[2]
-        num_blocks =dim(vhat)[1]/num_coef
-
-        blocks = lapply(1:num_blocks, function(i) {
-          start = num_coef*(i-1) + 1
-          end = num_coef*i
-          vhat[start:end,start:end]
-        })
-
-        vhat = Matrix::bdiag(blocks) %>% as.matrix()
-      }
-
-      # vcov_mat = vcov(model)
-
-    #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
-    #
-    #   #dimnames(vhat) <- dimnames(vcov_mat)
-    #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
-    #   vcov_mat = vcov_mat[safe_rows, safe_cols]
-    #
-    #   out <- tryCatch(Matrix::solve(vcov_mat),
-    #                   error = function(e) {e})
-    #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-    #   if (is(out, "error")) {
-    #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
-    #                   out$message,
-    #                   "Returning NA",
-    #                   sep = "\n"))
-    #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
-    #   } else {
-    #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-    #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
-    #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
-    #   }
-    #   #dimnames(vhat) <- dimnames(vcov_mat)
-    } else {
-      vhat <- NULL
-    }
-    vhat = methods::as(vhat, "dgCMatrix")
-    vhat
-}
+# compute_vhat = function(model, model_family, type) {
+#
+#     if (model$d > 0) {
+#       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
+#       ## safe inversion using Matrix::solve and Matrix::diag and error handling
+#
+#       X = model_family$responses
+#       Y = model_family$covariates
+#       model$get_vcov_hat(type, X, Y)
+#
+#       vhat = vcov(model)
+#
+#       # zero out everything not on block diagonal
+#       if (type == "sandwich") {
+#
+#         num_coef = dim(coef(model))[2]
+#         num_blocks =dim(vhat)[1]/num_coef
+#
+#         blocks = lapply(1:num_blocks, function(i) {
+#           start = num_coef*(i-1) + 1
+#           end = num_coef*i
+#           vhat[start:end,start:end]
+#         })
+#
+#         vhat = Matrix::bdiag(blocks) %>% as.matrix()
+#       }
+#
+#       # vcov_mat = vcov(model)
+#
+#     #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
+#     #
+#     #   #dimnames(vhat) <- dimnames(vcov_mat)
+#     #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
+#     #   vcov_mat = vcov_mat[safe_rows, safe_cols]
+#     #
+#     #   out <- tryCatch(Matrix::solve(vcov_mat),
+#     #                   error = function(e) {e})
+#     #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+#     #   if (is(out, "error")) {
+#     #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
+#     #                   out$message,
+#     #                   "Returning NA",
+#     #                   sep = "\n"))
+#     #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
+#     #   } else {
+#     #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
+#     #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
+#     #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
+#     #   }
+#     #   #dimnames(vhat) <- dimnames(vcov_mat)
+#     } else {
+#       vhat <- NULL
+#     }
+#     vhat = methods::as(vhat, "dgCMatrix")
+#     vhat
+# }
 
 
 #' computes the avg vhat across n bootstraps
@@ -486,11 +585,11 @@ bootstrap_vhat = function(ccs,
 
     if (backend == "torch") {
       coef(bootstrapped_model) %>%
-        as.data.frame() %>%
+        as.data.frame() %>% t() %>%
         tibble::rownames_to_column("cell_group")
     } else {
       best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
-      coef(best_bootstrapped_model) %>%
+      coef(best_bootstrapped_model) %>% t() %>%
         as.data.frame() %>%
         tibble::rownames_to_column("cell_group")
     }
@@ -573,11 +672,7 @@ bootstrap_vhat = function(ccs,
 #' @param pln_min_ratio numeric Used in the definition of the sparsity penalty grid.
 #' @param pln_num_penalties integer Number of penalty values for the internally
 #'    generated penalty grid.
-#' @param norm_method string Normalization method used to compute scaling
-#'    factors used as offset during PLN inference.
 #' @param vhat_method string Method used to compute covariance matrix?
-#' @param size_factors numeric vector or matrix User supplied vector or matrix of
-#'    offsets passed the PLNmodels::prepare_data() method.
 #' @param num_bootstraps positive integer Number of iterations used with the
 #'    bootstrap vhat_method.
 #' @param inception Not used.
@@ -602,14 +697,14 @@ new_cell_count_model <- function(ccs,
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
-                                 norm_method = c("size_factors","TSS", "CSS",
-                                                 "RLE", "GMPR", "Wrench", "none"),
-                                 vhat_method = c("wald", "sandwich", "louis", "bootstrap"),
-                                 size_factors = NULL,
+                                 vhat_method = c("variational_var", "jackknife", "bootstrap", "my_bootstrap"),
+                                 covariance_type = c("spherical", "diagonal"),
                                  num_bootstraps = 10,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
                                  num_threads=1,
+                                 ftol_rel = 1e-6,
+                                 penalize_by_distance=TRUE,
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -668,18 +763,12 @@ new_cell_count_model <- function(ccs,
 
   assertthat::assert_that(assertthat::is.flag(verbose))
 
-  assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste('Argument norm_method must be one of "size_factors",',
-                '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
-  norm_method <- match.arg(norm_method)
-
+  # TO DO: FIX THIS
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
              error = function(e) FALSE),
-    msg = paste( 'Argument vhat_method must be one of "wald", "sandwich",',
-                 '"louis", or "bootstrap".'))
+    msg = paste( 'Argument vhat_method must be one of "variational_var",',
+                 '"jackknife","bootstrap", or "my_bootstrap".'))
   vhat_method <- match.arg(vhat_method)
 
   assertthat::assert_that(
@@ -688,37 +777,11 @@ new_cell_count_model <- function(ccs,
     msg = paste( 'Argument backend must be one of "nlopt" or "torch".'))
   backend <- match.arg(backend)
 
-  #
-  # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
-  # which were calculate in new_cell_count_set() where rows are
-  # sample groups and the columns are cell groups, (2) covariates,
-  # where is a copy of colData(cds), and (3) offsets, which are
-  # calculated by PLNmodels::prepare_data.
-  if (norm_method == "size_factors") {
-    if (!is.null(size_factors)) {
+  covariance_type = match.arg(covariance_type)
 
-      assertthat::assert_that(
-        tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
-                 error = function(e) FALSE),
-        msg = "Argument size factor names must match ccs column names.")
-
-      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                          covariates = colData(ccs) %>% as.data.frame,
-                                          offset = size_factors)
-    } else {
-      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                          covariates = colData(ccs) %>% as.data.frame,
-                                          offset = monocle3::size_factors(ccs))
-    }
-  } else {
-    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                        covariates = colData(ccs) %>% as.data.frame,
-                                        offset = norm_method)
-
-    if (norm_method == "none") {
-      pln_data$Offset = 1
-    }
-  }
+  pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
+                                      covariates = colData(ccs) %>% as.data.frame,
+                                      offset = monocle3::size_factors(ccs))
 
   main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
   nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
@@ -730,10 +793,10 @@ new_cell_count_model <- function(ccs,
                             as.formula(full_model_formula_str)
                           },
                           error = function(condition) {
-                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condition, '.')
                           },
                           warn = function(condition) {
-                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condition, '.')
                           })
 
   reduced_model_formula_str = paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
@@ -743,10 +806,10 @@ new_cell_count_model <- function(ccs,
                             as.formula(reduced_model_formula_str)
                           },
                           error = function(condition) {
-                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condition, '.')
                           },
                           warn = function(condition) {
-                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condtiton, '.')
+                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condition, '.')
                           })
 
   #pln_data <- as.name(deparse(substitute(pln_data)))
@@ -756,30 +819,36 @@ new_cell_count_model <- function(ccs,
   #       arguments in the call to init_penalty_matrix() are unused there.
   #       This is so that the whitelist and blacklist penalties are applied
   #       to the user supplied penalty matrix.
-  if (is.null(penalty_matrix)){
-    initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
-    initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
-  }else{
-    initial_penalties = penalty_matrix
-  }
+    if (is.null(penalty_matrix)){
+      if (penalize_by_distance){
+        initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
+        initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+      }else{
+        initial_penalties = NULL
+      }
+    }else{
+      initial_penalties = penalty_matrix
+    }
 
   # FIXME: This might only actually work when grouping cells by clusters and cluster names are
   # integers. We should make sure this generalizes when making white/black lists of cell groups
   # by type or other groupings.
   # Note: this appears to work when the cell contents are character strings of cell.
   #       group names.
-  if (is.null(whitelist) == FALSE){
-    initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
-    initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
-  }
+  if (is.null(initial_penalties) == FALSE){
+    if (is.null(whitelist) == FALSE){
+      initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
+      initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
+    }
 
-  if (is.null(blacklist) == FALSE){
-    initial_penalties[as.matrix(blacklist[,c(1,2)])] = max_penalty
-    initial_penalties[as.matrix(blacklist[,c(2,1)])] = max_penalty
-  }
+    if (is.null(blacklist) == FALSE){
+      initial_penalties[as.matrix(blacklist[,c(1,2)])] = max_penalty
+      initial_penalties[as.matrix(blacklist[,c(2,1)])] = max_penalty
+    }
 
-  #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
-  initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+    #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
+    initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+  }
 
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
   # calling the fit via do.call prevents a weird error with formula
@@ -793,22 +862,95 @@ new_cell_count_model <- function(ccs,
     }else{
       print (paste("fitting model with", 1, "threads"))
     }
+
+    if (backend == "torch") {
+      control_optim_args = list(
+        # algorithm = 'CCSAQ',
+        maxeval = 10000,
+        ftol_rel = ftol_rel,
+        xtol_rel = 1e-6)
+    } else {
+      control_optim_args = list(
+        algorithm = 'CCSAQ',
+        maxeval = 10000,
+        ftol_rel = ftol_rel,
+        xtol_rel = 1e-6,
+        ftol_out = 1e-6,
+        maxit_out = 50,
+        ftol_abs = 0.0,
+        xtol_abs = 0.0,
+        maxtime = -1)
+
+    }
+
+    variational_var = TRUE
+    sandwich_var = FALSE
+    jackknife = FALSE
+    bootstrap = FALSE
+    my_bootstrap = FALSE
+
+    if (vhat_method == "variational_var" | vhat_method == "my_bootstrap") {
+      variational_var = TRUE
+    }else{
+      variational_var = FALSE # Don't compute the variational variance unless we have to, because it sometimes throws exceptions
+    }
+
+    if (vhat_method == "sandwich_var") {
+      sandwich_var = TRUE
+    }
+
+    if (vhat_method == "jackknife") {
+      jackknife = TRUE
+    }
+
+    if (vhat_method == "bootstrap") {
+      bootstrap = num_bootstraps
+    }
+
+
+# bge (20221227): notes:
+#                   o I am trying to track the code in the PLNmodels master branch at Github
+#                   o I revert to the original because the PLNmodels changes break hooke.
     reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                   data=pln_data,
-                                                                  control_init=list(min.ratio=pln_min_ratio,
-                                                                                    nPenalties=pln_num_penalties,
-                                                                                    penalty_weights=initial_penalties),
-                                                                  control_main=list(trace = ifelse(verbose, 2, 0)),
+                                                                  control = PLNmodels::PLNnetwork_param(backend = backend,
+                                                                                                        trace = ifelse(verbose, 2, 0),
+                                                                                                        covariance = covariance_type,
+                                                                                                        n_penalties = pln_num_penalties,
+                                                                                                        min_ratio = pln_min_ratio,
+                                                                                                        penalty_weights = initial_penalties,
+                                                                                                        config_post = list(jackknife = FALSE,  # never jackknife the reduced model
+                                                                                                                           bootstrap = FALSE, # never bootstrap the reduced model
+                                                                                                                           variational_var = FALSE, # never compute variational variances on the reduced model
+                                                                                                                           sandwich_var = FALSE,  # never bootstrap the reduced model
+                                                                                                                           rsquared = FALSE),
+                                                                                                        config_optim = control_optim_args),
                                                                   ...),)
 
-    full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+    full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                                data=pln_data,
-                                                               penalties = reduced_pln_model$penalties,
-                                                               control_init=list(min.ratio=pln_min_ratio,
-                                                                                 nPenalties=pln_num_penalties,
-                                                                                 penalty_weights=initial_penalties),
-                                                               control_main=list(trace = ifelse(verbose, 2, 0)),
+                                                               control = PLNmodels::PLN_param(backend = backend,
+                                                                                              covariance = covariance_type,
+                                                                                              trace = ifelse(verbose, 2, 0),
+                                                                                              config_post = list(jackknife = jackknife,
+                                                                                                                 bootstrap = bootstrap,
+                                                                                                                 variational_var = variational_var,
+                                                                                                                 sandwich_var = sandwich_var,
+                                                                                                                 rsquared = FALSE),
+                                                                                              config_optim = control_optim_args),
                                                                ...),)
+
+
+# bge (20221227): notes:
+#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
+#   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+#                                                                data=pln_data,
+#                                                                penalties = reduced_pln_model$penalties,
+#                                                                control_init=list(min.ratio=pln_min_ratio,
+#                                                                                  nPenalties=pln_num_penalties,
+#                                                                                  penalty_weights=initial_penalties),
+#                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
+#                                                                ...),)
   }, finally = {
     RhpcBLASctl::omp_set_num_threads(1)
     RhpcBLASctl::blas_set_num_threads(1)
@@ -824,9 +966,10 @@ new_cell_count_model <- function(ccs,
 
   # Choose a model that isn't very aggressively sparsified
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
-  best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
+  # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
+  best_full_model <- full_pln_model
 
-  if (vhat_method == "bootstrap") {
+  if (vhat_method == "my_bootstrap") {
     vhat = bootstrap_vhat(ccs,
                           full_model_formula_str,
                           best_full_model,
@@ -840,9 +983,29 @@ new_cell_count_model <- function(ccs,
                           norm_method,
                           num_bootstraps,
                           backend)
+
+  } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
+
+    vhat_coef = coef(best_full_model, type = "main")
+    var_jack_mat = attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
+    # var_jack_mat = var_jack %>% as.data.frame %>%
+    #   tibble::rownames_to_column("term") %>%
+    #   tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>%
+    #   arrange(cell_group) %>%
+    #   mutate(rowname = paste0(cell_group, "_", term)) %>%
+    #   select(-term, -cell_group) %>%
+    #   mutate(colname = rowname) %>%
+    #   tidyr::pivot_wider(values_from = var, names_from = colname) %>%
+    #   replace(is.na(.), 0) %>%
+    #   tibble::column_to_rownames("rowname") %>%
+    #   as.matrix()
+    vhat <- methods::as(var_jack_mat, "dgCMatrix")
+
   } else {
-    vhat = compute_vhat(best_full_model, full_pln_model, vhat_method)
+    vhat <- vcov(best_full_model, type= "main")
+    vhat <- methods::as(vhat, "dgCMatrix")
   }
+
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
@@ -875,8 +1038,8 @@ new_cell_count_model <- function(ccs,
 #' @param criterion a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".
 #' @param sparsity_factor A positive number to control how sparse the PLN network
 #'    is. Larger values make the network sparser.
-#' @param models_to_update string The model to update. Must be one of "both", "full", "reduced".
-#' @return an updated cell_count_model object
+#' @param models_to_update string The model to update. Must be one of "both", "full", or "reduced".
+#' @return an updated cell_count_model object.
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
@@ -906,8 +1069,8 @@ select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_fa
 
   #if (models_to_update == "full" || models_to_update == "both"){
   #  best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
-    best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
-    ccm@best_full_model = best_full_model
+  #  best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
+  #  ccm@best_full_model = best_full_model
   #}
 
   ccm@sparsity = sparsity_factor
@@ -955,11 +1118,22 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
 
 
 
-#' Builds a model formula for time series models based on the range of the data
-#'
-#' This is just a utility function that puts the knots in reasonable positions based on the range of the data
+#' Builds a model formula for time series models based on the range of the data.
+#' This is a utility function that puts the knots in reasonable positions based on the range of the data.
+#' @param numeric num_breaks Number of interval points.
+#' @param character interval_var
+#' @param numeric interval_start Interval start value.
+#' @param numeric interval_stop Interval stop value.
+#' @return An interval model formula.
 #' @export
 build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){
+
+  assertthat::assert_that(is(ccs, 'cell_count_set'))
+  assertthat::assert_that(is.numeric(num_breaks))
+  assertthat::assert_that(is.numeric(interval_start))
+  assertthat::assert_that(is.numeric(interval_stop))
+  assertthat::assert_that(is.character(interval_var))
+
   if (is.null(interval_start)){
     interval_start = as.numeric(min(colData(ccs@cds)[,interval_var]))
   }
@@ -973,4 +1147,3 @@ build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", in
   return(interval_formula_str)
 }
 #debug(build_interval_formula)
-

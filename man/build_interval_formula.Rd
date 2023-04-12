@@ -2,7 +2,8 @@
 % Please edit documentation in R/cell_count_model.R
 \name{build_interval_formula}
 \alias{build_interval_formula}
-\title{Builds a model formula for time series models based on the range of the data}
+\title{Builds a model formula for time series models based on the range of the data.
+This is a utility function that puts the knots in reasonable positions based on the range of the data.}
 \usage{
 build_interval_formula(
   ccs,
@@ -12,6 +13,15 @@ build_interval_formula(
   interval_stop = NULL
 )
 }
+\arguments{
+\item{character}{interval_var}
+
+\item{numeric}{interval_stop Interval stop value.}
+}
+\value{
+An interval model formula.
+}
 \description{
-This is just a utility function that puts the knots in reasonable positions based on the range of the data
+Builds a model formula for time series models based on the range of the data.
+This is a utility function that puts the knots in reasonable positions based on the range of the data.
 }

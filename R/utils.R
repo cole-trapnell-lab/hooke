@@ -119,20 +119,17 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 #' @param cds
 #' @param sub_space
 #' @noRd
-switch_umap_space <- function(cds, sub_space = TRUE) {
+switch_umap_space <- function(cds, prefix = "subumap3d") {
+  
   curr_umap_matrix = reducedDims(cds)[["UMAP"]]
+  col_names = colnames(colData(cds))
+  col_names = col_names[grepl(pattern = prefix, col_names)]
+  
+  umap_coords = colData(cds) %>%
+    as.data.frame() %>%
+    dplyr::select(dplyr::all_of(col_names)) %>%
+    as.matrix()
 
-  if (sub_space) {
-    umap_coords = colData(cds) %>%
-      as.data.frame() %>%
-      select(subumap3d_1, subumap3d_2, subumap3d_3) %>%
-      as.matrix()
-  } else {
-    umap_coords = colData(cds) %>%
-      as.data.frame() %>%
-      select(umap3d_1, umap3d_2, umap3d_3) %>%
-      as.matrix()
-  }
   reducedDims(cds)[["UMAP"]] = umap_coords[rownames(curr_umap_matrix),]
   return(cds)
 }
