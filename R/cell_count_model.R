@@ -267,7 +267,8 @@ new_cell_count_set <- function(cds,
                      cds_coldata=cds_coldata,
                      cds_reduced_dims=cds_reducedDims,
                      info=SimpleList(sample_group=sample_group,
-                                     cell_group=cell_group))
+                                     cell_group=cell_group,
+                                     norm_method = norm_method))
 
   #
   # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
@@ -387,7 +388,6 @@ bootstrap_model = function(ccs,
                            pln_min_ratio,
                            pln_num_penalties,
                            random.seed,
-                           norm_method,
                            backend = c('nlopt', 'torch')) {
 
   assertthat::assert_that(
@@ -399,6 +399,7 @@ bootstrap_model = function(ccs,
   # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
 
+  norm_method = ccs@info$norm_method
   if (norm_method == "size_factors") {
     norm_method = monocle3::size_factors(sub_ccs)
   }
@@ -554,7 +555,6 @@ bootstrap_vhat = function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
-                          norm_method,
                           num_bootstraps,
                           backend) {
   # to do: parallelize
@@ -580,7 +580,6 @@ bootstrap_vhat = function(ccs,
                                          pln_min_ratio,
                                          pln_num_penalties,
                                          random.seed = random.seed,
-                                         norm_method = norm_method,
                                          backend = backend)
 
     if (backend == "torch") {
@@ -980,7 +979,6 @@ new_cell_count_model <- function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
-                          norm_method,
                           num_bootstraps,
                           backend)
 
