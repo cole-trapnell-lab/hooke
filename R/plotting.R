@@ -155,13 +155,7 @@ plot_contrast <- function(ccm,
       ))
   }
 
-  if (keep_colors == FALSE) {
-    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
 
-    # corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
-    #   dplyr::mutate(from_delta_log_abund = ifelse(from_delta_q_value <= q_value_thresh, from_delta_log_abund, 0)) %>%
-    #   dplyr::mutate(to_delta_log_abund = ifelse(to_delta_q_value <= q_value_thresh, to_delta_log_abund, 0))
-  }
 
   directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
   undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
@@ -201,6 +195,27 @@ plot_contrast <- function(ccm,
       dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
     undirected_edge_df = undirected_edge_df %>%
       dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
+  }
+
+
+  directed_cells_to_keep = unique(union(directed_edge_df$to, directed_edge_df$from))
+  undirected_cells_to_keep = unique(union(undirected_edge_df$to, undirected_edge_df$from))
+  others = cond_b_vs_a_tbl %>% filter(delta_q_value <= q_value_thresh) %>% pull(cell_group)
+  cell_groups_to_keep = unique(union(directed_cells_to_keep, undirected_cells_to_keep))
+  cell_groups_to_keep = unique(union(cell_groups_to_keep, others))
+
+
+  if (keep_colors == FALSE) {
+
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund =
+                                                        ifelse(cell_group %in% cell_groups_to_keep, delta_log_abund, 0))
+
+    # cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund =
+    #                                                       ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+
+    # corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
+    #   dplyr::mutate(from_delta_log_abund = ifelse(from_delta_q_value <= q_value_thresh, from_delta_log_abund, 0)) %>%
+    #   dplyr::mutate(to_delta_log_abund = ifelse(to_delta_q_value <= q_value_thresh, to_delta_log_abund, 0))
   }
 
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
