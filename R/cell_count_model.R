@@ -563,12 +563,12 @@ bootstrap_vhat = function(ccs,
                                 ccs,
                                 full_model_formula_str,
                                 best_full_model,
+                                best_reduced_model, 
                                 reduced_pln_model,
                                 pseudocount,
                                 initial_penalties,
                                 pln_min_ratio,
                                 pln_num_penalties,
-                                norm_method,
                                 backend) {
 
     bootstrapped_model = bootstrap_model(ccs,
@@ -600,13 +600,14 @@ bootstrap_vhat = function(ccs,
                              ccs,
                              full_model_formula_str,
                              best_full_model,
+                             best_reduced_model,
                              reduced_pln_model,
                              pseudocount,
                              initial_penalties,
                              pln_min_ratio,
                              pln_num_penalties,
-                             norm_method,
                              backend))
+  
   coef_df = coef_df %>% filter(!is.na(coef))
 
   # compute the covariance of the parameters
