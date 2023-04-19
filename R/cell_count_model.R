@@ -388,6 +388,7 @@ bootstrap_model = function(ccs,
                            pln_min_ratio,
                            pln_num_penalties,
                            random.seed,
+                           covariance_type,
                            backend = c('nlopt', 'torch')) {
 
   assertthat::assert_that(
@@ -423,6 +424,7 @@ bootstrap_model = function(ccs,
                                                        # penalties = reduced_pln_model$penalties,
                                                        control = PLNmodels::PLN_param(backend = 'torch',
                                                                                       trace = ifelse(FALSE, 2, 0),
+                                                                                      covariance = covariance_type,
                                                                                       inception = best_full_model,
                                                                                       config_optim = list(maxevel  = 10000,
                                                                                                           ftol_rel = 1e-8,
@@ -451,6 +453,7 @@ bootstrap_model = function(ccs,
                                                               penalties = reduced_pln_model$penalties,
                                                               control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
                                                                                                     trace = ifelse(FALSE, 2, 0),
+                                                                                                    covariance = covariance_type,
                                                                                                     n_penalties = pln_num_penalties,
                                                                                                     min_ratio = pln_min_ratio,
                                                                                                     penalty_weights = initial_penalties,
@@ -556,7 +559,8 @@ bootstrap_vhat = function(ccs,
                           pln_num_penalties,
                           verbose,
                           num_bootstraps,
-                          backend) {
+                          backend, 
+                          covariance_type) {
   # to do: parallelize
 
   get_bootstrap_coef = function(random.seed,
@@ -569,7 +573,8 @@ bootstrap_vhat = function(ccs,
                                 initial_penalties,
                                 pln_min_ratio,
                                 pln_num_penalties,
-                                backend) {
+                                backend, 
+                                covariance_type) {
 
     bootstrapped_model = bootstrap_model(ccs,
                                          full_model_formula_str,
@@ -580,6 +585,7 @@ bootstrap_vhat = function(ccs,
                                          pln_min_ratio,
                                          pln_num_penalties,
                                          random.seed = random.seed,
+                                         covariance_type=covariance_type,
                                          backend = backend)
 
     if (backend == "torch") {
@@ -606,7 +612,8 @@ bootstrap_vhat = function(ccs,
                              initial_penalties,
                              pln_min_ratio,
                              pln_num_penalties,
-                             backend))
+                             backend, 
+                             covariance_type))
   
   coef_df = coef_df %>% filter(!is.na(coef))
 
@@ -981,7 +988,8 @@ new_cell_count_model <- function(ccs,
                           pln_num_penalties,
                           verbose,
                           num_bootstraps,
-                          backend)
+                          backend, 
+                          covariance_type)
 
   } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
 
