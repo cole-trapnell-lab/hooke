@@ -865,12 +865,12 @@ is_discordant <- function(cond_b_v_a_tbl, state_transition_graph) {
 }
 
 #' @noRd
-collect_psg_node_metadata <- function(ccm,
+collect_psg_node_metadata <- function(ccs,
                                       color_nodes_by,
                                       label_nodes_by,
                                       group_nodes_by)
 {
-  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   node_metadata = tibble(id=cell_groups)
 
   metadata_cols = c(color_nodes_by,
@@ -879,9 +879,9 @@ collect_psg_node_metadata <- function(ccm,
     metadata_cols = c(metadata_cols, label_nodes_by)
 
   #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = ccm@ccs@cds_coldata[,metadata_cols, drop=F] %>%
+  cell_group_metadata = ccs@cds_coldata[,metadata_cols, drop=F] %>%
     as.data.frame
-  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+  cell_group_metadata$cell_group = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
 
   if (is.null(color_nodes_by) == FALSE){
     color_by_metadata = cell_group_metadata[,c("cell_group", color_nodes_by)] %>%
@@ -910,6 +910,7 @@ collect_psg_node_metadata <- function(ccm,
   }else{
     node_metadata$label_nodes_by = node_metadata$id
   }
+
   node_metadata = node_metadata %>% distinct() %>% as.data.frame(stringsAsFactor=FALSE)
   row.names(node_metadata) = node_metadata$id
 
@@ -1023,7 +1024,7 @@ layout_state_graph <- function(G, node_metadata, edge_labels, weighted=FALSE)
 #' @param group_outline
 #' @return A ggplot2 plot object.
 #' @export
-plot_state_graph_annotations <- function(ccm,
+plot_state_graph_annotations <- function(ccs,
                                          state_graph,
                                          color_nodes_by=NULL,
                                          label_nodes_by=NULL,
@@ -1056,7 +1057,7 @@ plot_state_graph_annotations <- function(ccm,
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
 
-  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by, label_nodes_by, group_nodes_by)
+  node_metadata = collect_psg_node_metadata(ccs, color_nodes_by, label_nodes_by, group_nodes_by)
 
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
@@ -1081,6 +1082,14 @@ plot_state_graph_annotations <- function(ccm,
     edges = edges %>% left_join(edge_info)
     #print(edges)
   }
+
+
+  if (length(setdiff(edges$to, node_metadata$id)) > 0 ||
+      length(setdiff(edges$from, node_metadata$id)) > 0){
+    message("Warning: graph edges refers to nodes not in cell_count_set ccs. Dropping edges...")
+  }
+
+  edges = edges %>% filter(from %in% node_metadata$id & to %in% node_metadata$id)
 
   G = edges %>% distinct() %>% igraph::graph_from_data_frame(directed = T, vertices=node_metadata)
 
@@ -1306,7 +1315,7 @@ plot_state_graph_losses <- function(perturbation_ccm,
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
 
-  node_metadata = hooke:::collect_psg_node_metadata(perturbation_ccm, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
+  node_metadata = hooke:::collect_psg_node_metadata(perturbation_ccm@ccs, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
 
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
@@ -1575,7 +1584,7 @@ plot_state_graph_abundance_changes <- function(ccm,
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
 
-  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
+  node_metadata = collect_psg_node_metadata(ccm@ccs, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
 
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
@@ -1768,7 +1777,7 @@ plot_state_graph_abundance_changes <- function(ccm,
 
 #' Plot the expression of a single gene on the state transition graph
 #' @export
-plot_state_graph_gene_expression <- function(ccm,
+plot_state_graph_gene_expression <- function(ccs,
                                              state_graph,
                                              genes,
                                              method = "min",
@@ -1808,7 +1817,7 @@ plot_state_graph_gene_expression <- function(ccm,
   #edges = hooke:::distance_to_root(edges)
   edges = edges %>% dplyr::ungroup()
 
-  node_metadata = collect_psg_node_metadata(ccm, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
+  node_metadata = collect_psg_node_metadata(ccs, color_nodes_by=NULL, label_nodes_by, group_nodes_by)
 
   if (hide_unlinked_nodes){
     node_metadata = node_metadata %>% filter(id %in% edges$from | id %in% edges$to)
@@ -1862,10 +1871,10 @@ plot_state_graph_gene_expression <- function(ccm,
 
   g = ggnetwork::ggnetwork(G, layout = gvizl_coords, arrow.gap = arrow.gap, scale=F)
 
-  gene_ids = rowData(ccm@ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
+  gene_ids = rowData(ccs@cds) %>% as.data.frame %>% filter(gene_short_name %in% genes) %>% rownames()
 
   if (is.null(gene_expr)) {
-    gene_expr = aggregated_expr_data(ccm@ccs@cds[gene_ids,], group_cells_by = ccm@ccs@info$cell_group)
+    gene_expr = aggregated_expr_data(ccs@cds[gene_ids,], group_cells_by = ccs@info$cell_group)
   }
 
   sub_gene_expr = gene_expr %>%
