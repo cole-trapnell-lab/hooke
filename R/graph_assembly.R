@@ -2512,16 +2512,31 @@ assess_support_for_transition_graph <- function(control_timeseries_ccm,
 #' Simplify a directed state transition graph by grouping nodes according to a specified label
 #' assumes the graphs over nodes corresponding to groups in the ccm
 #' @export
-contract_state_graph <- function(ccm, state_graph, group_nodes_by){
+contract_state_graph <- function(ccs,
+                                 state_graph,
+                                 group_nodes_by,
+                                 edge_attr_policy=list("weight"="sum",
+                                                       "name"="concat",
+                                                       "num_perturbs_supporting"="sum",
+                                                       "max_timeseries_path_score_supporting"="sum",
+                                                       "total_timeseries_path_score_supporting"="sum",
+                                                       "max_perturb_path_score_supporting"="sum",
+                                                       "total_perturb_path_score_supporting"="sum",
+                                                       "max_path_score_supporting"="sum",
+                                                       "total_path_score_supporting"="sum",
+                                                       "edge_name"="ignore",
+                                                       "support_label"="concat",
+                                                       "supporting_perturbs"="concat",
+                                                       "ignore")){
   # Create simplified cell state graph just on cell type (not cluster):
-  cell_groups = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
+  cell_groups = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group) %>% unique()
   node_metadata = tibble(id=cell_groups)
 
   #G = edges %>% select(from, to, n, scaled_weight, distance_from_root)  %>% igraph::graph_from_data_frame(directed = T)
-  cell_group_metadata = colData(ccm@ccs@cds) %>%
+  cell_group_metadata = colData(ccs@cds) %>%
     as.data.frame %>% select(!!sym(group_nodes_by))
 
-  cell_group_metadata$cell_group = ccm@ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
+  cell_group_metadata$cell_group = ccs@metadata[["cell_group_assignments"]] %>% pull(cell_group)
 
   group_by_metadata = cell_group_metadata[,c("cell_group", group_nodes_by)] %>%
     as.data.frame %>%
@@ -2536,7 +2551,8 @@ contract_state_graph <- function(ccm, state_graph, group_nodes_by){
   names(contraction_mapping) = node_metadata$id
   contracted_state_graph = igraph::contract(state_graph, mapping=contraction_mapping, vertex.attr.comb="ignore")
   igraph::V(contracted_state_graph)$name = unlist(contraction_mapping_names[as.numeric(igraph::V(contracted_state_graph))])
-  contracted_state_graph = igraph::simplify(contracted_state_graph)
+  contracted_state_graph = igraph::simplify(contracted_state_graph,
+                                            edge.attr.comb=edge_attr_policy)
   igraph::V(contracted_state_graph)$cell_group = group_nodes_by
   return(contracted_state_graph)
 }
