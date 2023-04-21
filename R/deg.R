@@ -157,6 +157,11 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
   expr_df$lower_than_all_siblings = NA
   expr_df$higher_than_siblings = NA
   expr_df$lower_than_siblings = NA
+  expr_df$expressed_in_children = NA
+  expr_df$higher_than_all_children = NA
+  expr_df$lower_than_all_children = NA
+  expr_df$higher_than_children = NA
+  expr_df$lower_than_children = NA
 
   if (length(parents) > 0){
     expressed_in_parents_mat = pnorm(estimate_matrix[,parents, drop=F] - log(abs_expr_thresh), sd = stderr_matrix[,parents, drop=F], lower.tail=FALSE)
@@ -188,7 +193,11 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
     expr_df$lower_than_all_siblings = NA
     expr_df$higher_than_siblings = NA
     expr_df$lower_than_siblings = NA
-
+    expr_df$expressed_in_children = NA
+    expr_df$higher_than_all_children = NA
+    expr_df$lower_than_all_children = NA
+    expr_df$higher_than_children = NA
+    expr_df$lower_than_children = NA
   }
 
   if (length(siblings) > 0){
@@ -224,6 +233,39 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
     expr_df$lower_than_siblings = NA
   }
 
+  if (length(children) > 0){
+    expressed_in_children_mat = pnorm(estimate_matrix[,children, drop=F] - log(abs_expr_thresh), sd = stderr_matrix[,children, drop=F], lower.tail=FALSE)
+    expressed_in_children_mat = apply(expressed_in_children_mat, 2, p.adjust, method="BH")
+
+    expressed_in_children_mat = expressed_in_children_mat < sig_thresh
+    expr_df$expressed_in_children = Matrix::rowSums(expressed_in_children_mat) > 0
+
+    higher_than_children_stat = -t(sweep(t(estimate_matrix[,children, drop=F]), 2, as.numeric(estimate_matrix[,cell_state]) , `-`))
+    higher_than_children_pval = pnorm(higher_than_children_stat,
+                                      sd = sqrt(sweep(t(stderr_matrix[,children, drop=F]^2), 2, as.numeric(stderr_matrix[,cell_state, drop=F]^2), `+`)), lower.tail=FALSE)
+    higher_than_children_pval = apply(higher_than_children_pval, 2, p.adjust, method="BH")
+
+    higher_than_children_mat = abs(higher_than_children_stat) > log_fc_thresh & higher_than_children_pval < sig_thresh
+    expr_df$higher_than_all_children = Matrix::rowSums(higher_than_children_mat) == ncol(higher_than_children_pval)
+    expr_df$higher_than_children = Matrix::rowSums(higher_than_children_mat) > 0
+
+    lower_than_children_pval = pnorm(-higher_than_children_stat,
+                                     sd = sqrt(sweep(t(stderr_matrix[,children, drop=F]^2), 2, as.numeric(stderr_matrix[,cell_state, drop=F]^2), `+`)), lower.tail=FALSE)
+    lower_than_children_pval = apply(lower_than_children_pval, 2, p.adjust, method="BH")
+
+    lower_than_children_mat = abs(higher_than_children_stat) > log_fc_thresh & lower_than_children_pval < sig_thresh
+    expr_df$lower_than_all_children = Matrix::rowSums(lower_than_children_mat) == ncol(lower_than_children_mat)
+    expr_df$lower_than_children = Matrix::rowSums(lower_than_children_mat) > 0
+
+
+  }else{
+    expr_df$expressed_in_children = NA
+    expr_df$higher_than_all_children = NA
+    expr_df$lower_than_all_children = NA
+    expr_df$higher_than_children = NA
+    expr_df$lower_than_children = NA
+  }
+
   expr_df = expr_df %>% tidyr::nest(data = !gene_id)
 
   message("      interpreting patterns")
@@ -231,17 +273,84 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
     if (pat_df$expr_self){
       if (is.na(pat_df$expressed_in_parents)){
         # no parents, therefore no siblings
-        return ("Maintained")
+        #return ("Maintained")
+        if (is.na(pat_df$expressed_in_children)){
+          return("Maintained")
+        } else {
+          # no parent, but there are children
+          if (pat_df$expressed_in_children == FALSE | pat_df$higher_than_all_children){
+            # Higher than parent, and higher than children
+            return("Precursor-specific")
+          }
+          else if (pat_df$higher_than_children){
+            # no parent, higher than children
+            return("Precursor-specific")
+          }
+          else if(pat_df$lower_than_children){
+            # no parent, but lower than children
+            return("Precursor-depleted")
+          }
+          else { # no parent same as children
+            return("Maintained")
+          }
+        }
       }else if (pat_df$expressed_in_parents){
         # Expressed in self and parent
         if (is.na(pat_df$expressed_in_siblings)){
           # Expressed in self and parent and there are no siblings
-          if (pat_df$higher_than_parents)
-            return("Upregulated")
-          else if(pat_df$lower_than_parents)
-            return("Downregulated")
-          else
-            return("Maintained")
+          if (pat_df$higher_than_parents){
+            if (is.na(pat_df$expressed_in_children)){
+              return("Upregulated")
+            } else {
+              # there are children
+              if (pat_df$expressed_in_children == FALSE | pat_df$higher_than_all_children){
+                # Higher than parent, and higher than siblings
+                return("Transiently upregulated")
+              }
+              else if(pat_df$lower_than_all_children){
+                # lower than children
+                return("Increasingly upregulated")
+              }
+              else { # same as children
+                return("Upregulated")
+              }
+            }
+          }
+          else if(pat_df$lower_than_parents){
+            if (is.na(pat_df$expressed_in_children)){
+              return("Downregulated")
+            } else {
+              # there are children
+              if (pat_df$lower_than_all_children){
+                # Lower than parent, and lower than children
+                return("Decreasingly downregulated")
+              }
+              else if(pat_df$lower_than_all_children){
+                # lower than children
+                return("Transiently downregulated")
+              }
+              else { # same as children
+                return("Downregulated")
+              }
+            }
+          }else{
+            if (is.na(pat_df$expressed_in_children)){
+              return("Maintained")
+            } else {
+              # same as parent, and there are children
+              if (pat_df$expressed_in_children == FALSE | pat_df$higher_than_all_children){
+                # Higher than parent, and higher than children
+                return("Precursor-specific")
+              }
+              else if(pat_df$lower_than_all_children){
+                # no parent, but lower than children
+                return("Precursor-depleted")
+              }
+              else { # no parent same as children
+                return("Maintained")
+              }
+            }
+          }
         } else {
           # Expressed in self and parent and there are siblings
           if (pat_df$higher_than_parents){
@@ -262,19 +371,15 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
             }
           }
           else if(pat_df$lower_than_parents){
-            if (pat_df$expressed_in_siblings == FALSE | pat_df$higher_than_all_siblings){
+            if (pat_df$expressed_in_siblings == TRUE & pat_df$lower_than_all_siblings){
               # Lower than parent, and higher than siblings
-              return("Selectively downregulated")
+              return("Specifically downregulated")
             }
-            else if (pat_df$higher_than_siblings){
+            else if (pat_df$expressed_in_siblings == TRUE & pat_df$lower_than_siblings){
               # Lower than parent, and higher than some siblings
               return("Selectively downregulated")
             }
-            else if(pat_df$lower_than_all_siblings){
-              # Lower than parent and  lower than  all siblings
-              return("Specifically downregulated")
-            }
-            else { # same as parent, same as siblings
+            else { # lower than parent, same as or higher than siblings
               return("Downregulated")
             }
           }
@@ -308,7 +413,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
           else
             return("Activated") # might happen if its above threshold but not significantly above parent (and parent is below thresh)
         } else {
-          # expressed in self and there are siblings
+          # expressed in self, not in parent, and there are siblings
           if (pat_df$higher_than_parents){ # Expressed in self and higher than parent and there are siblings
             if (pat_df$expressed_in_siblings == FALSE | pat_df$higher_than_all_siblings){
               # Higher than parent, and higher than all siblings
@@ -428,7 +533,7 @@ classify_genes_in_cell_state <- function(cell_state, state_graph, estimate_matri
 
 #' Classify each gene's pattern of expresison in each state in a state transition graph
 #' @export
-classify_genes_over_graph <- function(ccm,
+classify_genes_over_graph <- function(ccs,
                                       state_graph,
                                       gene_ids = NULL,
                                       group_nodes_by=NULL,
@@ -440,10 +545,10 @@ classify_genes_over_graph <- function(ccm,
                                       cores=1,
                                       ...){
   if (is.null(group_nodes_by)){
-    pb_cds = pseudobulk_cds_for_states(ccm)
+    pb_cds = pseudobulk_ccs_for_states(ccs)
     state_term = "cell_group"
   }else{
-    pb_cds = pseudobulk_cds_for_states(ccm, state_col = group_nodes_by)
+    pb_cds = pseudobulk_ccs_for_states(ccs, state_col = group_nodes_by)
     state_term = group_nodes_by
   }
 
@@ -552,9 +657,14 @@ get_children = function(state_graph, cell_state){
 #' @noRd
 get_siblings = function(state_graph, cell_state){
   parents = get_parents(state_graph, cell_state)
-  siblings = igraph::neighbors(state_graph, parents, mode="out")
-  siblings = setdiff(siblings$name, cell_state) #exclude self
-  return(siblings)
+  if (length(parents) > 0){
+    siblings = igraph::neighbors(state_graph, parents, mode="out")
+    siblings = setdiff(siblings$name, cell_state) #exclude self
+    return(siblings)
+  } else{
+    return (c())
+  }
+
 }
 
 #' Compute a pseudobulk expression matrix for a model
