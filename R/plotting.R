@@ -41,7 +41,9 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = c("all", "directed", "undirected", "none"),
+                          plot_edges = c("all", "directed", "undirected","none"),
+                          edge_significance = c("both", "one-sided"),
+                          keep_colors = FALSE,
                           label_cell_groups = list(),
                           repel_labels = TRUE,
                           model_for_pcors=c("reduced", "full"),
@@ -99,6 +101,13 @@ plot_contrast <- function(ccm,
                 '"directed", "undirected", or "none".'))
   plot_edges = match.arg(plot_edges)
 
+  assertthat::assert_that(
+    tryCatch(expr = ifelse(match.arg(edge_significance) == "", TRUE, TRUE),
+             error = function(e) FALSE),
+    msg = paste('Argument plot_edges must be one of "both" or
+                "one-sided".'))
+  edge_significance = match.arg(edge_significance)
+
   if (!is.null(sub_cds)) {
 
     colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
@@ -121,19 +130,33 @@ plot_contrast <- function(ccm,
   umap_centers = centroids(ccm@ccs)
 
   umap_centers_delta_abund = umap_centers
-  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
   umap_centers_delta_abund = dplyr::left_join(umap_centers_delta_abund, cond_b_vs_a_tbl, by=c("cell_group"="cell_group"))
   umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(max_log_abund = pmax(log_abund_x, log_abund_y))
   umap_centers_delta_abund = umap_centers_delta_abund %>%
     dplyr::mutate(max_log_abund = ifelse(max_log_abund < log_abundance_thresh, log_abundance_thresh, max_log_abund))
 
-  #cond_b_vs_a_tbl$delta_q_value = p.adjust(cond_b_vs_a_tbl$delta_q_value, method = "BH")
-  # umap_centers_delta_abund = umap_centers_delta_abund %>% dplyr::mutate(delta_log_abund = ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
 
-  corr_edge_coords_umap_delta_abund = collect_pln_graph_edges(ccm,
+  corr_edge_coords_umap_delta_abund = hooke:::collect_pln_graph_edges(ccm,
                                                               umap_centers_delta_abund,
                                                               log_abundance_thresh,
                                                               model_for_pcors=model_for_pcors)
+
+  if (edge_significance == "one-sided") {
+    corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
+      mutate(edge_type = case_when(
+        (from_delta_q_value < q_value_thresh | to_delta_q_value < q_value_thresh ) ~ edge_type,
+        TRUE ~ "hidden"
+      ))
+  } else {
+    corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
+      mutate(edge_type = case_when(
+        (from_delta_q_value < q_value_thresh & to_delta_q_value < q_value_thresh ) ~ edge_type,
+        TRUE ~ "hidden"
+      ))
+  }
+
+
+
   directed_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
   undirected_edge_df = corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
 
@@ -172,6 +195,27 @@ plot_contrast <- function(ccm,
       dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
     undirected_edge_df = undirected_edge_df %>%
       dplyr::mutate(scaled_weight  = abs(pcor) / max(abs(pcor)))
+  }
+
+
+  directed_cells_to_keep = unique(union(directed_edge_df$to, directed_edge_df$from))
+  undirected_cells_to_keep = unique(union(undirected_edge_df$to, undirected_edge_df$from))
+  others = cond_b_vs_a_tbl %>% filter(delta_q_value <= q_value_thresh) %>% pull(cell_group)
+  cell_groups_to_keep = unique(union(directed_cells_to_keep, undirected_cells_to_keep))
+  cell_groups_to_keep = unique(union(cell_groups_to_keep, others))
+
+
+  if (keep_colors == FALSE) {
+
+    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund =
+                                                        ifelse(cell_group %in% cell_groups_to_keep, delta_log_abund, 0))
+
+    # cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund =
+    #                                                       ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+
+    # corr_edge_coords_umap_delta_abund = corr_edge_coords_umap_delta_abund %>%
+    #   dplyr::mutate(from_delta_log_abund = ifelse(from_delta_q_value <= q_value_thresh, from_delta_log_abund, 0)) %>%
+    #   dplyr::mutate(to_delta_log_abund = ifelse(to_delta_q_value <= q_value_thresh, to_delta_log_abund, 0))
   }
 
   plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
@@ -317,7 +361,7 @@ plot_contrast <- function(ccm,
     label_df = umap_centers_delta_abund
 
     if (plot_labels == "significant")
-      label_df = label_df %>% filter(delta_log_abund != 0)
+      label_df = label_df %>% filter(delta_q_value < q_value_thresh)
 
     if (length(label_cell_groups) > 0)
       label_df = label_df %>% filter(cell_group %in% label_cell_groups)
@@ -2178,7 +2222,6 @@ hooke_theme_opts <- function(){
     theme(panel.background = element_rect(fill='white')) +
     theme(legend.key=element_blank())
 }
-
 
 
 

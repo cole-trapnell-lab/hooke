@@ -275,7 +275,8 @@ new_cell_count_set <- function(cds,
                      cds_coldata=cds_coldata,
                      cds_reduced_dims=cds_reducedDims,
                      info=SimpleList(sample_group=sample_group,
-                                     cell_group=cell_group))
+                                     cell_group=cell_group,
+                                     norm_method = norm_method))
 
   #
   # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
@@ -395,7 +396,7 @@ bootstrap_model = function(ccs,
                            pln_min_ratio,
                            pln_num_penalties,
                            random.seed,
-                           norm_method,
+                           covariance_type,
                            backend = c('nlopt', 'torch')) {
 
   assertthat::assert_that(
@@ -407,6 +408,7 @@ bootstrap_model = function(ccs,
   # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
 
+  norm_method = ccs@info$norm_method
   if (norm_method == "size_factors") {
     norm_method = monocle3::size_factors(sub_ccs)
   }
@@ -430,6 +432,7 @@ bootstrap_model = function(ccs,
                                                        # penalties = reduced_pln_model$penalties,
                                                        control = PLNmodels::PLN_param(backend = 'torch',
                                                                                       trace = ifelse(FALSE, 2, 0),
+                                                                                      covariance = covariance_type,
                                                                                       inception = best_full_model,
                                                                                       config_optim = list(maxevel  = 10000,
                                                                                                           ftol_rel = 1e-8,
@@ -458,6 +461,7 @@ bootstrap_model = function(ccs,
                                                               penalties = reduced_pln_model$penalties,
                                                               control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
                                                                                                     trace = ifelse(FALSE, 2, 0),
+                                                                                                    covariance = covariance_type,
                                                                                                     n_penalties = pln_num_penalties,
                                                                                                     min_ratio = pln_min_ratio,
                                                                                                     penalty_weights = initial_penalties,
@@ -562,22 +566,23 @@ bootstrap_vhat = function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
-                          norm_method,
                           num_bootstraps,
-                          backend) {
+                          backend, 
+                          covariance_type) {
   # to do: parallelize
 
   get_bootstrap_coef = function(random.seed,
                                 ccs,
                                 full_model_formula_str,
                                 best_full_model,
+                                best_reduced_model, 
                                 reduced_pln_model,
                                 pseudocount,
                                 initial_penalties,
                                 pln_min_ratio,
                                 pln_num_penalties,
-                                norm_method,
-                                backend) {
+                                backend, 
+                                covariance_type) {
 
     bootstrapped_model = bootstrap_model(ccs,
                                          full_model_formula_str,
@@ -588,7 +593,7 @@ bootstrap_vhat = function(ccs,
                                          pln_min_ratio,
                                          pln_num_penalties,
                                          random.seed = random.seed,
-                                         norm_method = norm_method,
+                                         covariance_type=covariance_type,
                                          backend = backend)
 
     if (backend == "torch") {
@@ -609,13 +614,15 @@ bootstrap_vhat = function(ccs,
                              ccs,
                              full_model_formula_str,
                              best_full_model,
+                             best_reduced_model,
                              reduced_pln_model,
                              pseudocount,
                              initial_penalties,
                              pln_min_ratio,
                              pln_num_penalties,
-                             norm_method,
-                             backend))
+                             backend, 
+                             covariance_type))
+  
   coef_df = coef_df %>% filter(!is.na(coef))
 
   # compute the covariance of the parameters
@@ -1004,9 +1011,9 @@ new_cell_count_model <- function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
-                          norm_method,
                           num_bootstraps,
-                          backend)
+                          backend, 
+                          covariance_type)
 
   } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
 
