@@ -567,7 +567,7 @@ bootstrap_vhat = function(ccs,
                           pln_num_penalties,
                           verbose,
                           num_bootstraps,
-                          backend, 
+                          backend,
                           covariance_type) {
   # to do: parallelize
 
@@ -575,13 +575,13 @@ bootstrap_vhat = function(ccs,
                                 ccs,
                                 full_model_formula_str,
                                 best_full_model,
-                                best_reduced_model, 
+                                best_reduced_model,
                                 reduced_pln_model,
                                 pseudocount,
                                 initial_penalties,
                                 pln_min_ratio,
                                 pln_num_penalties,
-                                backend, 
+                                backend,
                                 covariance_type) {
 
     bootstrapped_model = bootstrap_model(ccs,
@@ -620,9 +620,9 @@ bootstrap_vhat = function(ccs,
                              initial_penalties,
                              pln_min_ratio,
                              pln_num_penalties,
-                             backend, 
+                             backend,
                              covariance_type))
-  
+
   coef_df = coef_df %>% filter(!is.na(coef))
 
   # compute the covariance of the parameters
@@ -721,6 +721,7 @@ new_cell_count_model <- function(ccs,
                                  ftol_rel = 1e-6,
                                  penalize_by_distance=TRUE,
                                  penalty_scale_exponent=2,
+                                 reduction_method="UMAP",
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -852,7 +853,14 @@ new_cell_count_model <- function(ccs,
   #       to the user supplied penalty matrix.
     if (is.null(penalty_matrix)){
       if (penalize_by_distance){
-        initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, penalty_scale_exponent=penalty_scale_exponent)
+        initial_penalties = init_penalty_matrix(ccs,
+                                                whitelist=whitelist,
+                                                blacklist=blacklist,
+                                                base_penalty=base_penalty,
+                                                min_penalty=min_penalty,
+                                                max_penalty=max_penalty,
+                                                penalty_scale_exponent=penalty_scale_exponent,
+                                                reduction_method=reduction_method)
         initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
       }else{
         initial_penalties = NULL
@@ -1012,7 +1020,7 @@ new_cell_count_model <- function(ccs,
                           pln_num_penalties,
                           verbose,
                           num_bootstraps,
-                          backend, 
+                          backend,
                           covariance_type)
 
   } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
@@ -1117,8 +1125,8 @@ select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_fa
 #' @param blacklist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
 #' @noRd
-init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6, penalty_scale_exponent=2){
-  cell_group_centroids = centroids(ccs)
+init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6, penalty_scale_exponent=2, reduction_method="UMAP"){
+  cell_group_centroids = centroids(ccs, reduction_method=reduction_method)
   dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
 
   row.names(dist_matrix) <- cell_group_centroids$cell_group
