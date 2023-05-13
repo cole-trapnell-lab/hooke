@@ -217,6 +217,7 @@ get_extant_cell_types <- function(ccm,
            cell_group,
            log_abund,
            max_abundance,
+           percent_max_abund,
            percent_cell_type_range,
            longest_contig_start,
            longest_contig_end,
@@ -249,12 +250,14 @@ weigh_edges <- function(ccm, edges) {
 
 }
 
+# FIXME: we need to standardize notation (use either "partition" or "component") throughout the code
 #' @noRd
 add_cross_component_pathfinding_links = function(ccm,
                                                  pathfinding_graph,
                                                  extant_cell_type_df,
                                                  type=c("strongest-pcor", "strong-pcor", "ctp"),
-                                                 surprise_thresh=2){
+                                                 surprise_thresh=2,
+                                                 components="partition"){
 
   pcor_graph = tibble(cell_group = row.names(counts(ccm@ccs)))
   pcor_graph = pcor_graph %>% select(cell_group) %>% tidyr::expand(cell_group, cell_group)
@@ -266,8 +269,15 @@ add_cross_component_pathfinding_links = function(ccm,
 
   pcor_graph = dplyr::left_join(pcor_graph, nz_pcor_graph_edges)
 
+  if (components == "partition"){
+    component_assignments = partitions(ccm@ccs@cds)
+  } else {
+    component_assignments = colData(ccm@ccs@cds)[,components]
+    names(component_assignments) = row.names(colData(ccm@ccs@cds))
+  }
+
   clusters_by_partition = tibble(cell_group=ccm@ccs@metadata$cell_group_assignments$cell_group,
-                                 partition=partitions(ccm@ccs@cds)[row.names(ccm@ccs@metadata$cell_group_assignments)])
+                                 partition=component_assignments[row.names(ccm@ccs@metadata$cell_group_assignments)])
   clusters_by_partition = clusters_by_partition %>% group_by(cell_group, partition) %>% summarize(cells_from_group_in_partition=n())
   clusters_by_partition = clusters_by_partition %>% group_by(cell_group) %>% slice_max(cells_from_group_in_partition, n=1)
   clusters_by_partition = clusters_by_partition %>% select(cell_group, partition)
@@ -373,6 +383,7 @@ add_cross_component_pathfinding_links = function(ccm,
 init_pathfinding_graph <- function(ccm,
                                    extant_cell_type_df,
                                    links_between_components=c("ctp", "none", "strongest-pcor", "strong-pcor"),
+                                   components="partition",
                                    weigh_by_pcor=F,
                                    edge_whitelist=NULL,
                                    edge_blacklist=NULL){
@@ -426,7 +437,8 @@ init_pathfinding_graph <- function(ccm,
     pathfinding_graph = add_cross_component_pathfinding_links(ccm,
                                                               pathfinding_graph,
                                                               extant_cell_type_df,
-                                                              type=links_between_components)
+                                                              type=links_between_components,
+                                                              components=components)
     pathfinding_graph = igraph::as_data_frame(pathfinding_graph) %>%  select(from, to)
     pathfinding_graph = hooke:::weigh_edges_by_umap_dist(ccm, pathfinding_graph) %>%
       igraph::graph_from_data_frame(directed=FALSE, vertices=node_metadata) %>%
@@ -1571,7 +1583,7 @@ estimate_loss_timing <- function(perturbation_ccm,
                                            by=c("cell_group"="cell_group", "wt_time_present"="timepoint")) %>%
       #mutate(peak_time_in_ctrl_within_perturb_time_range = tidyr::replace_na(peak_time_in_ctrl_within_perturb_time_range, FALSE)) %>%
       mutate(delta_q_value = ifelse(is.na(delta_q_value), 1, delta_q_value),
-             delta_log_abund_when_present = ifelse(is.na(delta_log_abund_when_present), 1, delta_log_abund_when_present)) %>%
+             delta_log_abund_when_present = ifelse(is.na(delta_log_abund_when_present), 0, delta_log_abund_when_present)) %>%
       mutate(is_lost_when_present = present_above_thresh & delta_log_abund_when_present < -abs(delta_log_abund_loss_thresh)) %>%
       mutate(is_gained_when_present = present_above_thresh & delta_log_abund_when_present > -abs(delta_log_abund_loss_thresh))
     #loss_when_present_in_wt = loss_when_present_in_wt %>% group_by(cell_group) %>% slice_min(peak_wt_time, n=1, with_ties=with_ties)
@@ -1582,26 +1594,26 @@ estimate_loss_timing <- function(perturbation_ccm,
     # num parameters
     k = length(rownames(coef(perturbation_ccm@best_full_model)))
     df.r = n - k - 1
-
+    #df_correction = sqrt(n / (n - k - 1))
     loss_summary_tbl = changes_when_present_in_wt %>%
       filter(is_lost_when_present) %>%
       group_by(cell_group) %>%
-      summarize(loss_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
-                loss_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
-                loss_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
-                loss_when_present_tvalue_df = df.r + n(),
+      summarize(loss_when_present = weighted.mean(delta_log_abund_when_present, percent_max_abund, na.rm=T),
+                loss_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_max_abund, na.rm=T),
+                loss_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_max_abund, na.rm=T),
+                loss_when_present_tvalue_df = df.r,
                 loss_when_present_p_value = 2 * pt(-abs(loss_when_present_tvalue), loss_when_present_tvalue_df)) %>%
-      mutate(loss_when_present_q_val = p.adjust(loss_when_present_p_value, method="BH"))
+      mutate(loss_when_present_q_val = p.adjust(loss_when_present_p_value, method="bonferroni"))
 
     gain_summary_tbl = changes_when_present_in_wt %>%
       filter(is_gained_when_present) %>%
       group_by(cell_group) %>%
-      summarize(gain_when_present = weighted.mean(delta_log_abund_when_present, percent_cell_type_range, na.rm=T),
-                gain_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
-                gain_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_cell_type_range, na.rm=T),
-                gain_when_present_tvalue_df = df.r + n(),
+      summarize(gain_when_present = weighted.mean(delta_log_abund_when_present, percent_max_abund, na.rm=T),
+                gain_when_present_se = weighted.mean(delta_log_abund_when_present_se, percent_max_abund, na.rm=T),
+                gain_when_present_tvalue = weighted.mean(delta_log_abund_when_present/delta_log_abund_when_present_se, percent_max_abund, na.rm=T),
+                gain_when_present_tvalue_df = df.r,
                 gain_when_present_p_value = 2 * pt(-abs(gain_when_present_tvalue), gain_when_present_tvalue_df)) %>%
-      mutate(gain_when_present_q_val = p.adjust(gain_when_present_p_value, method="BH"))
+      mutate(gain_when_present_q_val = p.adjust(gain_when_present_p_value, method="bonferroni"))
 
 
     change_summary_tbl = changes_when_present_in_wt %>% select(cell_group) %>% distinct()
@@ -1984,6 +1996,7 @@ assemble_timeseries_transitions <- function(ccm,
                                             min_pathfinding_lfc=0,
                                             make_dag=FALSE,
                                             links_between_components=c("ctp", "none", "strongest-pcor", "strong-pcor"),
+                                            components = "partition",
                                             edge_whitelist=NULL,
                                             edge_blacklist=NULL,
                                             ...){
@@ -2005,6 +2018,7 @@ assemble_timeseries_transitions <- function(ccm,
   pathfinding_graph = init_pathfinding_graph(ccm,
                                              extant_cell_type_df,
                                              links_between_components=links_between_components,
+                                             components = components,
                                              edge_whitelist=edge_whitelist,
                                              edge_blacklist=edge_blacklist)
 
@@ -2109,6 +2123,23 @@ assess_perturbation_effects = function(control_timeseries_ccm,
       min_lfc=min_lfc,
       log_abund_detection_thresh=log_abund_detection_thresh,
       ...))
+
+  # Perform a global correction for multiple testing
+  perturbs = perturbation_ccm_tbl %>%
+    dplyr::select(perturb_name, perturb_summary_tbl)
+
+  # Start from the q values, as these are already corrected for the number of cell types in the model
+  perturbs = perturbs %>% tidyr::unnest(cols= c(perturb_summary_tbl))%>%
+    ungroup() %>%
+    mutate(loss_when_present_q_val = p.adjust(loss_when_present_q_val, method="bonferroni"),
+           loss_when_present_q_val = ifelse(is.na(loss_when_present_q_val), 1, loss_when_present_q_val),
+           is_lost_when_present = loss_when_present_q_val < q_val,
+           gain_when_present_q_val = p.adjust(gain_when_present_q_val, method="bonferroni"),
+           gain_when_present_q_val = ifelse(is.na(gain_when_present_q_val), 1, gain_when_present_q_val),
+           is_gained_when_present = gain_when_present_q_val < q_val)
+  perturbs = perturbs %>% tidyr::nest(perturb_summary_tbl = !perturb_name)
+  perturbation_ccm_tbl$perturb_summary_tbl = perturbs$perturb_summary_tbl
+
   return (perturbation_ccm_tbl)
 }
 
@@ -2135,6 +2166,7 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
                                                          log_abund_detection_thresh=-5,
                                                          min_pathfinding_lfc=0,
                                                          links_between_components=c("ctp", "none", "strongest-pcor", "strong-pcor"),
+                                                         components = "partition",
                                                          verbose=FALSE,
                                                          edge_whitelist=NULL,
                                                          edge_blacklist=NULL,
@@ -2167,6 +2199,7 @@ assemble_transition_graph_from_perturbations <- function(control_timeseries_ccm,
     pathfinding_graph = init_pathfinding_graph(control_timeseries_ccm,
                                                extant_cell_type_df,
                                                links_between_components=links_between_components,
+                                               components = components,
                                                edge_whitelist=edge_whitelist,
                                                edge_blacklist=edge_blacklist)
 
