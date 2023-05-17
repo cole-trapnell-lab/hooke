@@ -1172,9 +1172,14 @@ plot_state_graph_annotations <- function(ccs,
   #                     data = bezier_df)
   if (is.null(group_nodes_by) == FALSE){
     if (group_outline) {
+      # if (label_groups) {
+      #   label_groups_by = group_nodes_by
+      # } else {
+      #   label_groups_by = NULL
+      # }
       p = p + ggforce::geom_mark_rect(aes(x, y,
                                           col = group_nodes_by,
-                                          label = group_nodes_by,
+                                          # label = label_groups_by,
                                           filter = group_nodes_by %in% unlabeled_groups == FALSE),
                                       size=0.5,
                                       expand = unit(2, "mm"),
@@ -1616,7 +1621,8 @@ plot_state_graph_abundance_changes <- function(ccm,
                                                label_conn_linetype="dotted",
                                                legend_position = "none",
                                                con_colour = "darkgrey",
-                                               group_outline=FALSE)
+                                               group_outline=FALSE,
+                                               flip_x = FALSE)
 {
 
   if (is(state_graph, "igraph")){
@@ -1706,6 +1712,11 @@ plot_state_graph_abundance_changes <- function(ccm,
   color_nodes_by = "delta_log_abund"
   # group_outline = TRUE
 
+  if (flip_x) {
+    g$x = -1*g$x
+    bezier_df$x = -1*bezier_df$x
+  }
+
   p <- ggplot(aes(x,y), data=g)
   p = p +
     ggplot2::geom_path(aes(x, y, group=edge_name), colour=con_colour, data=bezier_df %>% distinct(), arrow = arrow(angle=30, length = unit(arrow_unit, "pt"), type="closed"), linejoin='mitre')
@@ -1778,6 +1789,7 @@ plot_state_graph_abundance_changes <- function(ccm,
     }
 
     p = p + scale_fill_manual(values=rep("white", length(unique(g$contrast))))
+    # p = p + scale_color_manual(values = rainbow_colors)
 
   }
   p = p + guides(fill = "none")
