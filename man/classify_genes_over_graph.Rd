@@ -5,7 +5,7 @@
 \title{Classify each gene's pattern of expresison in each state in a state transition graph}
 \usage{
 classify_genes_over_graph(
-  ccm,
+  ccs,
   state_graph,
   gene_ids = NULL,
   group_nodes_by = NULL,

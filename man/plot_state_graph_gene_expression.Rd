@@ -5,7 +5,7 @@
 \title{Plot the expression of a single gene on the state transition graph}
 \usage{
 plot_state_graph_gene_expression(
-  ccm,
+  ccs,
   state_graph,
   genes,
   method = "min",
@@ -13,6 +13,7 @@ plot_state_graph_gene_expression(
   fract_expr = 0,
   mean_expr = 0,
   scale_to_range = FALSE,
+  color_nodes_by = NULL,
   label_nodes_by = NULL,
   group_nodes_by = NULL,
   label_edges_by = NULL,
@@ -20,11 +21,11 @@ plot_state_graph_gene_expression(
   arrow.gap = 0.03,
   arrow_unit = 2,
   bar_unit = 0.075,
-  node_size = 6,
+  min_node_size = 0.25,
+  max_node_size = 2,
   min_edge_size = 0.1,
   max_edge_size = 2,
   unlabeled_groups = c("Unknown"),
-  label_subset = NULL,
   label_groups = TRUE,
   hide_unlinked_nodes = TRUE,
   group_label_font_size = 6,

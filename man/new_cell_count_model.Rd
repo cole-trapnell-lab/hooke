@@ -19,13 +19,16 @@ new_cell_count_model(
   pseudocount = 0,
   pln_min_ratio = 0.001,
   pln_num_penalties = 30,
-  norm_method = c("size_factors", "TSS", "CSS", "RLE", "GMPR", "Wrench", "none"),
-  vhat_method = c("wald", "sandwich", "louis", "bootstrap"),
-  size_factors = NULL,
+  vhat_method = c("variational_var", "jackknife", "bootstrap", "my_bootstrap"),
+  covariance_type = c("spherical", "diagonal"),
   num_bootstraps = 10,
   inception = NULL,
   backend = c("nlopt", "torch"),
   num_threads = 1,
+  ftol_rel = 1e-06,
+  penalize_by_distance = TRUE,
+  penalty_scale_exponent = 2,
+  reduction_method = "UMAP",
   ...
 )
 }
@@ -74,13 +77,7 @@ cell_count_set matrix.}
 \item{pln_num_penalties}{integer Number of penalty values for the internally
 generated penalty grid.}
 
-\item{norm_method}{string Normalization method used to compute scaling
-factors used as offset during PLN inference.}
-
 \item{vhat_method}{string Method used to compute covariance matrix?}
-
-\item{size_factors}{numeric vector or matrix User supplied vector or matrix of
-offsets passed the PLNmodels::prepare_data() method.}
 
 \item{num_bootstraps}{positive integer Number of iterations used with the
 bootstrap vhat_method.}

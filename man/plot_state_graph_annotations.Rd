@@ -5,7 +5,7 @@
 \title{Plot the state graph with annotations.}
 \usage{
 plot_state_graph_annotations(
-  ccm,
+  ccs,
   state_graph,
   color_nodes_by = NULL,
   label_nodes_by = NULL,

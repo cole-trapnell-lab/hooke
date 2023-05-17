@@ -14,7 +14,7 @@ plot_state_graph_losses(
   log_abund_detection_thresh,
   q_val,
   loss_time = c("largest_loss", "largest_loss_time", "earliest_time", "latest_time",
-    "peak_loss_time"),
+    "peak_loss_time", "delta_log_abund_at_peak"),
   label_nodes_by = NULL,
   group_nodes_by = NULL,
   label_edges_by = NULL,
@@ -35,6 +35,9 @@ plot_state_graph_losses(
   legend_position = "none",
   con_colour = "darkgrey",
   group_outline = FALSE,
+  control_ccm = perturbation_ccm,
+  control_start_time = NULL,
+  control_stop_time = NULL,
   ...
 )
 }

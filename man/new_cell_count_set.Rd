@@ -12,7 +12,10 @@ new_cell_count_set(
   cell_metadata = NULL,
   lower_threshold = NULL,
   upper_threshold = NULL,
-  keep_cds = TRUE
+  keep_cds = TRUE,
+  norm_method = c("size_factors", "TSS", "CSS", "RLE", "GMPR", "Wrench", "none"),
+  size_factors = NULL,
+  pseudocount = 0
 )
 }
 \arguments{
@@ -37,6 +40,12 @@ retained cell_groups.}
 
 \item{upper_threshold}{numeric Maximum number of cells in
 retained cell_groups.}
+
+\item{norm_method}{string Normalization method used to compute scaling
+factors used as offset during PLN inference.}
+
+\item{size_factors}{numeric vector or matrix User supplied vector or matrix of
+offsets passed the PLNmodels::prepare_data() method.}
 }
 \value{
 a new cell_data_set object

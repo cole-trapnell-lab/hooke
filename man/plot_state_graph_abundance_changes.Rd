@@ -29,7 +29,8 @@ plot_state_graph_abundance_changes(
   label_conn_linetype = "dotted",
   legend_position = "none",
   con_colour = "darkgrey",
-  group_outline = FALSE
+  group_outline = FALSE,
+  flip_x = FALSE
 )
 }
 \description{
