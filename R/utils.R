@@ -157,11 +157,11 @@ plot_sub_contrast <- function (ccm,
                                plot_labels = c("significant", "all", "none"),
                                plot_edges = c("all", "directed", "undirected", "none"),
                                fc_limits=c(-3,3),
-                               sub_space = T,
+                               prefix = "subumap3d",
                                ...) {
 
 
-  ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, sub_space = sub_space)
+  ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, prefix = prefix)
 
   colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
