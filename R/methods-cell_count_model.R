@@ -55,3 +55,18 @@ centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
   colnames(centroid_coords)[-1] = paste0(tolower(reduction_method), "_", 1:(length(colnames(centroid_coords))-1))
   return (centroid_coords)
 }
+
+#' return a matrix of normalized counts
+#' @param ccs cell_count_set
+#' @param round TRUE if counts are rounded
+get_norm_counts <- function(ccs, round = FALSE) {
+  if (round) {
+    norm_counts = round(t((t(counts(ccs))/size_factors(ccs))))
+  } else {
+    norm_counts = t((t(counts(ccs))/size_factors(ccs)))
+  }
+
+  return(norm_counts)
+
+}
+
