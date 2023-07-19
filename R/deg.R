@@ -1,4 +1,5 @@
 #' Compute a pseudobulk expression matrix for a ccs
+#' @export
 #' @noRd
 pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALSE){
 
@@ -46,6 +47,7 @@ pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALS
 }
 
 #' add metadata to pb_cds from cds
+#' @export
 add_covariate <- function(ccs, pb_cds, covariate) {
 
   assertthat::assert_that(
@@ -74,14 +76,47 @@ add_covariate <- function(ccs, pb_cds, covariate) {
 }
 
 
-# run DEGs across all cell groups in the ccs 
-# for a given contrast 
+fit_cell_models <- function(ccs,
+                            model_formula_str = "~ 1",
+                            cores = 1,
+                            cell_groups = NULL,
+                            ... ) {
+  pb_cds = pseudobulk_ccs_for_states(ccs)
+
+  # make sure that the model terms are in the ccs
+  model_formula_str = stringr::str_replace_all(model_formula_str, "~", "")
+  model_formula_str = gsub("[[:space:]]", "", model_formula_str)
+  model_terms = stringr::str_split(model_formula_str, pattern="\\+") %>%
+                unlist() %>%
+                stringr::str_split(pattern="\\*") %>%
+                unlist() %>%
+                stringr::str_split(pattern="\\:") %>%
+                unlist() %>% unique()
+
+  for (term in model_terms) {
+    if (term %in% colnames(colData(ccs))) {
+      pb_cds = add_covariate(ccs, pb_cds, term)
+    }
+  }
+
+  group_models = monocle3::fit_models(cg_pb_cds,
+                                      weights = colData(cg_pb_cds)$num_cells_in_group,
+                                      model_formula_str = paste0("~",model_formula_str),
+                                      cores = cores,
+                                      ... )
+
+}
+
+
+# run DEGs across all cell groups in the ccs
+# for a given contrast
 #' @param ccs
 #' @param model_formula_str
 #' @param cores
-fit_cell_group_models <- function(ccs, 
-                                  model_formula_str = "~ 1", 
-                                  cores = 1, 
+fit_cell_group_models <- function(ccs,
+                                  model_formula_str = "~ 1",
+                                  cores = 1,
+                                  cell_groups = NULL,
                                   ... ) {
 
   pb_cds = pseudobulk_ccs_for_states(ccs)
@@ -89,34 +124,36 @@ fit_cell_group_models <- function(ccs,
   # make sure that the model terms are in the ccs
   model_formula_str = stringr::str_replace_all(model_formula_str, "~", "")
   model_formula_str = gsub("[[:space:]]", "", model_formula_str)
-  model_terms = stringr::str_split(model_formula_str, pattern="\\+") %>% 
-                unlist() %>% 
-                stringr::str_split(pattern="\\*") %>% 
-                unlist() %>% 
-                stringr::str_split(pattern="\\:") %>% 
+  model_terms = stringr::str_split(model_formula_str, pattern="\\+") %>%
+                unlist() %>%
+                stringr::str_split(pattern="\\*") %>%
+                unlist() %>%
+                stringr::str_split(pattern="\\:") %>%
                 unlist() %>% unique()
 
   for (term in model_terms) {
     if (term %in% colnames(colData(ccs))) {
-      pb_cds = add_covariate(ccs, pb_cds, covariate)
-    } 
+      pb_cds = add_covariate(ccs, pb_cds, term)
+    }
   }
 
-  # subset to genes that are expressed over a certain min value 
+  # subset to genes that are expressed over a certain min value
   expr_over_thresh = normalized_counts(pb_cds, "size_only", pseudocount = 0)
   genes_to_test = which(Matrix::rowSums(expr_over_thresh) >= 1)
   pb_cds = pb_cds[genes_to_test,]
-  
-  cell_groups = rownames(counts(ccs))
+
+  if (is.null(cell_groups)) {
+    cell_groups = rownames(counts(ccs))
+  }
 
   # fit models in every cell group
   group_models = lapply(cell_groups, function(cell_group){
 
-    cg_pb_cds = pb_cds[, colData(pb_cds)$cell_group == cell_group] 
+    cg_pb_cds = pb_cds[, colData(pb_cds)$cell_group == cell_group]
     cg_group_models = monocle3::fit_models(cg_pb_cds,
-                                           weights = colData(cg_pb_cds)$num_cells_in_group, 
-                                           model_formula_str = model_formula_str, 
-                                           cores = cores, 
+                                           weights = colData(cg_pb_cds)$num_cells_in_group,
+                                           model_formula_str = paste0("~",model_formula_str),
+                                           cores = cores,
                                            ... )
     cg_group_models
     # fit_coefs = coefficient_table(cg_group_models)
