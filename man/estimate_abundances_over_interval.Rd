@@ -6,8 +6,8 @@
 \usage{
 estimate_abundances_over_interval(
   ccm,
-  start,
-  stop,
+  interval_start,
+  interval_stop,
   interval_col = "timepoint",
   interval_step = 2,
   ...
@@ -16,11 +16,11 @@ estimate_abundances_over_interval(
 \arguments{
 \item{ccm}{A cell_count_model.}
 
-\item{start}{numeric Interval start value.}
+\item{interval_start}{numeric Interval start value.}
 
-\item{stop}{numeric Interval stop value.}
+\item{interval_stop}{numeric Interval stop value.}
 
-\item{interval_col}{character Interval values are taken from the interval_col data. Default is "timepoint".}
+\item{interval_col}{character Interval values are taken from the interval_var data. Default is "timepoint".}
 
 \item{interval_step}{numeric Interval size. Default is 2.}
 }

@@ -188,6 +188,14 @@ new_cell_count_set <- function(cds,
     cds = cds[, !is.na(colData(cds)[[cell_group]])]
   }
 
+  if (is.character(colData(cds)[[cell_group]])){
+    num_cell_group_blanks = sum(colData(cds)[[cell_group]] == "")
+    if (num_cell_group_blanks != 0) {
+      message(paste(num_cell_group_blanks, "unlabeled cells found in cell group. Dropping unlabled cells."))
+      cds = cds[, colData(cds)[[cell_group]] != ""]
+    }
+  }
+
   coldata_df = colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
@@ -267,7 +275,8 @@ new_cell_count_set <- function(cds,
                      cds_coldata=cds_coldata,
                      cds_reduced_dims=cds_reducedDims,
                      info=SimpleList(sample_group=sample_group,
-                                     cell_group=cell_group))
+                                     cell_group=cell_group,
+                                     norm_method = norm_method))
 
   #
   # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
@@ -387,7 +396,7 @@ bootstrap_model = function(ccs,
                            pln_min_ratio,
                            pln_num_penalties,
                            random.seed,
-                           norm_method,
+                           covariance_type,
                            backend = c('nlopt', 'torch')) {
 
   assertthat::assert_that(
@@ -399,6 +408,7 @@ bootstrap_model = function(ccs,
   # resample the counts
   sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
 
+  norm_method = ccs@info$norm_method
   if (norm_method == "size_factors") {
     norm_method = monocle3::size_factors(sub_ccs)
   }
@@ -422,6 +432,7 @@ bootstrap_model = function(ccs,
                                                        # penalties = reduced_pln_model$penalties,
                                                        control = PLNmodels::PLN_param(backend = 'torch',
                                                                                       trace = ifelse(FALSE, 2, 0),
+                                                                                      covariance = covariance_type,
                                                                                       inception = best_full_model,
                                                                                       config_optim = list(maxevel  = 10000,
                                                                                                           ftol_rel = 1e-8,
@@ -450,6 +461,7 @@ bootstrap_model = function(ccs,
                                                               penalties = reduced_pln_model$penalties,
                                                               control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
                                                                                                     trace = ifelse(FALSE, 2, 0),
+                                                                                                    covariance = covariance_type,
                                                                                                     n_penalties = pln_num_penalties,
                                                                                                     min_ratio = pln_min_ratio,
                                                                                                     penalty_weights = initial_penalties,
@@ -554,22 +566,23 @@ bootstrap_vhat = function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
-                          norm_method,
                           num_bootstraps,
-                          backend) {
+                          backend,
+                          covariance_type) {
   # to do: parallelize
 
   get_bootstrap_coef = function(random.seed,
                                 ccs,
                                 full_model_formula_str,
                                 best_full_model,
+                                best_reduced_model,
                                 reduced_pln_model,
                                 pseudocount,
                                 initial_penalties,
                                 pln_min_ratio,
                                 pln_num_penalties,
-                                norm_method,
-                                backend) {
+                                backend,
+                                covariance_type) {
 
     bootstrapped_model = bootstrap_model(ccs,
                                          full_model_formula_str,
@@ -580,7 +593,7 @@ bootstrap_vhat = function(ccs,
                                          pln_min_ratio,
                                          pln_num_penalties,
                                          random.seed = random.seed,
-                                         norm_method = norm_method,
+                                         covariance_type=covariance_type,
                                          backend = backend)
 
     if (backend == "torch") {
@@ -601,13 +614,15 @@ bootstrap_vhat = function(ccs,
                              ccs,
                              full_model_formula_str,
                              best_full_model,
+                             best_reduced_model,
                              reduced_pln_model,
                              pseudocount,
                              initial_penalties,
                              pln_min_ratio,
                              pln_num_penalties,
-                             norm_method,
-                             backend))
+                             backend,
+                             covariance_type))
+
   coef_df = coef_df %>% filter(!is.na(coef))
 
   # compute the covariance of the parameters
@@ -705,6 +720,8 @@ new_cell_count_model <- function(ccs,
                                  num_threads=1,
                                  ftol_rel = 1e-6,
                                  penalize_by_distance=TRUE,
+                                 penalty_scale_exponent=2,
+                                 reduction_method="UMAP",
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -740,26 +757,41 @@ new_cell_count_model <- function(ccs,
   assertthat::assert_that(is.null(whitelist) || (is.numeric(whitelist[[1]][[1]]) &&
                                                  range(whitelist[[1]])[[1]] >= 0 &&
                                                  range(whitelist[[1]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(whitelist[[1]][[1]]) &&
-                                                 all(whitelist[[1]] %in% ccs_cell_group_names)))
+                                                (is.character(whitelist[[1]][[1]])))
+  if (!all(whitelist[[1]] %in% ccs_cell_group_names)){
+    message ("Warning: whitelist refers to cell groups missing from cell count set")
+  }
 
   assertthat::assert_that(is.null(whitelist) || (is.numeric(whitelist[[2]][[1]]) &&
                                                  range(whitelist[[2]])[[1]] >= 0 &&
                                                  range(whitelist[[2]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(whitelist[[2]][[1]]) &&
-                                                 all(whitelist[[2]] %in% ccs_cell_group_names)))
+                                                (is.character(whitelist[[2]][[1]])))
+  if (!all(whitelist[[2]] %in% ccs_cell_group_names)){
+    message ("Warning: whitelist refers to cell groups missing from cell count set")
+  }
 
   assertthat::assert_that(is.null(blacklist) || (is.numeric(blacklist[[1]][[1]]) &&
                                                  range(blacklist[[1]])[[1]] >= 0 &&
                                                  range(blacklist[[1]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(blacklist[[1]][[1]]) &&
-                                                 all(blacklist[[1]] %in% ccs_cell_group_names)))
+                                                (is.character(blacklist[[1]][[1]])))
+  if (!all(blacklist[[1]] %in% ccs_cell_group_names)){
+    message ("Warning: blacklist refers to cell groups missing from cell count set")
+  }
+
 
   assertthat::assert_that(is.null(blacklist) || (is.numeric(blacklist[[2]][[1]]) &&
                                                  range(blacklist[[2]])[[1]] >= 0 &&
                                                  range(blacklist[[2]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(blacklist[[2]][[1]]) &&
-                                                 all(blacklist[[2]] %in% ccs_cell_group_names)))
+                                                (is.character(blacklist[[2]][[1]])))
+  if (!all(blacklist[[2]] %in% ccs_cell_group_names)){
+    message ("Warning: blacklist refers to cell groups missing from cell count set")
+  }
+
+  if (is.null(whitelist) == FALSE && is.character(whitelist[[2]][[1]]))
+    whitelist = whitelist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+
+  if (is.null(blacklist) == FALSE && is.character(blacklist[[2]][[1]]))
+    blacklist = blacklist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
 
   assertthat::assert_that(assertthat::is.flag(verbose))
 
@@ -821,7 +853,14 @@ new_cell_count_model <- function(ccs,
   #       to the user supplied penalty matrix.
     if (is.null(penalty_matrix)){
       if (penalize_by_distance){
-        initial_penalties = init_penalty_matrix(ccs, whitelist=whitelist, blacklist=blacklist, base_penalty=base_penalty,min_penalty=min_penalty, max_penalty=max_penalty, ...)
+        initial_penalties = init_penalty_matrix(ccs,
+                                                whitelist=whitelist,
+                                                blacklist=blacklist,
+                                                base_penalty=base_penalty,
+                                                min_penalty=min_penalty,
+                                                max_penalty=max_penalty,
+                                                penalty_scale_exponent=penalty_scale_exponent,
+                                                reduction_method=reduction_method)
         initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
       }else{
         initial_penalties = NULL
@@ -980,9 +1019,9 @@ new_cell_count_model <- function(ccs,
                           pln_min_ratio,
                           pln_num_penalties,
                           verbose,
-                          norm_method,
                           num_bootstraps,
-                          backend)
+                          backend,
+                          covariance_type)
 
   } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
 
@@ -1086,8 +1125,8 @@ select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_fa
 #' @param blacklist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
 #' @noRd
-init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6){
-  cell_group_centroids = centroids(ccs)
+init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6, penalty_scale_exponent=2, reduction_method="UMAP"){
+  cell_group_centroids = centroids(ccs, reduction_method=reduction_method)
   dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
 
   row.names(dist_matrix) <- cell_group_centroids$cell_group
@@ -1109,7 +1148,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     return(out)
   }
 
-  penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, s=2))
+  penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, s=penalty_scale_exponent))
 
   # TODO: add support for whitelisting and blacklisting
   #qplot(as.numeric(dist_matrix), as.numeric(out))

@@ -18,6 +18,8 @@ plot_contrast(
   sender_cell_groups = NULL,
   receiver_cell_groups = NULL,
   plot_edges = c("all", "directed", "undirected", "none"),
+  edge_significance = c("both", "one-sided"),
+  keep_colors = FALSE,
   label_cell_groups = list(),
   repel_labels = TRUE,
   model_for_pcors = c("reduced", "full"),

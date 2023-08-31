@@ -104,10 +104,6 @@ distance_to_root <- function(edges) {
 }
 
 
-
-
-
-
 #' weights edges based on partial correlation,
 #' change in abundance, and transcriptomic distance
 #' @param ccm

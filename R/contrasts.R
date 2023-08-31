@@ -78,7 +78,9 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   #pred_out = max(pred_out, -5)
   #log_abund = pred_out[1,]
   log_abund = as.numeric(pred_out)
+  
   log_abund_sd = sqrt(Matrix::diag(coef(model(ccm), type="covariance")))
+  names(log_abund_sd) = colnames(coef(model(ccm), type="covariance"))
   log_abund_se = se_fit
 
   below_thresh = log_abund < min_log_abund
