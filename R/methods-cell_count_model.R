@@ -59,6 +59,7 @@ centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
 #' return a matrix of normalized counts
 #' @param ccs cell_count_set
 #' @param round TRUE if counts are rounded
+#' @export
 get_norm_counts <- function(ccs, round = FALSE) {
   if (round) {
     norm_counts = round(t((t(counts(ccs))/size_factors(ccs))))
@@ -70,3 +71,28 @@ get_norm_counts <- function(ccs, round = FALSE) {
 
 }
 
+#' subset ccs by cell groups
+#' @param ccs
+#' @param cell_groups
+#' @export
+subset_ccs = function(ccs, cell_groups) {
+
+  # make sure that cell groups are in the ccs
+
+  assertthat::assert_that(
+    tryCatch(expr = all(cell_groups %in% rownames(ccs)),
+             error = function(e) FALSE),
+    msg = paste0(setdiff(cell_groups, rownames(ccs)) %>% paste0(collapse = ", "),
+                 " are not found in the ccs"))
+
+  sub_ccs = ccs[cell_groups, ]
+
+  sub_ccs@metadata$cell_group_assignments = sub_ccs@metadata$cell_group_assignments[sub_ccs@metadata$cell_group_assignments$cell_group %in% cell_groups,]
+
+  if (is.null(nrow(colnames(ccs@cds@colData))) == FALSE) {
+    sub_ccs@cds = sub_ccs@cds[,rownames(sub_ccs@metadata$cell_group_assignments)]
+  }
+
+  return(sub_ccs)
+
+}

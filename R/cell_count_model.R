@@ -1180,9 +1180,17 @@ build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", in
     interval_stop = as.numeric(max(colData(ccs@cds)[,interval_var]))
   }
 
-  interval_breakpoints = seq(interval_start, interval_stop, length.out=num_breaks)
-  interval_breakpoints = interval_breakpoints[2:(length(interval_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
-  interval_formula_str = paste("~ ns(", interval_var, ", knots=", paste("c(",paste(interval_breakpoints, collapse=","), ")", sep=""), ")")
+  if (num_breaks < 3) {
+    interval_formula_str = paste("~ ns(", interval_var," df=1)")
+    return(interval_formula_str)
+  } else {
+    interval_breakpoints = seq(interval_start, interval_stop, length.out=num_breaks)
+    interval_breakpoints = interval_breakpoints[2:(length(interval_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
+    interval_formula_str = paste("~ ns(", interval_var, ", knots=", paste("c(",paste(interval_breakpoints, collapse=","), ")", sep=""), ")")
+    return(interval_formula_str)
+
+  }
+
   return(interval_formula_str)
 }
 #debug(build_interval_formula)
