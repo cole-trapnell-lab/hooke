@@ -68,17 +68,19 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   v_hat <- ccm@vhat
   v_hat_method <- ccm@vhat_method
 
-  if (v_hat_method == "wald") {
-    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
-  } else {
-    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
-  }
+  se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+
+  # if (v_hat_method == "wald") {
+  #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
+  # } else {
+  #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+  # }
 
   pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
   #pred_out = max(pred_out, -5)
   #log_abund = pred_out[1,]
   log_abund = as.numeric(pred_out)
-  
+
   log_abund_sd = sqrt(Matrix::diag(coef(model(ccm), type="covariance")))
   names(log_abund_sd) = colnames(coef(model(ccm), type="covariance"))
   log_abund_se = se_fit
@@ -117,7 +119,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, ...) {
+estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, min_log_abund=-5, ...) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(is.numeric(interval_start))
@@ -133,7 +135,7 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
   time_interval_pred_helper = function(tp, ...){
     tp_tbl = tibble(IV=tp, ...)
     colnames(tp_tbl)[1] = interval_col
-    estimate_abundances(ccm, tp_tbl)
+    estimate_abundances(ccm, tp_tbl, min_log_abund = min_log_abund)
   }
 
   timepoint_pred_df = timepoint_pred_df %>%
