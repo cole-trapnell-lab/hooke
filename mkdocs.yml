@@ -1,0 +1,23 @@
+site_name: Hooke
+site_author: Maddy Duran
+
+theme:
+  palette:
+    scheme: trapnell
+    accent: teal
+  name: material
+  language: en
+  features: 
+    - content.code.copy
+#  logo: assets/ben_logo_embryo.png
+
+repo_url: https://github.com/cole-trapnell-lab/hooke
+markdown_extensions:
+  - attr_list
+  - md_in_html
+
+extra_css:
+  - stylesheets/extra.css
+
+copyright: |
+  &copy 2023 <a href="https://github.com/cole-trapnell-lab"  target="_blank" rel="noopener">Cole Trapnell</a>
