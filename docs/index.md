@@ -1,5 +1,7 @@
 # Overview
         
+![overview](hooke_website_figure.png)        
+
 Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both 1) perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and 2) easily performed pseudobulked differential gene expression analysis. 
 
 ---
