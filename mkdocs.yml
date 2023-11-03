@@ -1,6 +1,12 @@
 site_name: Hooke
 site_author: Maddy Duran
 
+nav:
+  - Home: index.md
+  - Differential Abundance: about.md
+  - Differential Expression: deg.md
+  - Advanced: advanced.md
+
 theme:
   palette:
     scheme: trapnell

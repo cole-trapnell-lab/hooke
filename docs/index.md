@@ -6,11 +6,11 @@ Hooke depends on the PLNmodels package.
 
 Use the github install: 
 
-`devtools::install_github("cole-trapnell-lab/PLNmodels`
+`devtools::install_github("cole-trapnell-lab/PLNmodels)`
 
 See the [PLN website](https://pln-team.github.io/PLNmodels/index.html) for more details. 
 
-`devtools::install_github("cole-trapnell-lab/hooke`
+`devtools::install_github("cole-trapnell-lab/hooke)`
 
 See our [Github repository](https://github.com/cole-trapnell-lab/hooke) for more details. 
 
@@ -25,7 +25,7 @@ Currently Hooke only supports Monocle3 cell data set objects. If using Seurat, p
 ##### Processed data subsets:
 
 
-[Silicosis data (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/silicosis_cds.rds)
+[Silicosis data (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/silicosis_cds.rds){ .md-button }
 
 
 This studied was published [Hasegawa, Franks, et al. _bioRxiv_, (2023)](https://www.biorxiv.org/content/10.1101/2023.02.17.528996v1)
