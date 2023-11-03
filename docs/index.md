@@ -25,7 +25,7 @@ Currently Hooke only supports Monocle3 cell data set objects. If using Seurat, p
 ##### Processed data subsets:
 
 
-[Silicosis data (.RDS)]()
+[Silicosis data (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/silicosis_cds.rds)
 
 
 This studied was published [Hasegawa, Franks, et al. _bioRxiv_, (2023)](https://www.biorxiv.org/content/10.1101/2023.02.17.528996v1)
@@ -39,7 +39,7 @@ For more information about this dataset, see the [ZSCAPE website](https://cole-t
 
 * Subclustered and finely annotated sensory cranial ganglia cells (plus Rohon-Beard neurons). This dataset contains just wild type and control-injected cells.  
 
-[Cranial ganglia subset (.RDS)](http://trapnell-lab-s3-zscape.s3-website-us-west-2.amazonaws.com/zscape_reference_sensory_neuron_cds.RDS.gz){ .md-button }
+[Cranial ganglia subset (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/all-geno_sensory-cranial-ganglion_neuron_29k_cds.RDS){ .md-button }
 
 
 ##### Cell metadata breakdown 
