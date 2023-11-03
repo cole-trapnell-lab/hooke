@@ -2,20 +2,29 @@
         
 Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both 1) perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and 2) easily performed pseudobulked differential gene expression analysis. 
 
-
+---
 **_NOTE:_** Hooke is currently in the beta phase of its development. This means there are likely bugs and performance issues that will need to be addressed. We are working hard towards a stable release, but please be patient while Hooke is under construction. The documentation on this page is also still under construction. Not all features currently implemented have been completely documented. Please report any issues to your [github page](https://github.com/cole-trapnell-lab/hooke/issues). 
+---
 
 ## Installation
 
-Hooke depends on the PLNmodels package. Currently Hooke is only available on Github. 
+Hooke runs in the [R statistical computing environment](https://www.r-project.org/). Currently Hooke is only available for Github install. 
+
+##### Required software
+
+Hooke builds on top of the [Monocle3 package](https://cole-trapnell-lab.github.io/monocle3/docs/installation/). 
+
+```devtools::install_github("cole-trapnell-lab/monocle3, ref="develop")```
+
+Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html). Currently we are using a forked version of the PLNmodels package until our pull request is approved. 
 
 Use the github install: 
 
-`devtools::install_github("cole-trapnell-lab/PLNmodels)`
+```devtools::install_github("cole-trapnell-lab/PLNmodels)```
 
-See the [PLN website](https://pln-team.github.io/PLNmodels/index.html) for more details. 
+Finally, install the hooke package as follows: 
 
-`devtools::install_github("cole-trapnell-lab/hooke)`
+```devtools::install_github("cole-trapnell-lab/hooke)```
 
 See our [Github repository](https://github.com/cole-trapnell-lab/hooke) for more details. 
 
