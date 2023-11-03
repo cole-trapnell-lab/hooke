@@ -1,11 +1,11 @@
 site_name: Hooke
 site_author: Maddy Duran
-
+site_url: https://cole-trapnell-lab.github.io/hooke
 nav:
   - Home: index.md
   - Differential Abundance: about.md
   - Differential Expression: deg.md
-  - Advanced: advanced.md
+  - Time series analysis: advanced.md
 
 theme:
   palette:

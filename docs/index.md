@@ -1,8 +1,13 @@
 # Overview
         
-## Installing Hooke
+Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both 1) perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and 2) easily performed pseudobulked differential gene expression analysis. 
 
-Hooke depends on the PLNmodels package. 
+
+**_NOTE:_** Hooke is currently in the beta phase of its development. This means there are likely bugs and performance issues that will need to be addressed. We are working hard towards a stable release, but please be patient while Hooke is under construction. The documentation on this page is also still under construction. Not all features currently implemented have been completely documented. Please report any issues to your [github page](https://github.com/cole-trapnell-lab/hooke/issues). 
+
+## Installation
+
+Hooke depends on the PLNmodels package. Currently Hooke is only available on Github. 
 
 Use the github install: 
 
@@ -15,6 +20,11 @@ See the [PLN website](https://pln-team.github.io/PLNmodels/index.html) for more 
 See our [Github repository](https://github.com/cole-trapnell-lab/hooke) for more details. 
 
 
+## Data type requirements
+
+Hooke is built for experiments with multiple samples, taking advantage of replicates in various groups or perturbations. As input, Hooke takes in a cell x gene matrix where cells are annotated according to type (or cluster) and by which sample or specimen they came from. It will aggregate cells according to type and by sample. This collapses the matrix into a new, smaller matrix where rows are cell types and the columns denote how many cells of that type were present in each sample. We refer to this as a cell type abundance matrix. 
+
+
 ## Using a Seurat object
 
 
@@ -22,25 +32,33 @@ Currently Hooke only supports Monocle3 cell data set objects. If using Seurat, p
 
 ## Example datasets
 
-##### Processed data subsets:
+#### Silica-induced pulmonary fibrosis [mouse]:
+
 
 
 [Silicosis data (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/silicosis_cds.rds){ .md-button }
 
+Subclustered and finely annotated whole-lung single-nucleas RNA sequencing from a silica-induced pulmonary fibrosis mouse model. 
 
-This studied was published [Hasegawa, Franks, et al. _bioRxiv_, (2023)](https://www.biorxiv.org/content/10.1101/2023.02.17.528996v1)
+This studied was published in [Hasegawa, Franks, et al. _bioRxiv_, (2023)](https://www.biorxiv.org/content/10.1101/2023.02.17.528996v1)
 
+##### Cell metadata breakdown 
 
+Important columns in this data: 
 
+* `ID` - individual sample ID. 
+* `Timepoint` - timepoint the lung was sampled. 
+* `Rep` - replicate
+* `fine_annotation` - The finest cell type annotation level.
+* `broad_annotation` - A broader level of cell type annotation than `cell_type_sub`, but still capturing all uniquely identified cell types.
 
-Our findings are published in [Saunders, Srivatsan, et al. _Nature_, in press (2023)](https://www.biorxiv.org/content/10.1101/2022.08.04.502764v1)
+#### Cranial sensory ganglia [zebrafish]:
 
-For more information about this dataset, see the [ZSCAPE website](https://cole-trapnell-lab.github.io/zscape/)
-
-* Subclustered and finely annotated sensory cranial ganglia cells (plus Rohon-Beard neurons). This dataset contains just wild type and control-injected cells.  
+Subclustered and finely annotated sensory cranial ganglia cells (plus Rohon-Beard neurons). This dataset contains just wild type and control-injected cells.  
 
 [Cranial ganglia subset (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/all-geno_sensory-cranial-ganglion_neuron_29k_cds.RDS){ .md-button }
 
+Our findings are published in [Saunders, Srivatsan, et al. _Nature_, in press (2023)](https://www.biorxiv.org/content/10.1101/2022.08.04.502764v1). For more information about this dataset, see the [ZSCAPE website](https://cole-trapnell-lab.github.io/zscape/). 
 
 ##### Cell metadata breakdown 
 
