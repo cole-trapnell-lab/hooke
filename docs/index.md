@@ -1,12 +1,9 @@
 # Overview
         
-![overview](hooke_website_figure.png)        
+![overview](assets/hooke_website_figure.png)        
 
 Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both 1) perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and 2) easily performed pseudobulked differential gene expression analysis. 
 
----
-**_NOTE:_** Hooke is currently in the beta phase of its development. This means there are likely bugs and performance issues that will need to be addressed. We are working hard towards a stable release, but please be patient while Hooke is under construction. The documentation on this page is also still under construction. Not all features currently implemented have been completely documented. Please report any issues to your [github page](https://github.com/cole-trapnell-lab/hooke/issues). 
----
 
 ## Installation
 
@@ -28,7 +25,9 @@ Finally, install the hooke package as follows:
 
 ```devtools::install_github("cole-trapnell-lab/hooke)```
 
-See our [Github repository](https://github.com/cole-trapnell-lab/hooke) for more details. 
+See our [Github repository](https://github.com/cole-trapnell-lab/hooke) for more details.
+
+**_NOTE:_** Hooke is currently in the beta phase of its development. This means there are likely bugs and performance issues that will need to be addressed. We are working hard towards a stable release, but please be patient while Hooke is under construction. The documentation on this page is also still under construction. Not all features currently implemented have been completely documented. Please report any issues to your [github page](https://github.com/cole-trapnell-lab/hooke/issues). 
 
 
 ## Data type requirements
