@@ -1,7 +1,7 @@
 # Differential Expression
 
 
-##### Pseudobulking 
+### Pseudobulking 
 
 Expression values are aggregated for each embryo each cell into "pseudo-cells". The aggregation matches that of the `ccs`. 
 

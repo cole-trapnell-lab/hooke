@@ -1,14 +1,18 @@
 # Using Hooke to analyze timeseries perturbation data
 
+Hooke can be used to analyze data with multiple time points across perturbations, such as the data found in 
+[Saunders, Srivatsan, et al. Nature, in press (2023)](https://www.biorxiv.org/content/10.1101/2022.08.04.502764v1). This study in includes ~3 million single cells across almost 2000 individual barcoded embryos. It includes 19 timepoints (18-96 hpf) and 23 genetic loss of function experiments. For more information see the [ZSCAPE website](https://cole-trapnell-lab.github.io/zscape/). 
+
+
+### Analysis of cranial sensory ganglia with Hooke
+
+This vignette focuses on the cranial sensory ganglia subset. Cranial sensory neurons transmit information from the head, ear, heart and viscera. Around 30000 cranial sensory neurons (~20 cells/embryo) were identified in the data. The data formed four distinct branches upon sub-clustering. These cells were annotated by comparing branch specific gene expression with published expression data.
+
 ![csg_umap](assets/csg_umap.png)
 
+#### Fitting a Hooke model with model time points
 
-### Analysis of cranial sensory ganglion with Hooke
-
-_Foxi1_ and _phox2a_ are two transcription factors important for cranial sensory ganglia development. 
-
-See figure 4 of [Saunders, Srivatsan, et al. Nature, in press (2023)](https://www.biorxiv.org/content/10.1101/2022.08.04.502764v1) for more information. 
-
+_Foxi1_ and _phox2a_ are two transcription factors important for cranial sensory ganglia development. Here we subset the `cds` to focus on those perturbations. We also include all the controls. 
 
 ```
 
@@ -23,8 +27,6 @@ ccs = new_cell_count_set(cds,
                          sample_group = "embryo", 
                          cell_group = "cell_type_sub")
 ```
-
-### Helper to build an interval formula. 
 
 The function`build_interval_formula()` builds a model formula for time series models based on the range of the data. This is a utility function that puts the knots in reasonable positions based on the range of the data. It takes the following as input: 
 
@@ -45,7 +47,7 @@ time_formula = build_interval_formula(ccs, num_breaks = 3, interval_start = 18, 
 The resulting time formula is `~ ns(timepoint , knots= c(45))`
 
 
-We can fit a `cell_count_model` using this time formula and a perturbation term. 
+We can fit a `cell_count_model` using this time formula and a perturbation term... 
 
 ```
 ccm = new_cell_count_model(ccs, 
@@ -61,6 +63,8 @@ wt_v_phox2a_tbl = compare_abundances(ccm, cond_wt, cond_phox2a)
 wt_v_foxi1_tbl = compare_abundances(ccm, cond_wt, cond_foxi1)
 ```
 
+... and plot the abundance changes. 
+
 ```
 plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_threshold = 0.05)
 ```
@@ -68,8 +72,9 @@ plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_threshold = 0.05)
 ![phox2a_48hpf](assets/phox2a_48hpf.png)
 
 
-### Using Hooke time intervals
+#### Using Hooke time intervals to view kinetics 
 
+We can use Hooke to view when cell types are at their peak abundance in the dataset. Here we are just looking at wild-type data and estimating abundances over a time interval. 
 
 ```
 
@@ -98,8 +103,9 @@ ggplot(wt_timepoint_pred_df, aes(x = timepoint)) +
 
 ![wt_kinetics](assets/wt_kinetics.png)
 
-### Controlling for batch effects
+##### Controlling for batch effects
 
+If the data was collected in multiple batches, you can also include a `nuisance model formula` and plot each experimental batch's kinetics. 
 
 ```
 
@@ -129,7 +135,9 @@ ggplot(wt_timepoint_pred_df, aes(x = timepoint)) +
 ![wt_expt_kinetics](assets/wt_expt_kinetics.png)
 
 
-### Perturbation kinetics
+##### Perturbation kinetics
+
+We can also plot a given perturbation's kinetics against the wild type. 
 
 ```
 

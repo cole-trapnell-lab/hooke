@@ -1,15 +1,12 @@
 # Overview
         
-![overview](assets/hooke_website_figure.png)        
-
 Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both 1) perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and 2) easily performed pseudobulked differential gene expression analysis. 
-
 
 ## Installation
 
-Hooke runs in the [R statistical computing environment](https://www.r-project.org/). Currently Hooke is only available for Github install. 
+Hooke runs in the [R statistical computing environment](https://www.r-project.org/).Hooke is currently only available for Github install. 
 
-##### Required software
+### Required software
 
 Hooke builds on top of the [Monocle3 package](https://cole-trapnell-lab.github.io/monocle3/docs/installation/). 
 
@@ -42,9 +39,9 @@ Currently Hooke only supports Monocle3 cell data set objects. If using Seurat, p
 
 ## Example datasets
 
+Descriptions and download links for the datasets used in the Hooke vignettes.  
+
 #### Silica-induced pulmonary fibrosis [mouse]:
-
-
 
 [Silicosis data (.RDS)](https://depts.washington.edu/trapnell-lab/software/hooke/silicosis_cds.rds){ .md-button }
 
