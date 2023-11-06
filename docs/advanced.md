@@ -8,8 +8,8 @@ Hooke can be used to analyze data with multiple time points across perturbations
 
 This vignette focuses on the cranial sensory ganglia subset. Cranial sensory neurons transmit information from the head, ear, heart and viscera. Around 30000 cranial sensory neurons (~20 cells/embryo) were identified in the data. The data formed four distinct branches upon sub-clustering. These cells were annotated by comparing branch specific gene expression with published expression data.
 
-<img src="ssets/csg_umap.png" alt="csg_umap" style="width:500px;height:600px;">
-<img src="ssets/csg_umap.png" alt="csg_umap" style="width:250px;height:300px;">
+<img src="assets/csg_umap.png" alt="csg_umap" style="width:500px;height:600px;">
+<img src="assets/csg_umap.png" alt="csg_umap" style="width:250px;height:300px;">
 
 ![csg_umap](assets/csg_umap.png)
 
