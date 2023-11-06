@@ -24,12 +24,14 @@ Finally, install the hooke package as follows:
 
 See our [Github repository](https://github.com/cole-trapnell-lab/hooke) for more details.
 
-**_NOTE:_** Hooke is currently in the beta phase of its development. This means there are likely bugs and performance issues that will need to be addressed. We are working hard towards a stable release, but please be patient while Hooke is under construction. The documentation on this page is also still under construction. Not all features currently implemented have been completely documented. Please report any issues to your [github page](https://github.com/cole-trapnell-lab/hooke/issues). 
+**_NOTE:_** Hooke is currently in the beta phase of its development. The documentation on this page is also still under construction. Not all features currently implemented have been completely documented. Please report any issues to your [github page](https://github.com/cole-trapnell-lab/hooke/issues). 
 
 
 ## Data type requirements
 
-Hooke is built for experiments with multiple samples, taking advantage of replicates in various groups or perturbations. As input, Hooke takes in a cell x gene matrix where cells are annotated according to type (or cluster) and by which sample or specimen they came from. It will aggregate cells according to type and by sample. This collapses the matrix into a new, smaller matrix where rows are cell types and the columns denote how many cells of that type were present in each sample. We refer to this as a cell type abundance matrix. 
+Hooke is built for experiments with multiple treatments and replicates, taking advantage of replicates in various groups or perturbations. As input, Hooke takes in a cell x gene matrix where cells are annotated according to type (or cluster) and by which sample or specimen they came from. It will aggregate cells according to type and by sample. This collapses the matrix into a new, smaller matrix where rows are cell types and the columns denote how many cells of that type were present in each sample. We refer to this as a *cell type abundance matrix*. 
+
+![aggregation_cells](assets/aggregation_cells.png)
 
 
 ## Using a Seurat object
