@@ -10,6 +10,7 @@ estimate_abundances_over_interval(
   interval_stop,
   interval_col = "timepoint",
   interval_step = 2,
+  min_log_abund = -5,
   ...
 )
 }
