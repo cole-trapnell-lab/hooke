@@ -78,6 +78,6 @@ plot_genes_violin(fm_pb_cds[rowData(fm_pb_cds)$gene_short_name %in% FM_genes,],
   theme(axis.text.x=element_text(angle=45, hjust=1))
 
 ```
-![silicosis_degs](assets/silicosis_im_degs.png)
+![silicosis_degs](assets/silicosis_im_degs.png){width=50%}
 
 
