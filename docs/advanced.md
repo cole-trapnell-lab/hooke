@@ -1,4 +1,4 @@
-# Using Hooke to analyze timeseries perturbation data
+# Analyzing time series perturbation data with Hooke
 
 Hooke can be used to analyze data with multiple time points across perturbations, such as the data found in 
 [Saunders, Srivatsan, et al. Nature, in press (2023)](https://www.biorxiv.org/content/10.1101/2022.08.04.502764v1). This study in includes ~3 million single cells across almost 2000 individual barcoded embryos. It includes 19 timepoints (18-96 hpf) and 23 genetic loss of function experiments. For more information see the [ZSCAPE website](https://cole-trapnell-lab.github.io/zscape/). 

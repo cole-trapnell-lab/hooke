@@ -4,7 +4,7 @@ Hooke is a new software package that uses Poisson-Lognormal models to perform di
 
 ## Installation
 
-Hooke runs in the [R statistical computing environment](https://www.r-project.org/).Hooke is currently only available for Github install. 
+Hooke runs in the [R statistical computing environment](https://www.r-project.org/). Hooke is currently only available for Github install. 
 
 ### Required software
 
