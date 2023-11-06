@@ -3,7 +3,11 @@
 
 ### Pseudobulking 
 
-Expression values are aggregated for each embryo each cell into "pseudo-cells". The aggregation matches that of the `ccs`. 
+Expression values are aggregated for each embryo each cell into "pseudo-cells". 
+
+![aggregation_cells](assets/aggregation_example_genes.png)
+
+The aggregation matches that of the `ccs`. 
 
 * `ccs` - a Hooke `cell_count_set` object. 
 
