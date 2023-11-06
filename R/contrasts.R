@@ -208,3 +208,16 @@ correlate_abundance_changes <- function(pln_model, cond_b_vs_a_tbl){
   #  dplyr::rename(from_delta_log_abund = delta_log_abund)
   return(change_corr_tbl)
 }
+
+#' Helper function to plot kinetics
+#' @param tp timepoint
+#' @param perturbation_ccm a cell count model with a perturbation
+#' @param interval_col column that matches the timepoint information
+#' @param wt_pred_df control output from estimate_abundances_over_interval()
+#' @param ko_pred_df perturbation output from estimate_abundances_over_interval()
+#' @export
+compare_ko_to_wt_at_timepoint <- function(tp, perturbation_ccm, wt_pred_df, ko_pred_df, interval_col)  {
+  cond_wt = wt_pred_df %>% filter(!!sym(interval_col) == tp)
+  cond_ko = ko_pred_df %>% filter(!!sym(interval_col) == tp)
+  return(compare_abundances(perturbation_ccm, cond_wt, cond_ko))
+}

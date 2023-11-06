@@ -1,6 +1,8 @@
 #' Compute a pseudobulk expression matrix for a ccs
+#' @param ccs a cell count set object
+#' @param state_col column to aggregate expression. Defaults using the cell_group used in ccs construction.
+#' @param collapse_samples boolean Whether to collapse sample groups into one.
 #' @export
-#' @noRd
 pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALSE){
 
   if (is.null(state_col)){
@@ -47,6 +49,9 @@ pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALS
 }
 
 #' add metadata to pb_cds from cds
+#' @param ccs a cell count set object
+#' @param pb_cds a pseudobulked cds
+#' @param covariate the column name in colData(ccs) to add to the pb_cds
 #' @export
 add_covariate <- function(ccs, pb_cds, covariate) {
 

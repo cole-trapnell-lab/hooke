@@ -62,14 +62,31 @@ centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
 #' @export
 get_norm_counts <- function(ccs, round = FALSE) {
   if (round) {
-    norm_counts = round(t((t(counts(ccs))/size_factors(ccs))))
+    norm_counts = round(t((t(as.matrix(counts(ccs)))/size_factors(ccs))))
   } else {
-    norm_counts = t((t(counts(ccs))/size_factors(ccs)))
+    norm_counts = t((t(as.matrix(counts(ccs)))/size_factors(ccs)))
   }
 
   return(norm_counts)
 
 }
+
+get_count_df <- function(ccs, round=F, norm=F) {
+
+  if (norm) {
+    count_mat = get_norm_counts(ccs, round=round)
+  } else {
+    count_mat = counts(ccs)
+  }
+
+  count_df = count_mat %>%
+    as.matrix %>%
+    as.data.frame %>%
+    rownames_to_column("cell_group") %>%
+    pivot_longer(-cell_group, names_to = "sample", values_to = "count")
+
+}
+
 
 #' subset ccs by cell groups
 #' @param ccs
