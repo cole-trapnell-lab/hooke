@@ -6,13 +6,13 @@ Hooke can be used to analyze data with multiple time points across perturbations
 
 ### Analysis of cranial sensory ganglia with Hooke
 
-This vignette focuses on the cranial sensory ganglia subset. Cranial sensory neurons transmit information from the head, ear, heart and viscera. Around 30000 cranial sensory neurons (~20 cells/embryo) were identified in the data. The data formed four distinct branches upon sub-clustering. These cells were annotated by comparing branch specific gene expression with published expression data.
+This vignette focuses on the cranial sensory ganglia subset. Cranial sensory neurons transmit information from the head, ear, heart and viscera. Around 30,000 cranial sensory neurons (~20 cells/embryo) were identified. These cells were annotated by comparing branch specific gene expression with published expression data.
 
 ![csg_umap](assets/csg_umap.png){width=75%}
 
 #### Fitting a Hooke model with model time points
 
-_Foxi1_ and _phox2a_ are two transcription factors important for cranial sensory ganglia development. Here we subset the `cds` to focus on those perturbations. We also include all the controls. 
+_Foxi1_ and _phox2a_ are two transcription factors important for cranial sensory ganglia development. Here we subset the `cds` to focus on those perturbations. We also include all the controls in our `cell count set` construction. 
 
 ```
 
@@ -69,7 +69,7 @@ wt_v_foxi1_tbl = compare_abundances(ccm, cond_wt, cond_foxi1)
 plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_threshold = 0.05)
 ```
 
-![phox2a_48hpf](assets/phox2a_48hpf.png)
+![phox2a_48hpf](assets/phox2a_48hpf.png){width=75%}
 
 
 #### Using Hooke time intervals to view kinetics 
@@ -105,7 +105,7 @@ ggplot(wt_timepoint_pred_df, aes(x = timepoint)) +
 
 ##### Controlling for batch effects
 
-If the data was collected in multiple batches, you can also include a `nuisance model formula` and plot each experimental batch's kinetics. 
+If the data was collected in multiple batches, you can also include a `nuisance_model_formula_str` and plot each experimental batch's kinetics. 
 
 ```
 
