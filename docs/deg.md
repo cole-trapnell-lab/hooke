@@ -5,7 +5,7 @@
 
 Expression values are aggregated for each embryo each cell into "pseudo-cells". 
 
-![aggregation_cells](assets/aggregation_example_genes.png)
+![aggregation_cells](assets/aggregation_example_genes.png){width=75%}
 
 The aggregation matches that of the `ccs`. 
 
