@@ -1,6 +1,6 @@
 # Overview
         
-Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and easily performed pseudobulked differential gene expression analysis. 
+Hooke is a new software package that uses Poisson-Lognormal models to perform differential analysis of cell abundances for perturbation experiments read out by single-cell RNA-seq. This versatile framework allows users to both perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state and visualize cell type abundance kinetics. 
 
 ![website_figure](assets/hooke_website_figure.png)
 
@@ -12,7 +12,7 @@ Hooke runs in the [R statistical computing environment](https://www.r-project.or
 
 Hooke builds on top of the [Monocle3 package](https://cole-trapnell-lab.github.io/monocle3/docs/installation/). 
 
-```devtools::install_github("cole-trapnell-lab/monocle3, ref="develop")```
+```devtools::install_github("cole-trapnell-lab/monocle3")```
 
 Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html). Currently we are using a forked version of the PLNmodels package until our pull request is approved. 
 
