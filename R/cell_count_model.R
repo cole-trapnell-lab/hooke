@@ -354,302 +354,6 @@ new_cell_count_set <- function(cds,
 }
 
 
-#' resamples the ccs counts using a multinomial distribution
-#' @param ccs
-#' @param random.seed
-#' @noRd
-bootstrap_ccs = function(ccs, random.seed=NULL) {
-  count_mat = counts(ccs)
-  num_cols = dim(count_mat)[2]
-  set.seed(random.seed)
-  count_list = lapply(seq(1,num_cols), function(i){
-    counts = count_mat[,i]
-    size = sum(count_mat[,i])
-    prob = counts/size
-    sample_counts = rmultinom(1, size, prob)
-
-  })
-  new_count_mat = do.call(cbind,count_list)
-  colnames(new_count_mat) = colnames(count_mat)
-  counts(ccs) = new_count_mat
-  return(ccs)
-}
-
-
-#'
-#' @param ccs
-#' @param full_model_formula_str
-#' @param best_full_model
-#' @param reduced_pln_model
-#' @param pseudocount
-#' @param initial_penalties
-#' @param pln_min_ratio
-#' @param pln_num_penalties
-#' @param random.seed
-#' @noRd
-bootstrap_model = function(ccs,
-                           full_model_formula_str,
-                           best_full_model,
-                           reduced_pln_model,
-                           pseudocount,
-                           initial_penalties,
-                           pln_min_ratio,
-                           pln_num_penalties,
-                           random.seed,
-                           covariance_type,
-                           backend = c('nlopt', 'torch')) {
-
-  assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(backend) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste('Argument backend must be one of "nlopt" or "torch".'))
-  backend <- match.arg(backend)
-
-  # resample the counts
-  sub_ccs = bootstrap_ccs(ccs, random.seed = random.seed)
-
-  norm_method = ccs@info$norm_method
-  if (norm_method == "size_factors") {
-    norm_method = monocle3::size_factors(sub_ccs)
-  }
-
-  # remake data from new ccs
-  sub_pln_data <- PLNmodels::prepare_data(counts = counts(sub_ccs) + pseudocount,
-                                          covariates = colData(sub_ccs) %>% as.data.frame,
-                                          offset = norm_method)
-  # rerun the model using the same initial parameters
-  # as the original, non bootstrapped model
-
-  if (backend == "torch") {
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o the PLNmodels::PLN() function versions that I see do not include
-#                     the arguments min.ratio, nPenalties, vcov_est, and penalty_weights. I
-#                     am confused...
-#                   o I revert to the original because the PLNmodels changes break hooke.
-    sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
-                                                       data = sub_pln_data,
-                                                       # penalties = reduced_pln_model$penalties,
-                                                       control = PLNmodels::PLN_param(backend = 'torch',
-                                                                                      trace = ifelse(FALSE, 2, 0),
-                                                                                      covariance = covariance_type,
-                                                                                      inception = best_full_model,
-                                                                                      config_optim = list(maxevel  = 10000,
-                                                                                                          ftol_rel = 1e-8,
-                                                                                                          xtol_rel = 1e-6))))
-
-# bge (20221227): notes
-#                   o I restore the PLN call for the earlier PLNmodels version commit 022d59d
-#                   o the earlier version of PLNmodels was 'PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)'
-#     sub_full_model = do.call(PLNmodels::PLN, args=list(full_model_formula_str,
-#                                                        data = sub_pln_data,
-#                                                        # penalties = reduced_pln_model$penalties,
-#                                                        control = list(min.ratio=pln_min_ratio,
-#                                                                       nPenalties=pln_num_penalties,
-#                                                                       vcov_est = "none",
-#                                                                       inception = best_full_model,
-#                                                                       backend = "torch",
-#                                                                       penalty_weights=initial_penalties,
-#                                                                       trace = ifelse(FALSE, 2, 0))))
-
-  } else {
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o I revert to the original because the PLNmodels changes break hooke.
-    sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-                                                              data = sub_pln_data,
-                                                              penalties = reduced_pln_model$penalties,
-                                                              control = PLNmodels::PLNnetwork_param(backend = 'nlopt',
-                                                                                                    trace = ifelse(FALSE, 2, 0),
-                                                                                                    covariance = covariance_type,
-                                                                                                    n_penalties = pln_num_penalties,
-                                                                                                    min_ratio = pln_min_ratio,
-                                                                                                    penalty_weights = initial_penalties,
-                                                                                                    config_optim = list(algorithm = 'CCSAQ',
-                                                                                                                        maxeval = 10000,
-                                                                                                                        ftol_rel = 1e-8,
-                                                                                                                        xtol_rel = 1e-6,
-                                                                                                                        ftol_out = 1e-6,
-                                                                                                                        maxit_out = 50,
-                                                                                                                        ftol_abs = 0.0,
-                                                                                                                        xtol_abs = 0.0,
-                                                                                                                        maxtime = -1))))
-
-# bge (20221227): notes
-#                   o I restore the PLN call for the earlier PLNmodels version commit 022d59d
-#                   o the earlier version of PLNmodels was 'PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)'
-#     sub_full_model = do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-#                                                               data = sub_pln_data,
-#                                                               penalties = reduced_pln_model$penalties,
-#                                                               control_init=list(min.ratio=pln_min_ratio,
-#                                                                                 nPenalties=pln_num_penalties,
-#                                                                                 penalty_weights=initial_penalties),
-#                                                               control_main=list(trace = ifelse(FALSE, 2, 0))))
-  }
-
-  return(sub_full_model)
-}
-
-
-#
-# Removed 20230104 bge PLNmodels v1.0.0 removed get_vcov_hat
-#' @noRd
-# compute_vhat = function(model, model_family, type) {
-#
-#     if (model$d > 0) {
-#       ## self$fisher$mat : Fisher Information matrix I_n(\Theta) = n * I(\Theta)
-#       ## safe inversion using Matrix::solve and Matrix::diag and error handling
-#
-#       X = model_family$responses
-#       Y = model_family$covariates
-#       model$get_vcov_hat(type, X, Y)
-#
-#       vhat = vcov(model)
-#
-#       # zero out everything not on block diagonal
-#       if (type == "sandwich") {
-#
-#         num_coef = dim(coef(model))[2]
-#         num_blocks =dim(vhat)[1]/num_coef
-#
-#         blocks = lapply(1:num_blocks, function(i) {
-#           start = num_coef*(i-1) + 1
-#           end = num_coef*i
-#           vhat[start:end,start:end]
-#         })
-#
-#         vhat = Matrix::bdiag(blocks) %>% as.matrix()
-#       }
-#
-#       # vcov_mat = vcov(model)
-#
-#     #   vhat <- matrix(0, nrow = nrow(vcov_mat), ncol = ncol(vcov_mat))
-#     #
-#     #   #dimnames(vhat) <- dimnames(vcov_mat)
-#     #   safe_rows = safe_cols = Matrix::rowSums(abs(vcov_mat)) > 0
-#     #   vcov_mat = vcov_mat[safe_rows, safe_cols]
-#     #
-#     #   out <- tryCatch(Matrix::solve(vcov_mat),
-#     #                   error = function(e) {e})
-#     #   row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-#     #   if (is(out, "error")) {
-#     #     warning(paste("Inversion of the Fisher information matrix failed with following error message:",
-#     #                   out$message,
-#     #                   "Returning NA",
-#     #                   sep = "\n"))
-#     #     vhat <- matrix(NA, nrow = model$p, ncol = model$d)
-#     #   } else {
-#     #     row.names(out) = colnames(out) = names(safe_rows[safe_rows])
-#     #     row.names(vhat) = colnames(vhat) = row.names(vcov(model))
-#     #     vhat[safe_rows, safe_cols] = as.numeric(out) #as.numeric(out) #%>% sqrt %>% matrix(nrow = self$d) %>% t()
-#     #   }
-#     #   #dimnames(vhat) <- dimnames(vcov_mat)
-#     } else {
-#       vhat <- NULL
-#     }
-#     vhat = methods::as(vhat, "dgCMatrix")
-#     vhat
-# }
-
-
-#' computes the avg vhat across n bootstraps
-#' @param ccm
-#' @param num_bootstraps
-#' @noRd
-bootstrap_vhat = function(ccs,
-                          full_model_formula_str,
-                          best_full_model,
-                          best_reduced_model,
-                          reduced_pln_model,
-                          pseudocount,
-                          initial_penalties,
-                          pln_min_ratio,
-                          pln_num_penalties,
-                          verbose,
-                          num_bootstraps,
-                          backend,
-                          covariance_type) {
-  # to do: parallelize
-
-  get_bootstrap_coef = function(random.seed,
-                                ccs,
-                                full_model_formula_str,
-                                best_full_model,
-                                best_reduced_model,
-                                reduced_pln_model,
-                                pseudocount,
-                                initial_penalties,
-                                pln_min_ratio,
-                                pln_num_penalties,
-                                backend,
-                                covariance_type) {
-
-    bootstrapped_model = bootstrap_model(ccs,
-                                         full_model_formula_str,
-                                         best_full_model,
-                                         reduced_pln_model,
-                                         pseudocount,
-                                         initial_penalties,
-                                         pln_min_ratio,
-                                         pln_num_penalties,
-                                         random.seed = random.seed,
-                                         covariance_type=covariance_type,
-                                         backend = backend)
-
-    if (backend == "torch") {
-      coef(bootstrapped_model) %>%
-        as.data.frame() %>% t() %>%
-        tibble::rownames_to_column("cell_group")
-    } else {
-      best_bootstrapped_model = PLNmodels::getModel(bootstrapped_model, var=best_reduced_model$penalty)
-      coef(best_bootstrapped_model) %>% t() %>%
-        as.data.frame() %>%
-        tibble::rownames_to_column("cell_group")
-    }
-  }
-
-  coef_df = data.frame(seed = seq(1, num_bootstraps)) %>%
-    mutate(coef = purrr::map(.f = purrr::possibly(get_bootstrap_coef, NA_character_),
-                             .x = seed,
-                             ccs,
-                             full_model_formula_str,
-                             best_full_model,
-                             best_reduced_model,
-                             reduced_pln_model,
-                             pseudocount,
-                             initial_penalties,
-                             pln_min_ratio,
-                             pln_num_penalties,
-                             backend,
-                             covariance_type))
-
-  coef_df = coef_df %>% filter(!is.na(coef))
-
-  # compute the covariance of the parameters
-  get_cov_mat = function(data, cell_group) {
-
-    cov_matrix = cov(data)
-    rownames(cov_matrix) = paste0(cell_group, "_", rownames(cov_matrix))
-    colnames(cov_matrix) = paste0(cell_group, "_", colnames(cov_matrix))
-    return(cov_matrix)
-  }
-
-  bootstrapped_df = do.call(rbind, coef_df$coef) %>%
-    group_by(cell_group) %>%
-    tidyr::nest() %>%
-    mutate(cov_mat = purrr::map2(.f = get_cov_mat,
-                                 .x = data,
-                                 .y = cell_group))
-
-  bootstrapped_vhat = Matrix::bdiag(bootstrapped_df$cov_mat) %>% as.matrix()
-  names = lapply(bootstrapped_df$cov_mat, function(m){ colnames(m)}) %>% unlist()
-  rownames(bootstrapped_vhat) = names
-  colnames(bootstrapped_vhat) = names
-
-  bootstrapped_vhat = methods::as(bootstrapped_vhat, "dgCMatrix")
-  return(bootstrapped_vhat)
-}
-
 
 #' Create a new cell_count_model object.
 #'
@@ -712,7 +416,7 @@ new_cell_count_model <- function(ccs,
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
-                                 vhat_method = c("bootstrap", "variational_var", "jackknife", "my_bootstrap"),
+                                 vhat_method = c("bootstrap", "variational_var", "jackknife"),
                                  covariance_type = c("spherical", "diagonal"),
                                  num_bootstraps = 10,
                                  inception = NULL,
@@ -800,7 +504,7 @@ new_cell_count_model <- function(ccs,
     tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
              error = function(e) FALSE),
     msg = paste( 'Argument vhat_method must be one of "variational_var",',
-                 '"jackknife","bootstrap", or "my_bootstrap".'))
+                 '"jackknife", or "bootstrap".'))
   vhat_method <- match.arg(vhat_method)
 
   assertthat::assert_that(
@@ -926,9 +630,8 @@ new_cell_count_model <- function(ccs,
     sandwich_var = FALSE
     jackknife = FALSE
     bootstrap = FALSE
-    my_bootstrap = FALSE
 
-    if (vhat_method == "variational_var" | vhat_method == "my_bootstrap") {
+    if (vhat_method == "variational_var") {
       variational_var = TRUE
     }else{
       variational_var = FALSE # Don't compute the variational variance unless we have to, because it sometimes throws exceptions
@@ -1008,22 +711,7 @@ new_cell_count_model <- function(ccs,
   # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
   best_full_model <- full_pln_model
 
-  if (vhat_method == "my_bootstrap") {
-    vhat = bootstrap_vhat(ccs,
-                          full_model_formula_str,
-                          best_full_model,
-                          best_reduced_model,
-                          reduced_pln_model,
-                          pseudocount,
-                          initial_penalties,
-                          pln_min_ratio,
-                          pln_num_penalties,
-                          verbose,
-                          num_bootstraps,
-                          backend,
-                          covariance_type)
-
-  } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
+ if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
 
     vhat_coef = coef(best_full_model, type = "main")
     var_jack_mat = attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
