@@ -942,45 +942,6 @@ plot_cells_per_sample = function(ccs,
 }
 
 
-#' @noRd
-plot_cells_highlight = function(ccs, group_to_highlight, colname) {
-
-  plot_df = as.data.frame(ccs@cds_coldata)
-  plot_df$cell_group = ccs@cds_coldata[[colname]]
-
-  plot_df$cell = row.names(plot_df)
-  plot_df$umap2D_1 <- ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,x]
-  plot_df$umap2D_2 <- ccs@cds_reduced_dims[["UMAP"]][plot_df$cell,y]
-
-  gp = ggplot() +
-    geom_point(
-      data = plot_df,
-      aes(umap2D_1, umap2D_2),
-      color = "black",
-      size = 1.5 * cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df %>% filter(!cell_group %in% c(group_to_highlight)),
-      aes(umap2D_1, umap2D_2),
-      color = "white",
-      size = cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df %>% filter(cell_group %in% c(group_to_highlight)),
-      aes(umap2D_1, umap2D_2),
-      color = "red",
-      size = cell_size,
-      stroke = 0
-    ) +
-    theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts()
-
-  return(gp)
-
-}
-
 
 #' @noRd
 plot_contrast_3d <- function(ccm,
