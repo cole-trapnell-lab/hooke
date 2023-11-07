@@ -146,13 +146,6 @@ weigh_edges_by_umap_dist <- function(ccm, edges) {
 
 }
 
-#' @noRd
-weigh_edges <- function(ccm, edges) {
-  # get weighted path
-  dist_df = hooke:::get_distances(ccm@ccs, matrix = F)
-
-
-}
 
 #' returns nodes not in paga graph
 #' @param  ccm
