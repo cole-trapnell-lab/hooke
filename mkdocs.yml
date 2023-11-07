@@ -3,8 +3,8 @@ site_author: Maddy Duran
 site_url: https://cole-trapnell-lab.github.io/hooke
 nav:
   - Overview: index.md
+  - Example data: data.md
   - Differential Abundance: about.md
-  - Differential Expression: deg.md
   - Time Series Analysis: advanced.md
 
 theme:
