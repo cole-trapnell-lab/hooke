@@ -3,7 +3,9 @@ site_author: Maddy Duran
 site_url: https://cole-trapnell-lab.github.io/hooke
 nav:
   - Overview: index.md
-  - Example data: data.md
+  - Installation: install.md
+  - Data types: data_type.md
+  - Example datasets: data.md
   - Differential Abundance: about.md
   - Time Series Analysis: advanced.md
 

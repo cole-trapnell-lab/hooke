@@ -4,6 +4,9 @@ Hooke is built for experiments with multiple treatments and replicates, taking a
 
 ![aggregation_cells](assets/aggregation_example_cells.png){width=75%}
 
+## Using a Monocle3 object
+
+Hooke extends the cell data count set. A Monocle3 object can be directly plugged into Hooke. 
 
 ## Using a Seurat object
 
