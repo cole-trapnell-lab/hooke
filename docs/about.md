@@ -10,6 +10,7 @@ cds = readRDS("silicosis_cds.cds")
 
 # for simplicity, we are lumping together pre and post i.t. silica
 colData(cds)$exposed = ifelse(colData(cds)$Timepoint == 0, "not exposed", "exposed")
+colData(cds)$Rep = as.factor(colData(cds)$Rep)
 
 plot_cells(cds, color_cells_by = "fine_annotation", label_groups_by_cluster = F)
 

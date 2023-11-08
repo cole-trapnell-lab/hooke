@@ -51,7 +51,7 @@ We can fit a `cell_count_model` using this time formula and a perturbation term.
 
 ```
 ccm = new_cell_count_model(ccs, 
-                           main_model_formula_str = paste0("perturbation" + time_formula)) 
+                           main_model_formula_str = paste0("perturbation" + time_formula),  
                            nuissance_model_formula_str = "~ expt")
 
 # predict for 48 hpf 
