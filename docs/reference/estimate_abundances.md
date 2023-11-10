@@ -1,16 +1,3 @@
-Predict cell type abundances given a PLN model and a set of inputs for its covariates — estimate\_abundances • hooke
-
-Toggle navigation [hooke](../index.html) 0.0.1
-
-*   [Reference](../reference/index.html)
-*   [Articles](#)
-    *   [Hooke Tutorial](../articles/hooke_tutorial.html)
-
-Predict cell type abundances given a PLN model and a set of inputs for its covariates
-=====================================================================================
-
-`estimate_abundances.Rd`
-
 Predict cell type abundances given a PLN model and a set of inputs for its covariates
 
     estimate_abundances(ccm, newdata, min_log_abund = -5)

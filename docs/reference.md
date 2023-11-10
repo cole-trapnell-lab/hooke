@@ -36,9 +36,3 @@ Create a new cell\_data\_set object.
 [`plot_contrast()`](plot_contrast)
 
 Plot a UMAP colored by how cells shift in a given contrast
-
-
-Contents
---------
-
-Developed by Cole Trapnell.
