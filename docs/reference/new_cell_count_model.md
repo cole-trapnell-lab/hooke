@@ -108,9 +108,3 @@ Fits a PLNnetwork according to a formula. Accepts a matrix of penalties as a way
     
     a new cell\_count\_model object
   
-  Contents
-  --------
-    
-    Developed by Cole Trapnell.
-  
-  Site built with [pkgdown](https://pkgdown.r-lib.org/) 2.0.7.

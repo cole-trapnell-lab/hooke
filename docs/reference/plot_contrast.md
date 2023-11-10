@@ -117,10 +117,3 @@ Value
 -----
 
 A ggplot2 plot object.
-
-Contents
---------
-
-Developed by Cole Trapnell.
-
-Site built with [pkgdown](https://pkgdown.r-lib.org/) 2.0.7.

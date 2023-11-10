@@ -57,10 +57,3 @@ Value
 -----
 
 a new cell\_data\_set object
-
-Contents
---------
-
-Developed by Cole Trapnell.
-
-Site built with [pkgdown](https://pkgdown.r-lib.org/) 2.0.7.

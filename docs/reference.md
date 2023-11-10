@@ -1,7 +1,7 @@
 Reference
 =========
 
-All functions[`](#all-functions)
+All functions
 -------------------------------
 
 

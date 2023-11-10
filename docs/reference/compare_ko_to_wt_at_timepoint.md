@@ -30,10 +30,3 @@ perturbation output from estimate\_abundances\_over\_interval()
 interval\_col
 
 column that matches the timepoint information
-
-Contents
---------
-
-Developed by Cole Trapnell.
-
-Site built with [pkgdown](https://pkgdown.r-lib.org/) 2.0.7.

@@ -30,10 +30,3 @@ Value
 -----
 
 tibble A table contrasting cond\_x and cond\_y (interpret as Y/X).
-
-Contents
---------
-
-Developed by Cole Trapnell.
-
-Site built with [pkgdown](https://pkgdown.r-lib.org/) 2.0.7.

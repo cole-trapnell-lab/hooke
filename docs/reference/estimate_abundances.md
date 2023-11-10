@@ -34,10 +34,3 @@ Value
 -----
 
 A tibble of cell abundance predictions.
-
-Contents
---------
-
-Developed by Cole Trapnell.
-
-Site built with [pkgdown](https://pkgdown.r-lib.org/) 2.0.7.
