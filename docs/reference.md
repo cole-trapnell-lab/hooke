@@ -12,7 +12,11 @@ Reference
 All functions[](reference/#all-functions)
 -------------------------------
 
-`[add_covariate()](reference/add_covariate.md)`
+[`add_covariate()`](reference/new_cell_count_set)
+[`add_covariate()`](reference/new_cell_count_set.md)
+[`add_covariate()`](new_cell_count_set)
+
+[`add_covariate()`](reference/add_covariate)
 
 add metadata to pb\_cds from cds
 
@@ -101,5 +105,3 @@ Contents
 --------
 
 Developed by Cole Trapnell.
-
-Site built with [pkgdown](reference/https://pkgdown.r-lib.org/) 2.0.7.
