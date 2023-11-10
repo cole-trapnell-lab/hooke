@@ -1,9 +1,14 @@
-# Analysis of silicosis with Hooke
+# Differential abundance
+
+Hooke can identify differentially abundant cell types for a given contrast. The underlying PLN model mimics the standard (G)LM-like interface of `R::stats`. This allows users to fit a multivariate Poisson lognormal model after correcting for effects of offsets and covariates. This framework allows users to perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state. For example, you could model the effects of genotype (WT vs MT) while controlling for experimental batch. 
+
+
+## Analysis of differentially abundant cell types in silicosis with Hooke
 
 This data was published in [Hasegawa, Franks, et al. _bioRxiv_](https://www.biorxiv.org/content/10.1101/2023.02.17.528996v1). 
 The authors performed a longitudinal transcriptomic analysis using scRNA-sequencing of the lungs from pre- and post-silica challenged mice. 
 
-The data includes 12 whole lung samples across pre- and post- intratracheal silica. 35 unique cell states were identified using highly and specifically expressed marker genes. 
+The data includes 12 whole lung samples across pre- and post- intratracheal silica. 35 unique cell states were identified using highly and specifically expressed marker genes. For simplicity, we are splitting samples into 2 levels: exposed and not exposed. The goal is to identify which cell types are differentially abundant post-silica exposure. 
 
 ```
 cds = readRDS("silicosis_cds.cds")
@@ -20,7 +25,7 @@ plot_cells(cds, color_cells_by = "fine_annotation", label_groups_by_cluster = F)
 
 ### Making a cell count set object 
 
-The first step of Hooke is to create a `cell_count_set`. This requires three inputs: 
+The first step of Hooke is to create a `cell_count_set` object. This requires three inputs: 
 
 * `cds` - a monocle3 `cell_data_set` object
 * `sample group` -  A column in `colData(cds)` that specifies how cells are grouped into samples
@@ -35,19 +40,24 @@ ccs = new_cell_count_set(cds,
 
 ### Fitting a cell count model 
 
+The next step is to fit a `cell_count_model` given a model formula. This function works with the standard `R formula` notations. 
+
 A cell count model requires the following inputs: 
 
 * `ccs` - a Hooke `cell_count_set` object
 * `main_model_formula_str` -  A character string specifying the model of cell abundances across samples, where terms refer to columns in `colData(ccs)`. Put main effects here.
 * `nuisance_model_formula_str` - A character string specifying the model of cell abundances across samples. Put nuisance effects here.
 
+In this case we are interested in comparing silica exposed mouse lungs to unexposed lungs. 
+
 ```
 ccm  = new_cell_count_model(ccs,
                             main_model_formula_str = "~ exposed")
 ```
 
-
 ### Estimating abundances 
+
+Next we can predict fold change values for a given contrast of interest using `estimate_abundances()`.  
 
 * `ccm` - a Hooke `cell_count_model` object
 * `newdata` - A tibble of variables used for the prediction.
@@ -72,6 +82,8 @@ cond_not_exp %>% head()
 
 ### Comparing abundances
 
+And then compare two estimates of cell abundances from a Hooke model to identify significant changes with `compare_abundances()`. In this case, exposed vs not exposed. 
+
 * `ccm` - a Hooke `cell_count_model` object
 * `cond_x` - A cell type abundance estimate from estimate_abundances().
 * `cond_y` - A cell type abundance estimate from estimate_abundances().
@@ -95,11 +107,12 @@ cond_ne_v_e_tbl %>% select(cell_group, perturbation_x, perturbation_y,
 
 ### Plotting differential abundance changes on a UMAP
 
+Finally, we can color our UMAP by the fold changes we estimate in `compare_abundances()` using the `plot_contrast()` function. We can select fold changes that are signifiant given a `q_value_thresh`. 
+
 * `ccm`	- A Hooke `cell_count_model` object.
 * `cond_b_vs_a_tbl` - A data frame from `compare_abundances()`.
 * `log_abundance_thresh` - _numeric_ Select cell groups by log abundance.
 * `q_value_threshold` - Remove contrasts whose change in q-value exceeds `q_value_thresh`.
-
 
 ```
 plot_contrast(ccm, cond_ne_v_e_tbl, q_value_threshold = 0.05)
