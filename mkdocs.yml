@@ -8,7 +8,7 @@ nav:
   - Example datasets: data.md
   - Differential Abundance: about.md
   - Time Series Analysis: advanced.md
-  - test: new_cell_count_set.md
+  - test: reference.md
 
 theme:
   palette:
