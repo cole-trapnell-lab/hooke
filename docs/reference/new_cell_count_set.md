@@ -1,14 +1,5 @@
 Create a new cell\_data\_set object. — new\_cell\_count\_set • hooke
 
-Toggle navigation [hooke](../index.html) 0.0.1
-
-*   [Reference](../reference/index.html)
-*   [Articles](#)
-    *   [Hooke Tutorial](../articles/hooke_tutorial.html)
-
-Create a new cell\_data\_set object.
-====================================
-
 `new_cell_count_set.Rd`
 
 Create a new cell\_data\_set object.
