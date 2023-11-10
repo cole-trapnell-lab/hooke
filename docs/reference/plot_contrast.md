@@ -1,16 +1,3 @@
-Plot a UMAP colored by how cells shift in a given contrast — plot\_contrast • hooke
-
-Toggle navigation [hooke](../index.html) 0.0.1
-
-*   [Reference](../reference/index.html)
-*   [Articles](#)
-    *   [Hooke Tutorial](../articles/hooke_tutorial.html)
-
-Plot a UMAP colored by how cells shift in a given contrast
-==========================================================
-
-`plot_contrast.Rd`
-
 Plot a UMAP colored by how cells shift in a given contrast
 
     plot_contrast(

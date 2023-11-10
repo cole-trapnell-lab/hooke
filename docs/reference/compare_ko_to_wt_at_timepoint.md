@@ -1,16 +1,3 @@
-Helper function to plot kinetics — compare\_ko\_to\_wt\_at\_timepoint • hooke
-
-Toggle navigation [hooke](../index.html) 0.0.1
-
-*   [Reference](../reference/index.html)
-*   [Articles](#)
-    *   [Hooke Tutorial](../articles/hooke_tutorial.html)
-
-Helper function to plot kinetics
-================================
-
-`compare_ko_to_wt_at_timepoint.Rd`
-
 Helper function to plot kinetics
 
     compare_ko_to_wt_at_timepoint(

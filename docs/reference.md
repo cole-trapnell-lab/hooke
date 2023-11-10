@@ -1,11 +1,3 @@
-Function reference • hooke
-
-Toggle navigation [hooke`](../index) 0.0.1
-
-*   [Reference`](../index)
-*   [Articles`](#)
-    *   [Hooke Tutorial`](../articles/hooke_tutorial)
-
 Reference
 =========
 

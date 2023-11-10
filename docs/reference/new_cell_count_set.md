@@ -1,7 +1,3 @@
-Create a new cell\_data\_set object. — new\_cell\_count\_set • hooke
-
-`new_cell_count_set.Rd`
-
 Create a new cell\_data\_set object.
 
     new_cell_count_set(

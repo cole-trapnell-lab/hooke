@@ -1,16 +1,3 @@
-Predict cell type abundances given a PLN model over a range of time or other interval — estimate\_abundances\_over\_interval • hooke
-
-Toggle navigation [hooke](../index.html) 0.0.1
-
-*   [Reference](../reference/index.html)
-*   [Articles](#)
-    *   [Hooke Tutorial](../articles/hooke_tutorial.html)
-
-Predict cell type abundances given a PLN model over a range of time or other interval
-=====================================================================================
-
-`estimate_abundances_over_interval.Rd`
-
 Predict cell type abundances given a PLN model over a range of time or other interval
 
     estimate_abundances_over_interval(

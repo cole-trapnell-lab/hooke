@@ -1,7 +1,3 @@
-Compare two estimates of cell abundances from a Hooke model. — compare\_abundances • hooke
-
-`compare_abundances.Rd`
-
 Compare two estimates of cell abundances from a Hooke model.
 
     compare_abundances(

@@ -1,44 +1,31 @@
-Create a new cell\_count\_model object. — new\_cell\_count\_model • hooke
-
-Toggle navigation [hooke](../index.html) 0.0.1
-
-*   [Reference](../reference/index.html)
-*   [Articles](#)
-  *   [Hooke Tutorial](../articles/hooke_tutorial.html)
+Fits a PLNnetwork according to a formula. Accepts a matrix of penalties as a way of encoding a graph prior. Automatically selects sparsity parameter, but allows user to update it.
   
-  Create a new cell\_count\_model object.
-  =======================================
-    
-    `new_cell_count_model.Rd`
-  
-  Fits a PLNnetwork according to a formula. Accepts a matrix of penalties as a way of encoding a graph prior. Automatically selects sparsity parameter, but allows user to update it.
-  
-  new_cell_count_model(
-    ccs,
-    main_model_formula_str,
-    nuisance_model_formula_str = "1",
-    penalty_matrix = NULL,
-    whitelist = NULL,
-    blacklist = NULL,
-    sparsity_factor = 0.1,
-    base_penalty = 1,
-    min_penalty = 0.01,
-    max_penalty = 1e+06,
-    verbose = FALSE,
-    pseudocount = 0,
-    pln_min_ratio = 0.001,
-    pln_num_penalties = 30,
-    vhat_method = c("bootstrap", "variational_var", "jackknife"),
-    covariance_type = c("spherical", "diagonal"),
-    num_bootstraps = 10,
-    inception = NULL,
-    backend = c("nlopt", "torch"),
-    num_threads = 1,
-    ftol_rel = 1e-06,
-    penalize_by_distance = TRUE,
-    penalty_scale_exponent = 2,
-    reduction_method = "UMAP",
-    ...
+    new_cell_count_model(
+      ccs,
+      main_model_formula_str,
+      nuisance_model_formula_str = "1",
+      penalty_matrix = NULL,
+      whitelist = NULL,
+      blacklist = NULL,
+      sparsity_factor = 0.1,
+      base_penalty = 1,
+      min_penalty = 0.01,
+      max_penalty = 1e+06,
+      verbose = FALSE,
+      pseudocount = 0,
+      pln_min_ratio = 0.001,
+      pln_num_penalties = 30,
+      vhat_method = c("bootstrap", "variational_var", "jackknife"),
+      covariance_type = c("spherical", "diagonal"),
+      num_bootstraps = 10,
+      inception = NULL,
+      backend = c("nlopt", "torch"),
+      num_threads = 1,
+      ftol_rel = 1e-06,
+      penalize_by_distance = TRUE,
+      penalty_scale_exponent = 2,
+      reduction_method = "UMAP",
+      ...
   )
   
   Arguments
