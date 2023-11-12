@@ -831,7 +831,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     out = min_penalty + (DM / max(DM))^s
     #out =  1 + DM^s
     # penalties have to be > 0
-    out[!is.finite(out)] <- min_penalty
+    out[!is.finite(out)] <- max_penalty
     out[out < 0] <- min_penalty
     return(out)
   }
