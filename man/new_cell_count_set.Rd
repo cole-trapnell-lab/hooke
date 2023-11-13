@@ -11,20 +11,41 @@ new_cell_count_set(
   sample_metadata = NULL,
   cell_metadata = NULL,
   lower_threshold = NULL,
-  upper_threshold = NULL
+  upper_threshold = NULL,
+  keep_cds = TRUE,
+  norm_method = c("size_factors", "TSS", "CSS", "RLE", "GMPR", "Wrench", "none"),
+  size_factors = NULL,
+  pseudocount = 0
 )
 }
 \arguments{
 \item{cds}{A Monocle cell data set object.}
 
-\item{sample_group}{A column in colData(cds) that specifes how cells are grouped into samples}
+\item{sample_group}{A column in colData(cds) that specifes how
+cells are grouped into samples.}
 
-\item{cell_group}{A column in colData(cds) that specifies how cells are grouped into types or states (e.g. cluster)}
+\item{cell_group}{A column in colData(cds) that specifies how
+cells are grouped into types or states (e.g. cluster).}
 
-\item{sample_metadata}{data frame containing attributes of individual samples, where}
+\item{sample_metadata}{Data frame containing attributes of
+individual samples, where the column named 'sample' has
+entries in \code{sample_group}.}
 
-\item{cell_metadata}{data frame containing attributes of individual cell groups, where
-\code{row.names(cell_metadata)} are entries in \code{cell_group}}
+\item{cell_metadata}{Data frame containing attributes of
+individual cell groups, where \code{row.names(cell_metadata)}
+are entries in \code{cell_group}}
+
+\item{lower_threshold}{numeric Minimum number of cells in
+retained cell_groups.}
+
+\item{upper_threshold}{numeric Maximum number of cells in
+retained cell_groups.}
+
+\item{norm_method}{string Normalization method used to compute scaling
+factors used as offset during PLN inference.}
+
+\item{size_factors}{numeric vector or matrix User supplied vector or matrix of
+offsets passed the PLNmodels::prepare_data() method.}
 }
 \value{
 a new cell_data_set object

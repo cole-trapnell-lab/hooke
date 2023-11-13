@@ -2,11 +2,11 @@
 #'
 #' @param ccm A cell_count_model object.
 #' @return An updated cell_count_model object
-#' @export
 #' @examples
 #' \dontrun{
 #' model(ccm)
 #' }
+#' @export
 model <- function( ccm, model_to_return=c("full", "reduced") ) {
   model_to_return = match.arg(model_to_return)
   stopifnot( methods::is( ccm, "cell_count_model" ) )
@@ -23,11 +23,11 @@ model <- function( ccm, model_to_return=c("full", "reduced") ) {
 #'
 #' @param ccm A cell_count_model object.
 #' @return A cell_data_set object
-#' @export
 #' @examples
 #' \dontrun{
 #' cds(ccm)
 #' }
+#' @export
 cds <- function( ccm ) {
   stopifnot( methods::is( ccm, "cell_count_model" ) )
   ccm@ccs@cds
@@ -40,10 +40,10 @@ cds <- function( ccm ) {
 #' @export
 centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
   # TODO: checks that reduction_method is valid, exists in cds, etc.
-  coord_matrix = reducedDims(ccs@cds)[[reduction_method]] %>% as.data.frame
+  coord_matrix = ccs@cds_reduced_dims[[reduction_method]] %>% as.data.frame #reducedDim(ccs@cds, reduction_method) %>% as.data.frame
 
   if (is.null(switch_group)==FALSE) {
-    grp_assign = ccs@cds@colData %>% as.data.frame %>% dplyr::select(!!sym(switch_group))
+    grp_assign = ccs@cds_coldata %>% as.data.frame %>% dplyr::select(!!sym(switch_group))
     colnames(grp_assign) = "cell_group"
   } else {
     grp_assign = ccs@metadata[["cell_group_assignments"]]
@@ -54,4 +54,62 @@ centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
   centroid_coords = aggregate(.~cell_group, data=coord_matrix, FUN=mean)
   colnames(centroid_coords)[-1] = paste0(tolower(reduction_method), "_", 1:(length(colnames(centroid_coords))-1))
   return (centroid_coords)
+}
+
+#' return a matrix of normalized counts
+#' @param ccs cell_count_set
+#' @param round TRUE if counts are rounded
+#' @export
+get_norm_counts <- function(ccs, round = FALSE) {
+  if (round) {
+    norm_counts = round(t((t(as.matrix(counts(ccs)))/size_factors(ccs))))
+  } else {
+    norm_counts = t((t(as.matrix(counts(ccs)))/size_factors(ccs)))
+  }
+
+  return(norm_counts)
+
+}
+
+get_count_df <- function(ccs, round=F, norm=F) {
+
+  if (norm) {
+    count_mat = get_norm_counts(ccs, round=round)
+  } else {
+    count_mat = counts(ccs)
+  }
+
+  count_df = count_mat %>%
+    as.matrix %>%
+    as.data.frame %>%
+    rownames_to_column("cell_group") %>%
+    pivot_longer(-cell_group, names_to = "sample", values_to = "count")
+
+}
+
+
+#' subset ccs by cell groups
+#' @param ccs
+#' @param cell_groups
+#' @export
+subset_ccs = function(ccs, cell_groups) {
+
+  # make sure that cell groups are in the ccs
+
+  assertthat::assert_that(
+    tryCatch(expr = all(cell_groups %in% rownames(ccs)),
+             error = function(e) FALSE),
+    msg = paste0(setdiff(cell_groups, rownames(ccs)) %>% paste0(collapse = ", "),
+                 " are not found in the ccs"))
+
+  sub_ccs = ccs[cell_groups, ]
+
+  sub_ccs@metadata$cell_group_assignments = sub_ccs@metadata$cell_group_assignments[sub_ccs@metadata$cell_group_assignments$cell_group %in% cell_groups,]
+
+  if (is.null(nrow(colnames(ccs@cds@colData))) == FALSE) {
+    sub_ccs@cds = sub_ccs@cds[,rownames(sub_ccs@metadata$cell_group_assignments)]
+  }
+
+  return(sub_ccs)
+
 }

@@ -1,46 +1,3 @@
-#' Calculate max flow between two points
-calc_max_flow <- function(edges, source, target) {
-
-  G <- igraph::graph_from_data_frame(edges, directed=FALSE)
-  mf = max_flow(G, source = source, target = target, capacity = igraph::E(G)$pcor)
-  igraph::E(G)$flow <- mf$flow
-  igraph::V(G)$pass <- igraph::strength(G,mode="in",weights=mf$flow)
-
-  # turn back into a dataframe
-  new_pos_edge_coords_df = igraph::as_data_frame(G)
-
-  # if flow values are neg, reverse them
-  switch_dir_df = new_pos_edge_coords_df %>% filter(flow < 0) %>%
-    dplyr::rename("from"="to",
-                  "umap_from_1"="umap_to_1",
-                  "umap_from_2"="umap_to_2",
-                  "to"="from",
-                  "umap_to_1"="umap_from_1",
-                  "umap_to_2"="umap_from_2") %>%
-    mutate(flow = -flow)
-  max_flow_edge_df = rbind(filter(new_pos_edge_coords_df, flow >=0),
-                           switch_dir_df) %>%
-    filter(flow > 0)
-  return(max_flow_edge_df)
-
-}
-
-#' Calculate a minimum spanning tree
-calc_mst <- function(edges, weight = "pcor") {
-  G <- igraph::graph_from_data_frame(edges, directed=FALSE)
-
-  if (weight == "pcor") {
-    G_mst <- igraph::mst(G, weights=igraph::E(G)$pcor)
-  }
-  if (weight == "weight") {
-    G_mst <- igraph::mst(G, weights=igraph::E(G)$weight)
-  }
-
-  mst_df <- igraph::as_data_frame(G_mst)
-  return(mst_df)
-}
-
-
 #' Calculate the shortest path between two points
 #' @param edges data frame of edges with edge weights
 #' @param from
@@ -53,8 +10,8 @@ calc_shortest_path <- function(G, from, to) {
   # if from or to is not in edges, return NA
   #if (!from %in% edges$from | !to %in% edges$to) {
   #  return(data.frame("from"=from, "to"=to, weight = -1, distance_from_root = -1))
-#
- # }
+  #
+  # }
 
   #G <- igraph::as.directed(igraph::graph_from_data_frame(edges, directed=FALSE))
 
@@ -78,6 +35,7 @@ calc_shortest_path <- function(G, from, to) {
 #' @param edges
 #' @import tidygraph
 #'
+#' @noRd
 distance_to_root <- function(edges) {
 
   g = edges %>% select(from,to) %>% distinct() %>% igraph::graph_from_data_frame()
@@ -101,10 +59,6 @@ distance_to_root <- function(edges) {
 }
 
 
-
-
-
-
 #' weights edges based on partial correlation,
 #' change in abundance, and transcriptomic distance
 #' @param ccm
@@ -113,6 +67,7 @@ distance_to_root <- function(edges) {
 #' @param beta
 #' @param gamma
 #' @param sum_weights
+#' @noRd
 get_weighted_edges <- function(ccm,
                                edges,
                                alpha= 1,
@@ -140,163 +95,7 @@ get_weighted_edges <- function(ccm,
 
 }
 
-#' calculates the shortest weighted path between two points
-#' @param weighted_edge_df
-#' @param source
-#' @param target
-#'
-get_shortest_path <- function(from, to, traversal_graph) {
-  # print(paste0(from, "-",to))
-  shortest_path_df = calc_shortest_path(traversal_graph, from, to) %>%
-    select(from, to, weight) %>%
-    distance_to_root() %>%
-    arrange(distance_from_root)
-
-
-  return(shortest_path_df)
-}
-
-#'
-#' @param shortest_path
-get_path_order <- function(shortest_path) {
-  state_order = shortest_path %>%
-    mutate(order = paste(from, to, sep="_")) %>%
-    pull(order) %>%
-    stringr::str_split("_") %>%
-    unlist() %>% unique
-  return(state_order)
-}
-
-# select adjacent states
-select_states <- function(ordered_path, start , n = 3) {
-  i = which(ordered_path == start)
-  j = i + n - 1
-  return(ordered_path[i:j])
-}
-
-#'
-#' @param ccm
-#' @param cond_a_vs_tbl
-#' @param p_value_threshold
-#'
-get_path <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
-
-  pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
-    as_tibble %>%
-    filter(pcor > 0 &
-             to_delta_q_value < q_value_threshold &
-             from_delta_q_value < q_value_threshold)
-
-  assertthat::assert_that(
-    tryCatch(expr = nrow(pos_edges) != 0,
-             error = function(e) FALSE),
-    msg = "no significant positive edges found")
-
-  weighted_edges = get_weighted_edges(ccm, pos_edges)
-
-  neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
-    as_tibble %>%
-    filter(edge_type != "undirected" &
-             to_delta_q_value < q_value_threshold &
-             from_delta_q_value < q_value_threshold)
-
-  assertthat::assert_that(
-    tryCatch(expr = nrow(neg_rec_edges) != 0,
-             error = function(e) FALSE),
-    msg = "no significant negative reciprocal edges found")
-
-  edge_path = neg_rec_edges %>%
-    dplyr::mutate(shortest_path = purrr::map2(.f =
-                                                purrr::possibly(get_shortest_path, NA_real_),
-                                              .x = from, .y = to,
-                                              weighted_edges)) %>%
-    select(origin=from, destination=to, shortest_path) %>%
-    tidyr::unnest(shortest_path) %>%
-    # select(-weight) %>%
-    distinct()
-
-  return(edge_path)
-}
-
-#' Find degs either along an entire path or between adjacent pairs
-#' @param ccm a cell count model object
-#' @param cond_b_vs_a_tbl
-#' @param p_value_threshold p_value threshold for inclusion of edges
-#' @param adj_pairs If TRUE, does the DEG testing between adjacent pairs. If FALSE, includes all states in the deg testing.
-find_deg_path = function(ccm,
-                         cond_b_vs_a_tbl,
-                         p_value_threshold = 1.0,
-                         adj_pairs = FALSE,
-                         ...) {
-
-  # 1. find all the negative reciprocal edges
-  neg_rec_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
-    as_tibble %>%
-    filter(edge_type != "undirected" &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold)
-
-  assertthat::assert_that(
-    tryCatch(expr = nrow(neg_rec_edges) != 0,
-             error = function(e) FALSE),
-    msg = "no significant negative reciprocal edges found")
-
-  pos_edges = hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
-    as_tibble %>%
-    filter(pcor > 0 &
-             to_delta_p_value < p_value_threshold &
-             from_delta_p_value < p_value_threshold)
-
-  assertthat::assert_that(
-    tryCatch(expr = nrow(pos_edges) != 0,
-             error = function(e) FALSE),
-    msg = "no significant positive edges found")
-
-  weighted_edges = get_weighted_edges(ccm, pos_edges)
-
-  # 2. find the shortest path between those edges
-  neg_rec_edges = neg_rec_edges %>%
-    dplyr::mutate(shortest_path = purrr::map2(.f = purrr::possibly(get_shortest_path, NA_real_),
-                                              .x = from, .y = to,
-                                              weighted_edges)) %>%
-    dplyr::rename("neg_from" = from, "neg_to" = to) %>%
-    select(neg_from, neg_to, shortest_path)
-
-
-  # two options
-  if (adj_pairs) {
-
-    # 3. find adjacent pairs along the path
-    neg_rec_edges = neg_rec_edges %>%
-      select(shortest_path) %>%
-      tidyr::unnest(shortest_path) %>%
-      select(-weight) %>%
-      distinct() %>%
-      dplyr::mutate(states = purrr::map(.f = collect_transition_states,
-                                        .x = from,
-                                        .y = to))
-  } else {
-
-    # 3. collect the states along each path
-
-    neg_rec_edges = neg_rec_edges %>%
-      dplyr::mutate(states = purrr::map(.f = collect_between_transition_states,
-                                        .x = shortest_path))
-
-  }
-
-  # 4. create pseudobulk cds and run DEG analysis
-  pb_cds = pseudobulk(ccm@ccs, ...)
-
-  neg_rec_edges = neg_rec_edges  %>%
-    dplyr::mutate(degs = purrr::map(.f = purrr::possibly(find_degs_between_states, NA_real_),
-                                    .x = states,
-                                    pb_cds))
-
-  return(neg_rec_edges)
-}
-
-
+#' @noRd
 get_neg_dir_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
@@ -306,6 +105,7 @@ get_neg_dir_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
 
 }
 
+#' @noRd
 get_positive_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
   hooke:::collect_pln_graph_edges(ccm, cond_b_vs_a_tbl) %>%
     as_tibble %>%
@@ -314,4 +114,3 @@ get_positive_edges <- function(ccm, cond_b_vs_a_tbl, q_value_threshold = 1.0) {
              from_delta_q_value < q_value_threshold)
 
 }
-

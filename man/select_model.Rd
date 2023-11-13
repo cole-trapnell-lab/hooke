@@ -6,7 +6,7 @@
 \usage{
 select_model(
   ccm,
-  criterion = "EBIC",
+  criterion = c("BIC", "EBIC", "StARS"),
   sparsity_factor = 1,
   models_to_update = c("both", "full", "reduced")
 )
@@ -15,9 +15,14 @@ select_model(
 \item{ccm}{A cell_count_model object.}
 
 \item{criterion}{a character string specifying the PLNmodels criterion to use. Must be one of "BIC", "EBIC" or "StARS".}
+
+\item{sparsity_factor}{A positive number to control how sparse the PLN network
+is. Larger values make the network sparser.}
+
+\item{models_to_update}{string The model to update. Must be one of "both", "full", or "reduced".}
 }
 \value{
-an updated cell_count_model object
+an updated cell_count_model object.
 }
 \description{
 Select the model a cell_count_model should use
