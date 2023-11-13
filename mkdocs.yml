@@ -4,8 +4,8 @@ site_url: https://cole-trapnell-lab.github.io/hooke
 nav:
   - Overview: index.md
   - Installation: install.md
-  - Data types: data_type.md
-  - Example datasets: data.md
+  - Data Type Requirements: data_type.md
+  - Example Datasets: data.md
   - Differential Abundance: about.md
   - Time Series Analysis: advanced.md
   - Reference: reference.md

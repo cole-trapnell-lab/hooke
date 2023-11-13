@@ -51,8 +51,7 @@ We can fit a `cell_count_model` using this time formula and a perturbation term.
 
 ```
 ccm = new_cell_count_model(ccs, 
-                           main_model_formula_str = paste0("perturbation" + time_formula),  
-                           nuissance_model_formula_str = "~ expt")
+                           main_model_formula_str = paste0("perturbation +", time_formula))
 
 # predict for 48 hpf 
 cond_wt = estimate_abundances(ccm, tibble(timepoint = 48, perturbation = "control"))
@@ -66,7 +65,7 @@ wt_v_foxi1_tbl = compare_abundances(ccm, cond_wt, cond_foxi1)
 ... and plot the abundance changes. 
 
 ```
-plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_threshold = 0.05)
+plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_thresh = 0.05)
 ```
 
 ![phox2a_48hpf](assets/phox2a_48hpf.png){width=75%}
@@ -112,7 +111,8 @@ If the data was collected in multiple batches, you can also include a `nuisance_
 wt_expt_ccm = new_cell_count_model(wt_ccs, 
                                    main_model_formula_str = "ns(timepoint, df=3)", 
                                    nuisance_model_formula_str = "~ expt")
-                                   
+
+batches = data.frame(batch = unique(colData(wt_ccs)$expt))                                   
 batches = batches %>% mutate(tp_preds = purrr::map(.f = function(batch) {
  estimate_abundances_over_interval(wt_expt_ccm,
                                             start_time,
@@ -155,7 +155,7 @@ stop_time = 72
 time_formula = build_interval_formula(foxi1_ccs, num_breaks = 3, interval_start = 18, interval_stop = 72)
 
 foxi1_ccm = new_cell_count_model(foxi1_ccs, 
-                                main_model_formula_str = past0("perturbation" + time_formula))
+                                main_model_formula_str = paste0("perturbation +", time_formula))
                                 
 wt_timepoint_pred_df = estimate_abundances_over_interval(foxi1_ccm, 
                                                                  interval_start=start_time, 

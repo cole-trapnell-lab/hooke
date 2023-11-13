@@ -91,7 +91,7 @@ And then compare two estimates of cell abundances from a Hooke model to identify
 ```
 cond_ne_v_e_tbl = compare_abundances(ccm, cond_not_exp, cond_exp)
 
-cond_ne_v_e_tbl %>% select(cell_group, perturbation_x, perturbation_y, 
+cond_ne_v_e_tbl %>% select(cell_group, exposed_x, exposed_y,
                            delta_log_abund, delta_log_abund_se, delta_q_value)
 
 ```
@@ -112,10 +112,10 @@ Finally, we can color our UMAP by the fold changes we estimate in `compare_abund
 * `ccm`	- A Hooke `cell_count_model` object.
 * `cond_b_vs_a_tbl` - A data frame from `compare_abundances()`.
 * `log_abundance_thresh` - _numeric_ Select cell groups by log abundance.
-* `q_value_threshold` - Remove contrasts whose change in q-value exceeds `q_value_thresh`.
+* `q_value_thresh` - Remove contrasts whose change in q-value exceeds `q_value_thresh`.
 
 ```
-plot_contrast(ccm, cond_ne_v_e_tbl, q_value_threshold = 0.05)
+plot_contrast(ccm, cond_ne_v_e_tbl, q_value_thresh = 0.05)
 ```
 ![silicosis_rep](assets/silicosis_no_rep.png)
 
@@ -124,15 +124,15 @@ plot_contrast(ccm, cond_ne_v_e_tbl, q_value_threshold = 0.05)
 If your data contains multiple experimental batch, Hooke supports batch correction with the use of a nuisance model string term. 
 
 ```
-ccm  = new_cell_count_model(ccs,
-                            main_model_formula_str = "~ exposed", 
+ccm_rep  = new_cell_count_model(ccs,
+                            main_model_formula_str = "~ exposed",
                             nuisance_model_formula_str = "~ Rep")
 
-cond_exp = estimate_abundances(ccm, tibble::tibble(exposed = "exposed", Rep = "3"))
-cond_not_exp = estimate_abundances(ccm, tibble::tibble(exposed = "not exposed", Rep = "3"))
-cond_ne_v_e_tbl = compare_abundances(ccm, cond_not_exp, cond_exp)
+cond_exp_rep = estimate_abundances(ccm_rep, tibble::tibble(exposed = "exposed", Rep = "1"))
+cond_not_exp_rep = estimate_abundances(ccm_rep, tibble::tibble(exposed = "not exposed", Rep = "1"))
+cond_ne_v_e_tbl_rep = compare_abundances(ccm_rep, cond_not_exp_rep, cond_exp_rep)
 
-plot_contrast(ccm, cond_ne_v_e_tbl, q_value_thresh = 0.05)
+plot_contrast(ccm_rep, cond_ne_v_e_tbl_rep, q_value_thresh = 0.05)
 ```
 
 Transitional interstitial macrophages and regulatory T cells no longer come up as significant if we control for replicate. 
