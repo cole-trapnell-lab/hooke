@@ -70,7 +70,6 @@ cond_not_exp = estimate_abundances(ccm, tibble::tibble(exposed = "not exposed"))
 cond_not_exp %>% head()
 ```
 
-
 |  exposed    | cell_group           | log_abund | log_abund_se | log_abund_sd
 |---|---|---|---|---|
 |not exposed |Endothelial Arterial    |   2.87    |   0.196      |   0.559
@@ -98,12 +97,12 @@ cond_ne_v_e_tbl %>% select(cell_group, exposed_x, exposed_y,
 
 | cell_group  | delta_log_abund |  delta_log_abund_se |  delta_q_value |
 |---|---|---|---|
-| Endothelial Arterial     |      -0.520        |       0.268   |       0.225 | 
-| Endothelial Capillary     |     -0.400        |       0.0799  |       0.0109| 
-| Endothelial Venous        |     -0.332        |       0.237   |       0.356 | 
-| Lymphatic Endothelial    |       0.0650       |       0.283   |       0.925 | 
-| Aerocytes                |      -0.351        |       0.148   |       0.143 | 
-| Fibroblasts              |      -0.477        |       0.0877  |       0.0109| 
+| Endothelial Arterial    |      -0.584     |         0.196     |    0.0774 |
+| Endothelial Capillary    |     -0.400      |        0.0769    |    0.0131 |
+| Endothelial Venous      |    -0.353       |     0.145     |    0.130 |
+| Lymphatic Endothelial   |     0.0529       |      0.330    |     0.989 | 
+| Aerocytes               |     -0.354      |      0.130      |   0.102 |
+| Fibroblasts             |     -0.477      |       0.102      |   0.0131|
 
 ### Plotting differential abundance changes on a UMAP
 
