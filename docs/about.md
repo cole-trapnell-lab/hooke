@@ -134,7 +134,7 @@ cond_ne_v_e_tbl_rep = compare_abundances(ccm_rep, cond_not_exp_rep, cond_exp_rep
 plot_contrast(ccm_rep, cond_ne_v_e_tbl_rep, q_value_thresh = 0.05)
 ```
 
-Transitional interstitial macrophages and regulatory T cells no longer come up as significant if we control for replicate. 
+If we control for replicate, we see some difference in significant fold changes. 
 
 ![silicosis_rep](assets/silicosis_rep.png)
 
