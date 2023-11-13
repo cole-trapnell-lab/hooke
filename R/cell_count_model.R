@@ -416,7 +416,7 @@ new_cell_count_model <- function(ccs,
                                  pseudocount=0,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
-                                 vhat_method = c("bootstrap", "variational_var", "jackknife", "my_bootstrap"),
+                                 vhat_method = c("bootstrap", "variational_var", "jackknife"),
                                  covariance_type = c("spherical", "diagonal"),
                                  num_bootstraps = 10,
                                  inception = NULL,
@@ -504,7 +504,7 @@ new_cell_count_model <- function(ccs,
     tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
              error = function(e) FALSE),
     msg = paste( 'Argument vhat_method must be one of "variational_var",',
-                 '"jackknife","bootstrap", or "my_bootstrap".'))
+                 '"jackknife", or"bootstrap"'))
   vhat_method <- match.arg(vhat_method)
 
   assertthat::assert_that(
@@ -632,9 +632,8 @@ new_cell_count_model <- function(ccs,
     sandwich_var = FALSE
     jackknife = FALSE
     bootstrap = FALSE
-    my_bootstrap = FALSE
 
-    if (vhat_method == "variational_var" | vhat_method == "my_bootstrap") {
+    if (vhat_method == "variational_var") {
       variational_var = TRUE
     }else{
       variational_var = FALSE # Don't compute the variational variance unless we have to, because it sometimes throws exceptions
@@ -714,22 +713,7 @@ new_cell_count_model <- function(ccs,
   # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
   best_full_model <- full_pln_model
 
-  if (vhat_method == "my_bootstrap") {
-    vhat = bootstrap_vhat(ccs,
-                          full_model_formula_str,
-                          best_full_model,
-                          best_reduced_model,
-                          reduced_pln_model,
-                          pseudocount,
-                          initial_penalties,
-                          pln_min_ratio,
-                          pln_num_penalties,
-                          verbose,
-                          num_bootstraps,
-                          backend,
-                          covariance_type)
-
-  } else if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
+  if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
 
     vhat_coef = coef(best_full_model, type = "main")
     var_jack_mat = attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
