@@ -1,7 +1,10 @@
 library(monocle3)
 library(hooke)
+library(ggplot2)
+library(splines)
+library(tidyverse)
 
-cds = readRDS("~/OneDrive/UW/Trapnell/hooke/examples/R_objects/all-geno_sensory-cranial-ganglion_neuron_29k_cds.RDS")
+cds = readRDS("all-geno_sensory-cranial-ganglion_neuron_29k_cds.RDS")
 
 ganglia_colors =
   c("cranial ganglion progenitor" = "#A29ADE",
@@ -33,8 +36,7 @@ stop_time = 72
 time_formula = build_interval_formula(ccs, num_breaks = 3, interval_start = 18, interval_stop = 72)
 
 ccm = new_cell_count_model(ccs,
-                           main_model_formula_str = paste0("perturbation +",  time_formula),
-                           nuissance_model_formula_str = "~ expt")
+                           main_model_formula_str = paste0("perturbation +",  time_formula))
 
 # predict for 48 hpf
 cond_wt = estimate_abundances(ccm, tibble(timepoint = 48, perturbation = "control"))
@@ -45,8 +47,8 @@ wt_v_phox2a_tbl = compare_abundances(ccm, cond_wt, cond_phox2a)
 wt_v_foxi1_tbl = compare_abundances(ccm, cond_wt, cond_foxi1)
 
 
-plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_threshold = 0.05)
-plot_contrast(ccm, wt_v_foxi1_tbl, x=1, y=3, q_value_threshold = 0.05)
+plot_contrast(ccm, wt_v_phox2a_tbl, x=1, y=3, q_value_thresh = 0.05)
+plot_contrast(ccm, wt_v_foxi1_tbl, x=1, y=3, q_value_thresh = 0.05)
 
 
 
@@ -79,6 +81,8 @@ wt_expt_ccm = new_cell_count_model(wt_ccs,
                                    main_model_formula_str = "ns(timepoint, df=3)",
                                    nuisance_model_formula_str = "~ expt")
 
+
+batches = data.frame(batch = unique(colData(wt_ccs)$expt))
 batches = batches %>% mutate(tp_preds = purrr::map(.f = function(batch) {
   estimate_abundances_over_interval(wt_expt_ccm,
                                     start_time,
@@ -113,7 +117,7 @@ stop_time = 72
 time_formula = build_interval_formula(foxi1_ccs, num_breaks = 3, interval_start = 18, interval_stop = 72)
 
 foxi1_ccm = new_cell_count_model(foxi1_ccs,
-                                 main_model_formula_str = past0("perturbation" + time_formula))
+                                 main_model_formula_str = paste0("perturbation +", time_formula))
 
 wt_timepoint_pred_df = estimate_abundances_over_interval(foxi1_ccm,
                                                          interval_start=start_time,
