@@ -220,7 +220,8 @@ new_cell_count_set <- function(cds,
     dplyr::group_by(sample) %>%
     dplyr::summarize(across(where(is.numeric), function(x){mean(x)}),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
-                     across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) } ))
+                     across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) }),
+                     across(where(is.logical), function(x) { unique(x) }))
 
   if (is.null(sample_metadata) == FALSE){
     cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
