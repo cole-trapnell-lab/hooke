@@ -120,11 +120,11 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 #' @param sub_space
 #' @noRd
 switch_umap_space <- function(cds, prefix = "subumap3d") {
-  
+
   curr_umap_matrix = reducedDims(cds)[["UMAP"]]
   col_names = colnames(colData(cds))
   col_names = col_names[grepl(pattern = prefix, col_names)]
-  
+
   umap_coords = colData(cds) %>%
     as.data.frame() %>%
     dplyr::select(dplyr::all_of(col_names)) %>%
@@ -134,7 +134,29 @@ switch_umap_space <- function(cds, prefix = "subumap3d") {
   return(cds)
 }
 
+#' this switches between global and sub umap space
+#' @param cds
+#' @param sub_space
+#' @noRd
+switch_reducedDims = function(cds, umap_space = c("global_UMAP", "sub_UMAP")) {
+  reducedDims(cds)[["UMAP"]] = reducedDims(cds)[[umap_space]]
+  return(cds)
+}
 
+
+#' this switches the ccm umap space allowing you to plot contrast in
+#' global and local spaces
+#' @param ccm a cell count model object
+#' @param umap_space
+#' @noRd
+switch_ccm_space <- function(ccm, umap_space = c("sub_UMAP", "global_UMAP")) {
+
+  umap_space <- match.arg(umap_space)
+
+  ccm@ccs@cds <- switch_umap_space(ccm@ccs@cds, umap_space)
+  ccm@ccs@cds_reduced_dims[["UMAP"]] <- ccm@ccs@cds_reduced_dims[[umap_space]]
+  return(ccm)
+}
 
 
 #' wrapper for plot contrast that allows you to facet the plot
@@ -144,42 +166,41 @@ switch_umap_space <- function(cds, prefix = "subumap3d") {
 #' @param cell_group
 #' @param facet_group
 #' @noRd
-#'
-plot_sub_contrast <- function (ccm,
-                               cond_b_vs_a_tbl,
-                               facet_group = "major_group",
-                               select_group = NULL,
-                               log_abundance_thresh = -5,
-                               edge_size=2,
-                               cell_size=1,
-                               q_value_thresh = 1.0,
-                               group_label_size=2,
-                               plot_labels = c("significant", "all", "none"),
-                               plot_edges = c("all", "directed", "undirected", "none"),
-                               fc_limits=c(-3,3),
-                               prefix = "subumap3d",
-                               ...) {
+plot_sub_contrast = function(ccm,
+                             cond_a_v_b_tbl,
+                             selected_groups = NULL,
+                             umap_space = "sub_UMAP",
+                             cell_group = "ann_party",
+                             facet_group = "my_partition",
+                             log_abundance_thresh = -5,
+                             edge_size=2,
+                             cell_size=1,
+                             q_value_thresh = 1.0,
+                             group_label_size=2,
+                             plot_labels = c("significant", "all", "none"),
+                             plot_edges = c("none", "all", "directed", "undirected"),
+                             fc_limits=c(-3,3),
+                             ...) {
 
-
-  ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, prefix = prefix)
+  ccm = switch_ccm_space(ccm, umap_space = umap_space)
 
   colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
 
-  cg_to_mg = as.data.frame(colData(ccm@ccs@cds)) %>%
-    select("cell_group", "facet_group") %>%
-    distinct()
+  cg_to_mg = colData(ccm@ccs@cds) %>%
+              as.data.frame() %>%
+              select(cell_group, facet_group) %>%
+              distinct()
 
-  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>%
-    left_join(cg_to_mg, by = "cell_group")
+  cond_a_v_b_tbl = left_join(cond_a_v_b_tbl,
+                             cg_to_mg, by = "cell_group")
 
-  if (is.null(select_group) == FALSE) {
-    ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["facet_group"]] == select_group]
-    cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(facet_group == select_group)
+  if (!is.null(selected_groups)){
 
-    sub_cell_groups = unique(colData(ccm@ccs@cds)$cell_group)
-    ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
+    partition_cell_groups = cg_to_mg %>% filter(facet_group %in% selected_groups) %>% pull(cell_group)
 
+    ccm@ccs <- hooke:::subset_ccs(ccm@ccs, partition_cell_groups)
+    cond_a_v_b_tbl = cond_a_v_b_tbl %>% filter(my_partition %in% partitions)
   }
 
 
@@ -198,6 +219,65 @@ plot_sub_contrast <- function (ccm,
 }
 
 
+#' #' wrapper for plot contrast that allows you to facet the plot
+#' #' you can also switch between sub + full umap space
+#' #' @param ccm
+#' #' @param cond_b_vs_a_tbl
+#' #' @param cell_group
+#' #' @param facet_group
+#' #' @noRd
+#' #'
+#' plot_sub_contrast <- function (ccm,
+#'                                cond_b_vs_a_tbl,
+#'                                facet_group = "major_group",
+#'                                select_group = NULL,
+#'                                log_abundance_thresh = -5,
+#'                                edge_size=2,
+#'                                cell_size=1,
+#'                                q_value_thresh = 1.0,
+#'                                group_label_size=2,
+#'                                plot_labels = c("significant", "all", "none"),
+#'                                plot_edges = c("all", "directed", "undirected", "none"),
+#'                                fc_limits=c(-3,3),
+#'                                prefix = "subumap3d",
+#'                                ...) {
+#'
+#'
+#'   ccm@ccs@cds = switch_umap_space(ccm@ccs@cds, prefix = prefix)
+#'
+#'   colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
+#'   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
+#'
+#'   cg_to_mg = as.data.frame(colData(ccm@ccs@cds)) %>%
+#'     select("cell_group", "facet_group") %>%
+#'     distinct()
+#'
+#'   cond_b_vs_a_tbl = cond_b_vs_a_tbl %>%
+#'     left_join(cg_to_mg, by = "cell_group")
+#'
+#'   if (is.null(select_group) == FALSE) {
+#'     ccm@ccs@cds = ccm@ccs@cds[,colData(ccm@ccs@cds)[["facet_group"]] == select_group]
+#'     cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% filter(facet_group == select_group)
+#'
+#'     sub_cell_groups = unique(colData(ccm@ccs@cds)$cell_group)
+#'     ccm@ccs@metadata[["cell_group_assignments"]] = ccm@ccs@metadata[["cell_group_assignments"]][colnames(ccm@ccs@cds),]
+#'
+#'   }
+#'
+#'
+#'   plot_contrast(ccm,
+#'                 cond_b_vs_a_tbl,
+#'                 edge_size=edge_size,
+#'                 cell_size=cell_size,
+#'                 q_value_thresh = q_value_thresh,
+#'                 group_label_size=group_label_size,
+#'                 plot_labels = plot_labels,
+#'                 fc_limits=fc_limits,
+#'                 plot_edges = plot_edges,
+#'                 ...) +
+#'     facet_wrap(~facet_group)
+#'
+#' }
 
 
 #' @noRd

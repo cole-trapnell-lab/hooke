@@ -427,6 +427,7 @@ new_cell_count_model <- function(ccs,
                                  penalize_by_distance=TRUE,
                                  penalty_scale_exponent=2,
                                  reduction_method="UMAP",
+                                 random.seed = 42,
                                  ...) {
 
   assertthat::assert_that(is(ccs, 'cell_count_set'))
@@ -516,6 +517,7 @@ new_cell_count_model <- function(ccs,
 
   covariance_type = match.arg(covariance_type)
 
+  set.seed(random.seed)
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
                                       covariates = colData(ccs) %>% as.data.frame,
                                       offset = monocle3::size_factors(ccs))
