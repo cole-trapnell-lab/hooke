@@ -35,14 +35,27 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   # check that all terms in new data have been specified
   missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
 
-  if (length(missing_terms) > 1) {
-    missing_terms = paste(missing_terms,collapse = ", ")
+  if (length(missing_terms) >= 1) {
+
+    default_df = lapply(missing_terms, function(term){
+      df = data.frame(t = levels(factor(colData(ccm@ccs)[[term]]))[1])
+      names(df) = term
+      df
+    }) %>% bind_cols()
+
+    newdata = cbind(newdata, tibble(default_df))
+
+    print( paste0(paste(missing_terms,collapse = ", "),
+                  " missing from specified newdata columns. Assuming default values:",
+                  paste(default_df[,1],collapse = ", ")))
+
+
   }
 
-  assertthat::assert_that(
-    tryCatch(expr = length(missing_terms) == 0,
-             error = function(e) FALSE),
-    msg = paste0(missing_terms, " missing from newdata columns"))
+  # assertthat::assert_that(
+  #   tryCatch(expr = length(missing_terms) == 0,
+  #            error = function(e) FALSE),
+  #   msg = paste0(missing_terms, " missing from newdata columns"))
 
   #stopifnot(nrow(newdata) == 1)
   newdata$Offset = 1
