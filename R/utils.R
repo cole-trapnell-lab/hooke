@@ -140,7 +140,14 @@ switch_umap_space <- function(cds, prefix = "subumap3d") {
 #' @noRd
 switch_reducedDims = function(cds, umap_space = c("global_UMAP", "sub_UMAP")) {
   reducedDims(cds)[["UMAP"]] = reducedDims(cds)[[umap_space]]
+  cds@metadata$umap_space = umap_space
+  print(paste0("switching to ", umap_space))
   return(cds)
+}
+
+# check which umap space the cds currently is in
+get_umap_space = function(cds) {
+  return(cds@metadata$umap_space)
 }
 
 
@@ -150,10 +157,8 @@ switch_reducedDims = function(cds, umap_space = c("global_UMAP", "sub_UMAP")) {
 #' @param umap_space
 #' @noRd
 switch_ccm_space <- function(ccm, umap_space = c("sub_UMAP", "global_UMAP")) {
-
   umap_space <- match.arg(umap_space)
-
-  ccm@ccs@cds <- switch_umap_space(ccm@ccs@cds, umap_space)
+  ccm@ccs@cds <- switch_reducedDims(ccm@ccs@cds, umap_space)
   ccm@ccs@cds_reduced_dims[["UMAP"]] <- ccm@ccs@cds_reduced_dims[[umap_space]]
   return(ccm)
 }
