@@ -141,7 +141,7 @@ switch_umap_space <- function(cds, prefix = "subumap3d") {
 switch_reducedDims = function(cds, umap_space = c("global_UMAP", "sub_UMAP")) {
   reducedDims(cds)[["UMAP"]] = reducedDims(cds)[[umap_space]]
   cds@metadata$umap_space = umap_space
-  print(paste0("switching to ", umap_space))
+  print(paste0("switching to ", umap_space, " space"))
   return(cds)
 }
 
@@ -205,12 +205,12 @@ plot_sub_contrast = function(ccm,
     partition_cell_groups = cg_to_mg %>% filter(facet_group %in% selected_groups) %>% pull(cell_group)
 
     ccm@ccs <- hooke:::subset_ccs(ccm@ccs, partition_cell_groups)
-    cond_a_v_b_tbl = cond_a_v_b_tbl %>% filter(my_partition %in% partitions)
+    cond_a_v_b_tbl = cond_a_v_b_tbl[cond_a_v_b_tbl$facet_group %in% selected_groups,]
   }
 
 
   plot_contrast(ccm,
-                cond_b_vs_a_tbl,
+                cond_a_v_b_tbl,
                 edge_size=edge_size,
                 cell_size=cell_size,
                 q_value_thresh = q_value_thresh,
