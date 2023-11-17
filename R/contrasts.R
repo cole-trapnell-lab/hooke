@@ -46,8 +46,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
     newdata = cbind(newdata, tibble(default_df))
 
     print( paste0(paste(missing_terms,collapse = ", "),
-                  " missing from specified newdata columns. Assuming default values:",
-                  paste(default_df[,1],collapse = ", ")))
+                  " missing from specified newdata columns. Assuming default values: ",
+                  paste(default_df[1,],collapse = ", ")))
 
 
   }
