@@ -5,7 +5,7 @@ When we perform a single-cell RNA-seq experiment, we often want to compare indiv
 
 # Background
 
-![overview](docs/assets/how_it_works.png)
+![overview](assets/how_it_works.png)
 
 Hooke is implemented using the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html). PLN models are a multivariate mixed generalized linear model with a Poisson distribution, allowing them to overcome the computational challenges posed by count data. They provide a convenient framework to perform multivariate statistical regression to describe how environmental effects or perturbations alter the relative abundances of each species.
 
