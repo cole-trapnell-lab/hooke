@@ -3,6 +3,7 @@ site_author: Maddy Duran
 site_url: https://cole-trapnell-lab.github.io/hooke
 nav:
   - Overview: index.md
+  - Background: background.md
   - Installation: install.md
   - Data Type Requirements: data_type.md
   - Example Datasets: data.md
