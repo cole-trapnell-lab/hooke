@@ -419,7 +419,7 @@ new_cell_count_model <- function(ccs,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
                                  vhat_method = c("bootstrap", "variational_var", "jackknife"),
-                                 covariance_type = c("spherical", "diagonal"),
+                                 covariance_type = c("spherical", "full", "diagonal"),
                                  num_bootstraps = 10,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
@@ -657,11 +657,12 @@ new_cell_count_model <- function(ccs,
 # bge (20221227): notes:
 #                   o I am trying to track the code in the PLNmodels master branch at Github
 #                   o I revert to the original because the PLNmodels changes break hooke.
+
     reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
                                                                   data=pln_data,
                                                                   control = PLNmodels::PLNnetwork_param(backend = backend,
                                                                                                         trace = ifelse(verbose, 2, 0),
-                                                                                                        covariance = covariance_type,
+                                                                                                        # covariance = covariance_type,
                                                                                                         n_penalties = pln_num_penalties,
                                                                                                         min_ratio = pln_min_ratio,
                                                                                                         penalty_weights = initial_penalties,
