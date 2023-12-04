@@ -139,7 +139,8 @@ switch_umap_space <- function(cds, prefix = "subumap3d") {
 #' @param sub_space
 #' @noRd
 switch_reducedDims = function(cds, umap_space = c("global_UMAP", "sub_UMAP")) {
-  reducedDims(cds)[["UMAP"]] = reducedDims(cds)[[umap_space]]
+  # must put as as.matrix() otherwise can't build a nn index
+  reducedDims(cds)[["UMAP"]] = as.matrix(reducedDims(cds)[[umap_space]])
   cds@metadata$umap_space = umap_space
   print(paste0("switching to ", umap_space, " space"))
   return(cds)
@@ -175,7 +176,6 @@ plot_sub_contrast = function(ccm,
                              cond_a_v_b_tbl,
                              selected_groups = NULL,
                              umap_space = "sub_UMAP",
-                             cell_group = "ann_party",
                              facet_group = "my_partition",
                              log_abundance_thresh = -5,
                              edge_size=2,
