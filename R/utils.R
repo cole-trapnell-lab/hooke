@@ -140,6 +140,8 @@ switch_umap_space <- function(cds, prefix = "subumap3d") {
 #' @noRd
 switch_reducedDims = function(cds, umap_space = c("global_UMAP", "sub_UMAP")) {
   # must put as as.matrix() otherwise can't build a nn index
+  reducedDims(cds)[["PCA"]] = as.matrix(reducedDims(cds)[[gsub("UMAP", "PCA", umap_space)]])
+  reducedDims(cds)[["Aligned"]] = as.matrix(reducedDims(cds)[[gsub("UMAP", "Aligned", umap_space)]])
   reducedDims(cds)[["UMAP"]] = as.matrix(reducedDims(cds)[[umap_space]])
   cds@metadata$umap_space = umap_space
   print(paste0("switching to ", umap_space, " space"))
