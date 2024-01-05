@@ -87,29 +87,47 @@ get_count_df <- function(ccs, round=F, norm=F) {
 
 }
 
-
 #' subset ccs by cell groups
-#' @param ccs
-#' @param cell_groups
-#' @export
-subset_ccs = function(ccs, cell_groups) {
+#' #' @param ccs
+#' #' @param cell_groups
+#' #' @export
+subset_ccs = function(ccs, ...) {
 
-  # make sure that cell groups are in the ccs
+  filtered_cds_coldata = ccs@cds_coldata %>% as.data.frame %>% filter(...)
+  group_ids = filtered_cds_coldata %>% pull(group_id)
 
-  assertthat::assert_that(
-    tryCatch(expr = all(cell_groups %in% rownames(ccs)),
-             error = function(e) FALSE),
-    msg = paste0(setdiff(cell_groups, rownames(ccs)) %>% paste0(collapse = ", "),
-                 " are not found in the ccs"))
-
-  sub_ccs = ccs[cell_groups, ]
-
-  sub_ccs@metadata$cell_group_assignments = sub_ccs@metadata$cell_group_assignments[sub_ccs@metadata$cell_group_assignments$cell_group %in% cell_groups,]
-
-  if (is.null(nrow(colnames(ccs@cds@colData))) == FALSE) {
-    sub_ccs@cds = sub_ccs@cds[,rownames(sub_ccs@metadata$cell_group_assignments)]
-  }
+  cell_group_assignments = ccs@metadata$cell_group_assignments[ccs@metadata$cell_group_assignments$group_id %in% group_ids,]
+  samples = cell_group_assignments$sample %>% unique()
+  cell_groups = cell_group_assignments$cell_group %>% unique()
+  sub_ccs = ccs[cell_groups, samples]
+  sub_ccs@metadata$cell_group_assignments = cell_group_assignments
 
   return(sub_ccs)
 
 }
+
+#' #' subset ccs by cell groups
+#' #' @param ccs
+#' #' @param cell_groups
+#' #' @export
+#' subset_ccs = function(ccs, cell_groups) {
+#'
+#'   # make sure that cell groups are in the ccs
+#'
+#'   assertthat::assert_that(
+#'     tryCatch(expr = all(cell_groups %in% rownames(ccs)),
+#'              error = function(e) FALSE),
+#'     msg = paste0(setdiff(cell_groups, rownames(ccs)) %>% paste0(collapse = ", "),
+#'                  " are not found in the ccs"))
+#'
+#'   sub_ccs = ccs[cell_groups, ]
+#'
+#'   sub_ccs@metadata$cell_group_assignments = sub_ccs@metadata$cell_group_assignments[sub_ccs@metadata$cell_group_assignments$cell_group %in% cell_groups,]
+#'
+#'   if (is.null(nrow(colnames(ccs@cds@colData))) == FALSE) {
+#'     sub_ccs@cds = sub_ccs@cds[,rownames(sub_ccs@metadata$cell_group_assignments)]
+#'   }
+#'
+#'   return(sub_ccs)
+#'
+#' }
