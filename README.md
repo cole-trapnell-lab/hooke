@@ -21,11 +21,11 @@ Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/in
 Use the github install: 
 
 ```r 
-devtools::install_github("cole-trapnell-lab/PLNmodels)
+devtools::install_github("cole-trapnell-lab/PLNmodels")
 ```
 
 Finally, install the hooke package as follows: 
 
 ```r
-devtools::install_github("cole-trapnell-lab/hooke)
+devtools::install_github("cole-trapnell-lab/hooke")
 ```
