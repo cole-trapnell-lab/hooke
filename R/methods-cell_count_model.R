@@ -97,14 +97,16 @@ subset_ccs = function(ccs, ...) {
   group_ids = filtered_cds_coldata %>% pull(group_id)
 
   cell_group_assignments = ccs@metadata$cell_group_assignments[ccs@metadata$cell_group_assignments$group_id %in% group_ids,]
-  samples = cell_group_assignments$sample %>% unique()
-  cell_groups = cell_group_assignments$cell_group %>% unique()
+  samples = intersect( colnames(ccs), unique(cell_group_assignments$sample))
+  cell_groups = intersect(rownames(ccs), unique(cell_group_assignments$cell_group))
   sub_ccs = ccs[cell_groups, samples]
   sub_ccs@metadata$cell_group_assignments = cell_group_assignments
 
   return(sub_ccs)
 
 }
+
+
 
 #' #' subset ccs by cell groups
 #' #' @param ccs
