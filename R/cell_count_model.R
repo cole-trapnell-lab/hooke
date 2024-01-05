@@ -57,7 +57,8 @@ setClass("cell_count_model",
                    sparsity = "numeric",
                    model_aux = "SimpleList",
                    vhat = "dgCMatrix",
-                   vhat_method = "character")
+                   vhat_method = "character",
+                   info = "SimpleList")
 )
 setMethod("is.na", "cell_count_model", function(x) FALSE)
 
@@ -750,7 +751,8 @@ new_cell_count_model <- function(ccs,
                       sparsity = sparsity_factor,
                       model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels),
                       vhat = vhat,
-                      vhat_method = vhat_method
+                      vhat_method = vhat_method,
+                      info=SimpleList()
                       )
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
