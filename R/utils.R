@@ -191,8 +191,11 @@ plot_sub_contrast = function(ccm,
 
   ccm = switch_ccm_space(ccm, umap_space = umap_space)
 
+  # ccm@ccs = subset_ccs(ccm@ccs, ...)
+
   colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
+  ccm@ccs@cds_coldata$cell_group = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
 
   cg_to_mg = colData(ccm@ccs@cds) %>%
               as.data.frame() %>%
@@ -206,19 +209,20 @@ plot_sub_contrast = function(ccm,
 
     partition_cell_groups = cg_to_mg %>% filter(facet_group %in% selected_groups) %>% pull(cell_group)
 
-    ccm@ccs <- hooke:::subset_ccs(ccm@ccs, partition_cell_groups)
+    # ccm@ccs <- hooke:::subset_ccs(ccm@ccs, partition_cell_groups)
+    ccm@ccs <- subset_ccs(ccm@ccs, cell_group %in% partition_cell_groups)
     cond_a_v_b_tbl = cond_a_v_b_tbl[cond_a_v_b_tbl$facet_group %in% selected_groups,]
   }
 
 
   plot_contrast(ccm,
                 cond_a_v_b_tbl,
-                edge_size=edge_size,
-                cell_size=cell_size,
+                edge_size = edge_size,
+                cell_size = cell_size,
                 q_value_thresh = q_value_thresh,
-                group_label_size=group_label_size,
+                group_label_size = group_label_size,
                 plot_labels = plot_labels,
-                fc_limits=fc_limits,
+                fc_limits = fc_limits,
                 plot_edges = plot_edges,
                 ...) +
     facet_wrap(~facet_group)
