@@ -101,6 +101,7 @@ subset_ccs = function(ccs, ...) {
   cell_groups = intersect(rownames(ccs), unique(cell_group_assignments$cell_group))
   sub_ccs = ccs[cell_groups, samples]
   sub_ccs@metadata$cell_group_assignments = cell_group_assignments
+  sub_ccs@cds = sub_ccs@cds[, colData(sub_ccs@cds)$cell %in% filtered_cds_coldata$cell]
 
   return(sub_ccs)
 
