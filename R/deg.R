@@ -21,7 +21,7 @@ pseudobulk_ccs_for_states <- function(ccs,
       dplyr::group_by(pseudobulk_id, cell_group) %>%
       dplyr::summarize(num_cells_in_group = n()) %>%
       as.data.frame
-    #%>% select(rowname, cell_group)
+  #%>% select(rowname, cell_group)
   }else{
     cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]])
     cds_group_df = colData(ccs@cds) %>%
@@ -48,6 +48,19 @@ pseudobulk_ccs_for_states <- function(ccs,
 
   row.names(agg_coldata) = agg_coldata$pseudobulk_id
   agg_coldata = agg_coldata[colnames(agg_expr_mat),]
+
+  cds_covariates_df = colData(ccs@cds) %>% as.data.frame %>%
+    mutate(pseudobulk_id = paste(group_id, "cell_group", sep = "_"))
+
+  pseudobulk_covariates = cds_covariates_df %>%
+    select(pseudobulk_id, "sample" = ccs@info$sample_group) %>%
+    distinct()
+
+  ccs_covariates_df = colData(ccs) %>% as.data.frame
+
+  agg_coldata = left_join(agg_coldata, pseudobulk_covariates, by = "pseudobulk_id")
+  agg_coldata = left_join(agg_coldata, ccs_covariates_df, by = "sample")
+  row.names(agg_coldata) = agg_coldata$pseudobulk_id
 
   pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccs@cds) %>% as.data.frame)
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
