@@ -72,7 +72,7 @@ pseudobulk_ccs_for_states <- function(ccs,
 #' @param pb_cds a pseudobulked cds
 #' @param covariate the column name in colData(ccs) to add to the pb_cds
 #' @export
-add_covariate <- function(ccs, pb_cds, covariate) {
+add_covariate <- function(ccs, pb_cds, covariate, colname = covariate) {
 
   assertthat::assert_that(
     tryCatch(expr = covariate %in% colnames(colData(ccs@cds)),
@@ -94,7 +94,7 @@ add_covariate <- function(ccs, pb_cds, covariate) {
     mutate(group_id = gsub("_cell_group", "", pseudobulk_id)) %>%
     left_join(group_to_covariate, by = "group_id")
 
-  colData(pb_cds)[[covariate]] =  pb_coldata[[covariate]]
+  colData(pb_cds)[[colname]] =  pb_coldata[[covariate]]
 
   return(pb_cds)
 }
