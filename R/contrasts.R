@@ -23,14 +23,16 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 #' @param ccm A cell_count_model.
 #' @param newdata tibble A tibble of variables used for the prediction.
 #' @param min_log_abund numeric Minimum log abundance value.
+#' @param cell_group string The name of the groups that are being estimated.
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
+estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell_group") {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(newdata))
   assertthat::assert_that(is.numeric(min_log_abund))
+  assertthat::assert_that(is.character(cell_group))
 
   # check that all terms in new data have been specified
   missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
@@ -106,10 +108,10 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5) {
   #min_log_abundances = log(matrixStats::colMins(pln_model$fitted))
   #percent_max = 100 * (exp(log_abund)/exp(max_log_abundances))
   #percent_range = 100 * (exp(log_abund) - exp(min_log_abundances)) / (exp(max_log_abundances) - exp(min_log_abundances))
-  pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out),
+  pred_out_tbl = tibble::tibble(!!cell_group:=colnames(pred_out),
                         log_abund,
                         log_abund_se)
-  pred_out_tbl = left_join(pred_out_tbl,  tibble::tibble(cell_group=names(log_abund_sd), log_abund_sd), by=c("cell_group"))
+  pred_out_tbl = left_join(pred_out_tbl,  tibble::tibble(!!cell_group:=names(log_abund_sd), log_abund_sd), by=cell_group)
   #max_log_abundances,
   #min_log_abundances,
   #percent_max,
@@ -167,18 +169,20 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
 #'
 #' @param ccm A cell_count_model.
 #' @param cond_x tibble A cell type abundance estimate from estimate_abundances().
-#' @param cond_y tibble A cell type abundance estimate from estimate from estimate_abundances().
+#' @param cond_y tibble A cell type abundance estimate from estimate_abundances().
+#' @param by string The column name used to join the two estimates.
 #' @param method string A method for correcting P-value multiple comparisons.
 #'    This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 #'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
 #' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X).
 #' @importFrom dplyr full_join
 #' @export
-compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni", "hochberg", "hommel", "BY")){
+compare_abundances <- function(ccm, cond_x, cond_y, by = "cell_group", method = c("BH","bonferroni", "hochberg", "hommel", "BY")){
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(cond_x))
   assertthat::assert_that(tibble::is_tibble(cond_y))
+  assertthat::assert_that(is.character(by))
 
   assertthat::assert_that(
     tryCatch(expr = ifelse(match.arg(method) == "", TRUE, TRUE),
@@ -187,7 +191,7 @@ compare_abundances <- function(ccm, cond_x, cond_y, method = c("BH","bonferroni"
                 '"BH", "bonferroni", "hochberg", "hommel", or "BY".'))
   method <- match.arg(method)
 
-  contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by="cell_group")
+  contrast_tbl = dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by=by)
 
   # num samples
   n = nrow(model(ccm)$fitted)
