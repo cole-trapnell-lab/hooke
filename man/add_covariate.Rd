@@ -6,6 +6,13 @@
 \usage{
 add_covariate(ccs, pb_cds, covariate)
 }
+\arguments{
+\item{ccs}{a cell count set object}
+
+\item{pb_cds}{a pseudobulked cds}
+
+\item{covariate}{the column name in colData(ccs) to add to the pb_cds}
+}
 \description{
 add metadata to pb_cds from cds
 }

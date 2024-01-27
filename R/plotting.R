@@ -41,7 +41,7 @@ plot_contrast <- function(ccm,
                           fc_limits=c(-3,3),
                           sender_cell_groups=NULL,
                           receiver_cell_groups=NULL,
-                          plot_edges = c("all", "directed", "undirected","none"),
+                          plot_edges = c("none", "all", "directed", "undirected"),
                           edge_significance = c("both", "one-sided"),
                           keep_colors = FALSE,
                           label_cell_groups = list(),
@@ -50,6 +50,7 @@ plot_contrast <- function(ccm,
                           switch_label = NULL,
                           sub_cds = NULL,
                           alpha = 1.0,
+                          downsample = NULL,
                           x=1,
                           y=2){
 
@@ -239,6 +240,13 @@ plot_contrast <- function(ccm,
       mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
       mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
   }
+
+  # option to downsample for easier plotting
+  if (is.null(downsample) == FALSE) {
+    n = min(nrow(plot_df), downsample)
+    plot_df = plot_df[sample(nrow(plot_df), n),]
+  }
+
 
   # plot
   gp = ggplot() +

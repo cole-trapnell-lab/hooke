@@ -62,37 +62,75 @@ centroids <- function(ccs, reduction_method="UMAP", switch_group = NULL) {
 #' @export
 get_norm_counts <- function(ccs, round = FALSE) {
   if (round) {
-    norm_counts = round(t((t(counts(ccs))/size_factors(ccs))))
+    norm_counts = round(t((t(as.matrix(counts(ccs)))/size_factors(ccs))))
   } else {
-    norm_counts = t((t(counts(ccs))/size_factors(ccs)))
+    norm_counts = t((t(as.matrix(counts(ccs)))/size_factors(ccs)))
   }
 
   return(norm_counts)
 
 }
 
-#' subset ccs by cell groups
-#' @param ccs
-#' @param cell_groups
-#' @export
-subset_ccs = function(ccs, cell_groups) {
+get_count_df <- function(ccs, round=F, norm=F) {
 
-  # make sure that cell groups are in the ccs
-
-  assertthat::assert_that(
-    tryCatch(expr = all(cell_groups %in% rownames(ccs)),
-             error = function(e) FALSE),
-    msg = paste0(setdiff(cell_groups, rownames(ccs)) %>% paste0(collapse = ", "),
-                 " are not found in the ccs"))
-
-  sub_ccs = ccs[cell_groups, ]
-
-  sub_ccs@metadata$cell_group_assignments = sub_ccs@metadata$cell_group_assignments[sub_ccs@metadata$cell_group_assignments$cell_group %in% cell_groups,]
-
-  if (is.null(nrow(colnames(ccs@cds@colData))) == FALSE) {
-    sub_ccs@cds = sub_ccs@cds[,rownames(sub_ccs@metadata$cell_group_assignments)]
+  if (norm) {
+    count_mat = get_norm_counts(ccs, round=round)
+  } else {
+    count_mat = counts(ccs)
   }
+
+  count_df = count_mat %>%
+    as.matrix %>%
+    as.data.frame %>%
+    rownames_to_column("cell_group") %>%
+    pivot_longer(-cell_group, names_to = "sample", values_to = "count")
+
+}
+
+#' subset ccs by cell groups
+#' #' @param ccs
+#' #' @param cell_groups
+#' #' @export
+subset_ccs = function(ccs, ...) {
+
+  filtered_cds_coldata = ccs@cds_coldata %>% as.data.frame %>% filter(...)
+  group_ids = filtered_cds_coldata %>% pull(group_id)
+
+  cell_group_assignments = ccs@metadata$cell_group_assignments[ccs@metadata$cell_group_assignments$group_id %in% group_ids,]
+  samples = intersect( colnames(ccs), unique(cell_group_assignments$sample))
+  cell_groups = intersect(rownames(ccs), unique(cell_group_assignments$cell_group))
+  sub_ccs = ccs[cell_groups, samples]
+  sub_ccs@metadata$cell_group_assignments = cell_group_assignments
+  sub_ccs@cds = sub_ccs@cds[, colData(sub_ccs@cds)$cell %in% filtered_cds_coldata$cell]
 
   return(sub_ccs)
 
 }
+
+
+
+#' #' subset ccs by cell groups
+#' #' @param ccs
+#' #' @param cell_groups
+#' #' @export
+#' subset_ccs = function(ccs, cell_groups) {
+#'
+#'   # make sure that cell groups are in the ccs
+#'
+#'   assertthat::assert_that(
+#'     tryCatch(expr = all(cell_groups %in% rownames(ccs)),
+#'              error = function(e) FALSE),
+#'     msg = paste0(setdiff(cell_groups, rownames(ccs)) %>% paste0(collapse = ", "),
+#'                  " are not found in the ccs"))
+#'
+#'   sub_ccs = ccs[cell_groups, ]
+#'
+#'   sub_ccs@metadata$cell_group_assignments = sub_ccs@metadata$cell_group_assignments[sub_ccs@metadata$cell_group_assignments$cell_group %in% cell_groups,]
+#'
+#'   if (is.null(nrow(colnames(ccs@cds@colData))) == FALSE) {
+#'     sub_ccs@cds = sub_ccs@cds[,rownames(sub_ccs@metadata$cell_group_assignments)]
+#'   }
+#'
+#'   return(sub_ccs)
+#'
+#' }

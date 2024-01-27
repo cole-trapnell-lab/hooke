@@ -17,7 +17,7 @@ plot_contrast(
   fc_limits = c(-3, 3),
   sender_cell_groups = NULL,
   receiver_cell_groups = NULL,
-  plot_edges = c("all", "directed", "undirected", "none"),
+  plot_edges = c("none", "all", "directed", "undirected"),
   edge_significance = c("both", "one-sided"),
   keep_colors = FALSE,
   label_cell_groups = list(),
