@@ -1,7 +1,8 @@
 #' Compute a pseudobulk expression matrix for a ccs
 #' @export
 #' @noRd
-pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALSE){
+pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALSE,
+                                      cell_agg_fun="mean"){
 
   if (is.null(state_col)){
     cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]])
@@ -34,7 +35,7 @@ pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALS
                                                      norm_method="size_only",
                                                      scale_agg_values = FALSE,
                                                      pseudocount=0,
-                                                     cell_agg_fun="mean")
+                                                     cell_agg_fun=cell_agg_fun)
 
   agg_expr_mat = agg_expr_mat[,agg_coldata$pseudobulk_id]
 
