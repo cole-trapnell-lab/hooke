@@ -44,6 +44,7 @@ pseudobulk_ccs_for_states <- function(ccs,
                                                      pseudocount=pseudocount,
                                                      cell_agg_fun=cell_agg_fun)
 
+  agg_expr_mat = as(agg_expr_mat, "dgCMatrix") 
   agg_expr_mat = agg_expr_mat[,agg_coldata$pseudobulk_id]
 
   row.names(agg_coldata) = agg_coldata$pseudobulk_id
