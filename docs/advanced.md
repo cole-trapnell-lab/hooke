@@ -51,7 +51,7 @@ We can fit a `cell_count_model` using this time formula and a perturbation term.
 
 ```
 ccm = new_cell_count_model(ccs, 
-                           main_model_formula_str = paste0("perturbation +", time_formula))
+                           main_model_formula_str = paste0(time_formula, "+ perturbation"))
 
 # predict for 48 hpf 
 cond_wt = estimate_abundances(ccm, tibble(timepoint = 48, perturbation = "control"))
@@ -155,7 +155,7 @@ stop_time = 72
 time_formula = build_interval_formula(foxi1_ccs, num_breaks = 3, interval_start = 18, interval_stop = 72)
 
 foxi1_ccm = new_cell_count_model(foxi1_ccs, 
-                                main_model_formula_str = paste0("perturbation +", time_formula))
+                                main_model_formula_str = paste0(time_formula, "+ perturbation"))
                                 
 wt_timepoint_pred_df = estimate_abundances_over_interval(foxi1_ccm, 
                                                                  interval_start=start_time, 
