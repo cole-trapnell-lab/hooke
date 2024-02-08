@@ -3,11 +3,6 @@
 #' @param state_col column to aggregate expression. Defaults using the cell_group used in ccs construction.
 #' @param collapse_samples boolean Whether to collapse sample groups into one.
 #' @export
-<<<<<<< HEAD
-#' @noRd
-pseudobulk_ccs_for_states <- function(ccs, state_col=NULL, collapse_samples=FALSE,
-                                      cell_agg_fun="mean"){
-=======
 pseudobulk_ccs_for_states <- function(ccs,
                                       state_col=NULL,
                                       collapse_samples=FALSE,
@@ -15,7 +10,6 @@ pseudobulk_ccs_for_states <- function(ccs,
                                       norm_method="size_only",
                                       scale_agg_values = FALSE,
                                       pseudocount = 0){
->>>>>>> 53e78d50f7563f8838e99c84dd592a740ebd3177
 
   if (is.null(state_col)){
     cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]])
@@ -45,15 +39,9 @@ pseudobulk_ccs_for_states <- function(ccs,
 
   agg_expr_mat = monocle3::aggregate_gene_expression(ccs@cds,
                                                      cell_group_df=cell_group_df,
-<<<<<<< HEAD
-                                                     norm_method="size_only",
-                                                     scale_agg_values = FALSE,
-                                                     pseudocount=0,
-=======
                                                      norm_method=norm_method,
                                                      scale_agg_values = scale_agg_values,
                                                      pseudocount=pseudocount,
->>>>>>> 53e78d50f7563f8838e99c84dd592a740ebd3177
                                                      cell_agg_fun=cell_agg_fun)
 
   agg_expr_mat = agg_expr_mat[,agg_coldata$pseudobulk_id]
