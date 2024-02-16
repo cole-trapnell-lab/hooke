@@ -222,7 +222,7 @@ new_cell_count_set <- function(cds,
     dplyr::summarize(across(where(is.numeric), function(x){mean(x)}),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
                      across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) }),
-                     across(where(is.logical), function(x) { unique(x) }))
+                     across(where(is.logical), function(x) { (sum(x, na.rm = T)==1) }))
 
   if (is.null(sample_metadata) == FALSE){
     cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
@@ -518,6 +518,7 @@ new_cell_count_model <- function(ccs,
   backend <- match.arg(backend)
 
   covariance_type = match.arg(covariance_type)
+  
 
   set.seed(random.seed)
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
@@ -674,19 +675,24 @@ new_cell_count_model <- function(ccs,
                                                                                                                            rsquared = FALSE),
                                                                                                         config_optim = control_optim_args),
                                                                   ...),)
+    
+   full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
+                                                          data=pln_data,
+                                                          control = PLNmodels::PLN_param(backend = backend,
+                                                                                         covariance = covariance_type,
+                                                                                         trace = ifelse(verbose, 2, 0),
+                                                                                         config_post = list(jackknife = jackknife,
+                                                                                                            bootstrap = bootstrap,
+                                                                                                            variational_var = variational_var,
+                                                                                                            sandwich_var = sandwich_var,
+                                                                                                            rsquared = FALSE),
+                                                                                         config_optim = control_optim_args),
+                                                          ...),)
+      
 
-    full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
-                                                               data=pln_data,
-                                                               control = PLNmodels::PLN_param(backend = backend,
-                                                                                              covariance = covariance_type,
-                                                                                              trace = ifelse(verbose, 2, 0),
-                                                                                              config_post = list(jackknife = jackknife,
-                                                                                                                 bootstrap = bootstrap,
-                                                                                                                 variational_var = variational_var,
-                                                                                                                 sandwich_var = sandwich_var,
-                                                                                                                 rsquared = FALSE),
-                                                                                              config_optim = control_optim_args),
-                                                               ...),)
+
+    
+    
 
 
 # bge (20221227): notes:
