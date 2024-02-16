@@ -238,7 +238,7 @@ plot_sub_contrast_3d = function(ccm,
                              facet_group = "assembly_group",
                              log_abundance_thresh = -5,
                              edge_size=2,
-                             cell_size=1,
+                             # cell_size=1,
                              q_value_thresh = 1.0,
                              group_label_size=2,
                              fc_limits=c(-3,3),
@@ -273,7 +273,7 @@ plot_sub_contrast_3d = function(ccm,
   plot_contrast_3d(ccm,
                   cond_a_v_b_tbl,
                   edge_size = edge_size,
-                  cell_size = cell_size,
+                  # cell_size = cell_size,
                   q_value_thresh = q_value_thresh,
                   group_label_size = group_label_size,
                   fc_limits = fc_limits,
@@ -649,6 +649,20 @@ single_thread_blas = function(){
   return (old_blas_num_threads)
 }
 
+#' function to easily plot to easily feed in normalized counts from ccs
+#' into boxplots 
+#' @param ccs 
+get_norm_df = function(ccs) {
+  
+  get_norm_counts(ccs) %>% 
+    as.data.frame() %>% 
+    rownames_to_column("cell_group") %>% 
+    pivot_longer(-cell_group, 
+                 names_to = "sample", 
+                 values_to = "count") %>% 
+    left_join(colData(ccs) %>% as.data.frame, by = "sample") 
+  
+}
 
 
 
