@@ -2,7 +2,7 @@ Package: hooke
 Title: Differential analysis of cell counts in single-cell experiments
 Version: 0.0.1
 Authors@R: 
-    person(given = "Madelein",
+    person(given = "Madeleine",
            family = "Duran",
            role = c("aut", "cre"),
            email = "duran@uw.edu")
