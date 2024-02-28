@@ -18,6 +18,104 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
 }
 
 
+
+my_pln_predict_cond <- function (ccm,
+                                 newdata,
+                                 cond_responses,
+                                 type = c("link", "response"),
+                                 var_par = FALSE,
+                                 envir = parent.frame()
+                                 )
+{
+
+    type <- match.arg(type)
+
+    # Checks
+    Yc <- as.matrix(cond_responses)
+    sp_names <- colnames(model(ccm)$model_par$B)
+    if (!any(colnames(cond_responses) %in% sp_names))
+      stop("Yc must be a subset of the species in responses")
+    if (!nrow(Yc) == nrow(newdata))
+      stop("The number of rows of Yc must match the number of rows in newdata")
+
+    # Dimensions and subsets
+    n_new <- nrow(Yc)
+    cond <- sp_names %in% colnames(Yc)
+
+    ## Extract the model matrices from the new data set with initial formula
+    # X <- model.matrix(formula(private$formula)[-2], newdata, xlev = attr(private$formula, "xlevels"))
+    X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
+                      xlev = ccm@model_aux[["xlevels"]])
+
+    # O <- model.offset(model.frame(formula(ccm@full_model_formula)[-2], newdata))
+    O <- NULL
+    # O <- model.offset(model.frame(formula(private$formula)[-2], newdata))
+    if (is.null(O)){
+      O <- matrix(0, n_new, model(ccm)$p)
+    }
+
+    # Compute parameters of the law
+    Sigma = model(ccm)$model_par$Sigma
+    vcov11 <- Sigma[cond ,  cond, drop = FALSE]
+    vcov22 <- Sigma[!cond, !cond, drop = FALSE]
+    vcov12 <- Sigma[cond , !cond, drop = FALSE]
+    prec11 <- solve(vcov11)
+
+    A <- crossprod(Sigma[cond, , drop = FALSE], prec11)
+    # A <- crossprod(vcov11, prec11)
+    # A <- crossprod(vcov12, prec11)
+    # Sigma21 <- vcov22 - A %*% vcov12
+
+    VE <- model(ccm)$optimize_vestep(covariates = X,
+                               offsets    = O[, cond, drop = FALSE],
+                               responses  = Yc,
+                               weights    = rep(1, n_new),
+                               B          = model(ccm)$model_par$B[, cond, drop = FALSE],
+                               Omega      = prec11)
+
+    # # Call to VEstep to obtain M1, S1
+    # VE <- optimize_vestep(
+    #   ccm        = ccm,
+    #   covariates = X,
+    #   offsets    = O[, cond, drop = FALSE],
+    #   responses  = Yc,
+    #   weights    = rep(1, n_new),
+    #   B          = model(ccm)$model_par$B[, cond, drop = FALSE],
+    #   Omega      = prec11
+    # )
+
+    M <- tcrossprod(VE$M, A)
+    # S <- map(1:n_new, ~crossprod(sqrt(VE$S[., ]) * t(A)) + Sigma21) %>%
+    #   simplify2array()
+    # S <- map(1:n_new, ~crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
+
+    ## mean latent positions in the parameter space
+
+    EZ <- tcrossprod(X, t(model(ccm)$model_par$B[, , drop = FALSE])) + M + O[, , drop = FALSE]
+    EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm)$model_par$Sigma[, , drop = FALSE]), "+")
+    colnames(EZ) <- colnames(model(ccm)$model_par$Sigma[, , drop = FALSE])
+
+    # EZ <- X %*% model(ccm)$model_par$B[, !cond, drop = FALSE] + M + O[, !cond, drop = FALSE]
+    # colnames(EZ) <- setdiff(sp_names, colnames(Yc))
+
+    # ! We should only add the .5*diag(S2) term only if we want the type="response"
+    if (type == "response") {
+      if (ncol(EZ) == 1) {
+        EZ <- EZ + .5 * S
+      } else {
+        EZ <- EZ + .5 * t(apply(S, 3, diag))
+      }
+    }
+    results <- switch(type, link = EZ, response = exp(EZ))
+    attr(results, "type") <- type
+    if (var_par) {
+      attr(results, "M") <- M
+      attr(results, "S") <- S
+    }
+    results
+}
+
+
 #' Predict cell type abundances given a PLN model and a set of inputs for its covariates
 #'
 #' @param ccm A cell_count_model.
@@ -120,6 +218,16 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
   pred_out_tbl = cbind(newdata, pred_out_tbl)
   pred_out_tbl <- tibble::tibble(pred_out_tbl)
 
+  return(pred_out_tbl)
+}
+
+
+estimate_abundances_cond = function(ccm, newdata, cond_responses) {
+
+  pred_out = my_pln_predict_cond(ccm, newdata,
+                                 cond_responses, type="link")
+  log_abund = as.numeric(pred_out)
+  pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
   return(pred_out_tbl)
 }
 
