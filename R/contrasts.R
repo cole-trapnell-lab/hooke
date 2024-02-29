@@ -55,16 +55,17 @@ my_pln_predict_cond <- function (ccm,
     }
 
     # Compute parameters of the law
-    Sigma = model(ccm)$model_par$Sigma
+    Sigma = model(ccm, model_to_return = "reduced")$model_par$Sigma
     vcov11 <- Sigma[cond ,  cond, drop = FALSE]
     vcov22 <- Sigma[!cond, !cond, drop = FALSE]
     vcov12 <- Sigma[cond , !cond, drop = FALSE]
     prec11 <- solve(vcov11)
 
-    A <- crossprod(Sigma[cond, , drop = FALSE], prec11)
-    # A <- crossprod(vcov11, prec11)
     # A <- crossprod(vcov12, prec11)
+    A <- crossprod(as.matrix(Sigma[cond, , drop = FALSE]), prec11)
+
     # Sigma21 <- vcov22 - A %*% vcov12
+    Sigma21 <- as.matrix(Sigma[, , drop = FALSE]) - A %*% as.matrix(Sigma[cond, , drop = FALSE])
 
     VE <- model(ccm)$optimize_vestep(covariates = X,
                                offsets    = O[, cond, drop = FALSE],
@@ -85,9 +86,8 @@ my_pln_predict_cond <- function (ccm,
     # )
 
     M <- tcrossprod(VE$M, A)
-    # S <- map(1:n_new, ~crossprod(sqrt(VE$S[., ]) * t(A)) + Sigma21) %>%
-    #   simplify2array()
-    # S <- map(1:n_new, ~crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
+
+    S <- map(1:n_new, ~crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
 
     ## mean latent positions in the parameter space
 
@@ -221,13 +221,44 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
   return(pred_out_tbl)
 }
 
+#' Predict cell type abundances given a PLN model and a set of inputs for its covariates
+#' and observed counts
+#'
+#' @param ccm A cell_count_model.
+#' @param newdata tibble A tibble of variables used for the prediction.
+#' @param cond_responses a data frame containing the counts of the observed variables
+#' @param min_log_abund numeric Minimum log abundance value.
+#' @param cell_group string The name of the groups that are being estimated.
+#' @return A tibble of cell abundance predictions.
+#' @importFrom tibble tibble
+#' @export
+estimate_abundances_cond = function(ccm,
+                                    newdata,
+                                    cond_responses,
+                                    min_log_abund=-5,
+                                    cell_group="cell_group",
+                                    type = c("link", "response")) {
 
-estimate_abundances_cond = function(ccm, newdata, cond_responses) {
+  assertthat::assert_that(is(ccm, 'cell_count_model'))
+  assertthat::assert_that(tibble::is_tibble(newdata))
+  assertthat::assert_that(is.numeric(min_log_abund))
+  assertthat::assert_that(is.character(cell_group))
 
+  type <- match.arg(type)
+
+  newdata$Offset = 1
   pred_out = my_pln_predict_cond(ccm, newdata,
-                                 cond_responses, type="link")
+                                 cond_responses, type=type)
   log_abund = as.numeric(pred_out)
+  newdata$Offset = NULL
+
+  below_thresh = log_abund < min_log_abund
+  log_abund[below_thresh] = min_log_abund
+
   pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
+
+  pred_out_tbl = cbind(newdata, pred_out_tbl)
+  pred_out_tbl <- tibble::tibble(pred_out_tbl)
   return(pred_out_tbl)
 }
 
