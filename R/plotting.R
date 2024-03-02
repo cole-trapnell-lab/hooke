@@ -102,7 +102,7 @@ plot_abundance = function(ccs,
                                         mapping = aes(get(paste0("umap_", x)),
                                                       get(paste0("umap_", y)),
                                                       label=cell_group),
-                                        size=I(group_label_size),
+                                        size = I(group_label_size),
                                         fill = "white")
 
 
@@ -1149,15 +1149,22 @@ plot_contrast_3d <- function(ccm,
                              cond_b_vs_a_tbl,
                              by=c("cell_group"="cell_group"))
 
-  if (is.null(fc_limits)) {
-    fc_limits = range(plot_df$delta_log_abund)
-  } else {
-    min = fc_limits[1]
-    max = fc_limits[2]
-    plot_df = plot_df %>%
-      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
-      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
-  }
+  fc_limits = range(plot_df$delta_log_abund)
+  range_min = min(abs(fc_limits))
+
+  plot_df = plot_df %>%
+    mutate(delta_log_abund = ifelse(delta_log_abund > range_min, max, delta_log_abund)) %>%
+    mutate(delta_log_abund = ifelse(delta_log_abund < -range_min, -range_min, delta_log_abund))
+
+  # if (is.null(fc_limits)) {
+  #   fc_limits = range(plot_df$delta_log_abund)
+  # } else {
+  #   min = fc_limits[1]
+  #   max = fc_limits[2]
+  #   plot_df = plot_df %>%
+  #     mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+  #     mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  # }
 
   color_palette = c('#3A5FCD', '#FAFAFA','#CD3700')
   # color_palette = c('#3A5FCD', '#FFFFFF','#CD3700')
@@ -1168,12 +1175,14 @@ plot_contrast_3d <- function(ccm,
                       y = ~umap3D_2,
                       z = ~umap3D_3,
                       type = 'scatter3d',
-                      mode= "markers",
+                      mode ='markers',
                       alpha = I(alpha),
-                      color = ~delta_log_abund,
-                      colors = color_palette,
                       size = I(cell_size),
-                      range = fc_limits
+                      color = ~delta_log_abund,
+                      colors = color_palette
+                      # marker = list(size = I(cell_size),
+                      #               color = ~delta_log_abund,
+                      #               colorscale = colorscale)
                       )
 
   return(p)
