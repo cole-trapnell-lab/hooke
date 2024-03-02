@@ -518,7 +518,7 @@ new_cell_count_model <- function(ccs,
   backend <- match.arg(backend)
 
   covariance_type = match.arg(covariance_type)
-  
+
 
   set.seed(random.seed)
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
@@ -675,7 +675,7 @@ new_cell_count_model <- function(ccs,
                                                                                                                            rsquared = FALSE),
                                                                                                         config_optim = control_optim_args),
                                                                   ...),)
-    
+
    full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
                                                           data=pln_data,
                                                           control = PLNmodels::PLN_param(backend = backend,
@@ -688,11 +688,11 @@ new_cell_count_model <- function(ccs,
                                                                                                             rsquared = FALSE),
                                                                                          config_optim = control_optim_args),
                                                           ...),)
-      
 
 
-    
-    
+
+
+
 
 
 # bge (20221227): notes:
@@ -844,7 +844,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     out = min_penalty + (DM / max(DM))^s
     #out =  1 + DM^s
     # penalties have to be > 0
-    out[!is.finite(out)] <- min_penalty
+    out[!is.finite(out)] <- max_penalty
     out[out < 0] <- min_penalty
     return(out)
   }

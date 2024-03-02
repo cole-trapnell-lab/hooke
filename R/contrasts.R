@@ -74,17 +74,6 @@ my_pln_predict_cond <- function (ccm,
                                B          = model(ccm)$model_par$B[, cond, drop = FALSE],
                                Omega      = prec11)
 
-    # # Call to VEstep to obtain M1, S1
-    # VE <- optimize_vestep(
-    #   ccm        = ccm,
-    #   covariates = X,
-    #   offsets    = O[, cond, drop = FALSE],
-    #   responses  = Yc,
-    #   weights    = rep(1, n_new),
-    #   B          = model(ccm)$model_par$B[, cond, drop = FALSE],
-    #   Omega      = prec11
-    # )
-
     M <- tcrossprod(VE$M, A)
 
     S <- map(1:n_new, ~crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
