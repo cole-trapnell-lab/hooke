@@ -222,7 +222,7 @@ new_cell_count_set <- function(cds,
     dplyr::summarize(across(where(is.numeric), function(x){mean(x)}),
                      across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
                      across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) }),
-                     across(where(is.logical), function(x) { unique(x) }))
+                     across(where(is.logical), function(x) { (sum(x, na.rm = T)==1) }))
 
   if (is.null(sample_metadata) == FALSE){
     cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
@@ -519,6 +519,7 @@ new_cell_count_model <- function(ccs,
 
   covariance_type = match.arg(covariance_type)
 
+
   set.seed(random.seed)
   pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
                                       covariates = colData(ccs) %>% as.data.frame,
@@ -675,18 +676,23 @@ new_cell_count_model <- function(ccs,
                                                                                                         config_optim = control_optim_args),
                                                                   ...),)
 
-    full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
-                                                               data=pln_data,
-                                                               control = PLNmodels::PLN_param(backend = backend,
-                                                                                              covariance = covariance_type,
-                                                                                              trace = ifelse(verbose, 2, 0),
-                                                                                              config_post = list(jackknife = jackknife,
-                                                                                                                 bootstrap = bootstrap,
-                                                                                                                 variational_var = variational_var,
-                                                                                                                 sandwich_var = sandwich_var,
-                                                                                                                 rsquared = FALSE),
-                                                                                              config_optim = control_optim_args),
-                                                               ...),)
+   full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
+                                                          data=pln_data,
+                                                          control = PLNmodels::PLN_param(backend = backend,
+                                                                                         covariance = covariance_type,
+                                                                                         trace = ifelse(verbose, 2, 0),
+                                                                                         config_post = list(jackknife = jackknife,
+                                                                                                            bootstrap = bootstrap,
+                                                                                                            variational_var = variational_var,
+                                                                                                            sandwich_var = sandwich_var,
+                                                                                                            rsquared = FALSE),
+                                                                                         config_optim = control_optim_args),
+                                                          ...),)
+
+
+
+
+
 
 
 # bge (20221227): notes:
@@ -838,7 +844,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
     out = min_penalty + (DM / max(DM))^s
     #out =  1 + DM^s
     # penalties have to be > 0
-    out[!is.finite(out)] <- min_penalty
+    out[!is.finite(out)] <- max_penalty
     out[out < 0] <- min_penalty
     return(out)
   }

@@ -1,3 +1,119 @@
+plot_abundance = function(ccs,
+                          cond_b_vs_a_tbl,
+                          mask = list(),
+                          cell_size = 1,
+                          q_value_thresh = 1.0,
+                          fc_limits=c(-3,3),
+                          alpha = 1.0,
+                          group_label_size=2,
+                          x = 1,
+                          y = 2,
+                          downsample = NULL,
+                          plot_labels = TRUE) {
+
+
+
+  cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund =
+                                                        ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+
+
+  plot_df = ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
+  plot_df$cell = row.names(plot_df)
+
+  plot_df$umap2D_1 <- reducedDim(ccs@cds, type="UMAP")[plot_df$cell,x]
+  plot_df$umap2D_2 <- reducedDim(ccs@cds, type="UMAP")[plot_df$cell,y]
+
+  plot_df = dplyr::left_join(plot_df,
+                             cond_b_vs_a_tbl,
+                             by=c("cell_group"="cell_group"))
+
+  if (is.null(fc_limits)) {
+    fc_limits = range(plot_df$delta_log_abund)
+  } else {
+    min = fc_limits[1]
+    max = fc_limits[2]
+    plot_df = plot_df %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  }
+
+  # option to downsample for easier plotting
+  if (is.null(downsample) == FALSE) {
+    n = min(nrow(plot_df), downsample)
+    plot_df = plot_df[sample(nrow(plot_df), n),]
+  }
+
+  if (length(mask) > 0 ) {
+    plot_df$mask = ifelse(plot_df$cell_group %in% mask, T, F)
+  } else {
+    plot_df$mask = F
+  }
+
+
+  gp = ggplot() +
+    geom_point(
+      data = plot_df,
+      aes(umap2D_1, umap2D_2),
+      color = "black",
+      size = 1.5 * cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>% filter(mask == T),
+      aes(umap2D_1, umap2D_2),
+      color = "light gray",
+      size = cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>% filter(mask == F),
+      aes(umap2D_1, umap2D_2),
+      color = "white",
+      size = cell_size,
+      stroke = 0
+    ) +
+    geom_point(
+      data = plot_df %>%
+        filter(mask == F) %>%
+        arrange(!is.na(abs(delta_log_abund)),
+                abs(delta_log_abund)),
+      aes(umap2D_1, umap2D_2, color = delta_log_abund),
+      size = cell_size,
+      alpha = alpha,
+      stroke = 0
+    ) +
+    scale_color_gradient2(
+      low = "royalblue3",
+      mid = "white",
+      high = "orangered3",
+      na.value = "white",
+      limits = fc_limits
+    ) +
+    guides(color=guide_colourbar(title="log(\u0394 Abundance)")) + #
+    monocle3:::monocle_theme_opts()
+
+
+
+  if (plot_labels) {
+
+    label_df = centroids(ccm@ccs)
+
+    gp = gp + ggrepel::geom_label_repel(data = label_df,
+                                        mapping = aes(get(paste0("umap_", x)),
+                                                      get(paste0("umap_", y)),
+                                                      label=cell_group),
+                                        size = I(group_label_size),
+                                        fill = "white")
+
+
+  }
+
+  return(gp)
+}
+
+
+
+
 #' Plot a UMAP colored by how cells shift in a given contrast
 #'
 #' @param ccm A cell_count_model object.
@@ -50,6 +166,7 @@ plot_contrast <- function(ccm,
                           switch_label = NULL,
                           sub_cds = NULL,
                           alpha = 1.0,
+                          mask = list(),
                           downsample = NULL,
                           x=1,
                           y=2){
@@ -219,71 +336,75 @@ plot_contrast <- function(ccm,
     #   dplyr::mutate(to_delta_log_abund = ifelse(to_delta_q_value <= q_value_thresh, to_delta_log_abund, 0))
   }
 
-  plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
-  plot_df$cell = row.names(plot_df)
+  gp = plot_abundance(ccm@ccs, cond_b_vs_a_tbl, cell_size = cell_size, mask = mask, q_value_thresh = q_value_thresh,
+                 fc_limits = fc_limits, alpha = alpha, x = x, y = y, downsample = downsample, group_label_size = group_label_size,
+                 plot_labels = FALSE)
 
-  plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,x]
-  plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,y]
-
-  plot_df = dplyr::left_join(plot_df,
-                             cond_b_vs_a_tbl,
-                             # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
-                             by=c("cell_group"="cell_group"))
-
-
-  if (is.null(fc_limits)) {
-    fc_limits = range(plot_df$delta_log_abund)
-  } else {
-    min = fc_limits[1]
-    max = fc_limits[2]
-    plot_df = plot_df %>%
-      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
-      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
-  }
-
-  # option to downsample for easier plotting
-  if (is.null(downsample) == FALSE) {
-    n = min(nrow(plot_df), downsample)
-    plot_df = plot_df[sample(nrow(plot_df), n),]
-  }
+  # plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
+  # plot_df$cell = row.names(plot_df)
+  #
+  # plot_df$umap2D_1 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,x]
+  # plot_df$umap2D_2 <- reducedDim(ccm@ccs@cds, type="UMAP")[plot_df$cell,y]
+  #
+  # plot_df = dplyr::left_join(plot_df,
+  #                            cond_b_vs_a_tbl,
+  #                            # cond_b_vs_a_tbl %>% dplyr::select(cell_group, delta_log_abund),
+  #                            by=c("cell_group"="cell_group"))
+  #
+  #
+  # if (is.null(fc_limits)) {
+  #   fc_limits = range(plot_df$delta_log_abund)
+  # } else {
+  #   min = fc_limits[1]
+  #   max = fc_limits[2]
+  #   plot_df = plot_df %>%
+  #     mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+  #     mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  # }
+  #
+  # # option to downsample for easier plotting
+  # if (is.null(downsample) == FALSE) {
+  #   n = min(nrow(plot_df), downsample)
+  #   plot_df = plot_df[sample(nrow(plot_df), n),]
+  # }
 
 
   # plot
-  gp = ggplot() +
-    geom_point(
-      data = plot_df,
-      aes(umap2D_1, umap2D_2),
-      color = "black",
-      size = 1.5 * cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df,
-      aes(umap2D_1, umap2D_2),
-      color = "white",
-      size = cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df %>%
-        arrange(!is.na(abs(delta_log_abund)),
-                abs(delta_log_abund)),
-      aes(umap2D_1, umap2D_2, color = delta_log_abund),
-      size = cell_size,
-      alpha = alpha,
-      stroke = 0
-    ) +
-    scale_color_gradient2(
-      low = "royalblue3",
-      mid = "white",
-      high = "orangered3",
-      na.value = "white",
-      limits = fc_limits
-    )  +
-    guides(color=guide_colourbar(title="log(\u0394 Abundance)")) + # unicode for captital delta
-    #theme_void() +
-    #theme(legend.position = "none") +
-    monocle3:::monocle_theme_opts()
+  # gp = ggplot() +
+  #   geom_point(
+  #     data = plot_df,
+  #     aes(umap2D_1, umap2D_2),
+  #     color = "black",
+  #     size = 1.5 * cell_size,
+  #     stroke = 0
+  #   ) +
+  #   geom_point(
+  #     data = plot_df,
+  #     aes(umap2D_1, umap2D_2),
+  #     color = "white",
+  #     size = cell_size,
+  #     stroke = 0
+  #   ) +
+  #   geom_point(
+  #     data = plot_df %>%
+  #       arrange(!is.na(abs(delta_log_abund)),
+  #               abs(delta_log_abund)),
+  #     aes(umap2D_1, umap2D_2, color = delta_log_abund),
+  #     size = cell_size,
+  #     alpha = alpha,
+  #     stroke = 0
+  #   ) +
+  #   scale_color_gradient2(
+  #     low = "royalblue3",
+  #     mid = "white",
+  #     high = "orangered3",
+  #     na.value = "white",
+  #     limits = fc_limits
+  #   )  +
+  #   guides(color=guide_colourbar(title="log(\u0394 Abundance)")) + # unicode for captital delta
+  #   #theme_void() +
+  #   #theme(legend.position = "none") +
+  #   monocle3:::monocle_theme_opts()
 
   # force to be empty
   if (plot_edges == "directed") {
@@ -1028,15 +1149,22 @@ plot_contrast_3d <- function(ccm,
                              cond_b_vs_a_tbl,
                              by=c("cell_group"="cell_group"))
 
-  if (is.null(fc_limits)) {
-    fc_limits = range(plot_df$delta_log_abund)
-  } else {
-    min = fc_limits[1]
-    max = fc_limits[2]
-    plot_df = plot_df %>%
-      mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
-      mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
-  }
+  fc_limits = range(plot_df$delta_log_abund)
+  range_min = min(abs(fc_limits))
+
+  plot_df = plot_df %>%
+    mutate(delta_log_abund = ifelse(delta_log_abund > range_min, max, delta_log_abund)) %>%
+    mutate(delta_log_abund = ifelse(delta_log_abund < -range_min, -range_min, delta_log_abund))
+
+  # if (is.null(fc_limits)) {
+  #   fc_limits = range(plot_df$delta_log_abund)
+  # } else {
+  #   min = fc_limits[1]
+  #   max = fc_limits[2]
+  #   plot_df = plot_df %>%
+  #     mutate(delta_log_abund = ifelse(delta_log_abund > max, max, delta_log_abund)) %>%
+  #     mutate(delta_log_abund = ifelse(delta_log_abund < min, min, delta_log_abund))
+  # }
 
   color_palette = c('#3A5FCD', '#FAFAFA','#CD3700')
   # color_palette = c('#3A5FCD', '#FFFFFF','#CD3700')
@@ -1047,12 +1175,15 @@ plot_contrast_3d <- function(ccm,
                       y = ~umap3D_2,
                       z = ~umap3D_3,
                       type = 'scatter3d',
-                      mode="markers",
+                      mode ='markers',
                       alpha = I(alpha),
-                      color = ~delta_log_abund,
-                      colors = color_palette,
                       size = I(cell_size),
-                      range_color = fc_limits)
+                      color = ~delta_log_abund,
+                      colors = color_palette
+                      # marker = list(size = I(cell_size),
+                      #               color = ~delta_log_abund,
+                      #               colorscale = colorscale)
+                      )
 
   return(p)
 
