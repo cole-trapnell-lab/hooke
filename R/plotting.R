@@ -96,7 +96,7 @@ plot_abundance = function(ccs,
 
   if (plot_labels) {
 
-    label_df = centroids(ccm@ccs)
+    label_df = centroids(ccs)
 
     gp = gp + ggrepel::geom_label_repel(data = label_df,
                                         mapping = aes(get(paste0("umap_", x)),
