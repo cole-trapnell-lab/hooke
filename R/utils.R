@@ -159,6 +159,18 @@ get_umap_space = function(cds) {
 #' @param ccm a cell count model object
 #' @param umap_space
 #' @noRd
+switch_ccs_space <- function(ccs, umap_space = c("sub_UMAP", "global_UMAP")) {
+  umap_space <- match.arg(umap_space)
+  ccs@cds <- switch_reducedDims(ccs@cds, umap_space)
+  ccs@cds_reduced_dims[["UMAP"]] <- ccs@cds_reduced_dims[[umap_space]]
+  return(ccs)
+}
+
+#' this switches the ccm umap space allowing you to plot contrast in
+#' global and local spaces
+#' @param ccm a cell count model object
+#' @param umap_space
+#' @noRd
 switch_ccm_space <- function(ccm, umap_space = c("sub_UMAP", "global_UMAP")) {
   umap_space <- match.arg(umap_space)
   ccm@ccs@cds <- switch_reducedDims(ccm@ccs@cds, umap_space)
@@ -243,33 +255,33 @@ plot_sub_contrast_3d = function(ccm,
                              group_label_size=2,
                              fc_limits=c(-3,3),
                              ...) {
-  
+
   ccm = switch_ccm_space(ccm, umap_space = umap_space)
-  
+
   # ccm@ccs = subset_ccs(ccm@ccs, ...)
-  
+
   colData(ccm@ccs@cds)[["cell_group"]] = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
   colData(ccm@ccs@cds)[["facet_group"]] = colData(ccm@ccs@cds)[[facet_group]]
   ccm@ccs@cds_coldata$cell_group = colData(ccm@ccs@cds)[[ccm@ccs@info$cell_group]]
-  
+
   cg_to_mg = colData(ccm@ccs@cds) %>%
     as.data.frame() %>%
     select(cell_group, facet_group) %>%
     distinct()
-  
+
   cond_a_v_b_tbl = left_join(cond_a_v_b_tbl,
                              cg_to_mg, by = "cell_group")
-  
+
   if (!is.null(selected_groups)){
-    
+
     partition_cell_groups = cg_to_mg %>% filter(facet_group %in% selected_groups) %>% pull(cell_group)
-    
+
     # ccm@ccs <- hooke:::subset_ccs(ccm@ccs, partition_cell_groups)
     ccm@ccs <- subset_ccs(ccm@ccs, cell_group %in% partition_cell_groups)
     cond_a_v_b_tbl = cond_a_v_b_tbl[cond_a_v_b_tbl$facet_group %in% selected_groups,]
   }
-  
-  
+
+
   plot_contrast_3d(ccm,
                   cond_a_v_b_tbl,
                   edge_size = edge_size,
@@ -277,11 +289,64 @@ plot_sub_contrast_3d = function(ccm,
                   q_value_thresh = q_value_thresh,
                   group_label_size = group_label_size,
                   fc_limits = fc_limits,
-                  ...) 
-  
+                  ...)
+
 }
 
 
+plot_sub_abundance = function(ccs,
+                             cond_a_v_b_tbl,
+                             selected_groups = NULL,
+                             umap_space = "sub_UMAP",
+                             facet_group = "assembly_group",
+                             log_abundance_thresh = -5,
+                             edge_size=2,
+                             cell_size=1,
+                             q_value_thresh = 1.0,
+                             group_label_size=2,
+                             plot_labels = c("significant", "all", "none"),
+                             plot_edges = c("none", "all", "directed", "undirected"),
+                             fc_limits=c(-3,3),
+                             ...) {
+
+  ccs = switch_ccs_space(ccs, umap_space = umap_space)
+
+  # ccm@ccs = subset_ccs(ccm@ccs, ...)
+
+  colData(ccs@cds)[["cell_group"]] = colData(ccs@cds)[[ccs@info$cell_group]]
+  colData(ccs@cds)[["facet_group"]] = colData(ccs@cds)[[facet_group]]
+  ccs@cds_coldata$cell_group = colData(ccs@cds)[[ccs@info$cell_group]]
+
+  cg_to_mg = colData(ccs@cds) %>%
+    as.data.frame() %>%
+    select(cell_group, facet_group) %>%
+    distinct()
+
+  cond_a_v_b_tbl = left_join(cond_a_v_b_tbl,
+                             cg_to_mg, by = "cell_group")
+
+  if (!is.null(selected_groups)){
+
+    partition_cell_groups = cg_to_mg %>% filter(facet_group %in% selected_groups) %>% pull(cell_group)
+
+    # ccm@ccs <- hooke:::subset_ccs(ccm@ccs, partition_cell_groups)
+    ccs <- subset_ccs(ccs, cell_group %in% partition_cell_groups)
+    cond_a_v_b_tbl = cond_a_v_b_tbl[cond_a_v_b_tbl$facet_group %in% selected_groups,]
+  }
+
+  plot_abundance(ccs,
+                cond_a_v_b_tbl,
+                edge_size = edge_size,
+                cell_size = cell_size,
+                q_value_thresh = q_value_thresh,
+                group_label_size = group_label_size,
+                plot_labels = plot_labels,
+                fc_limits = fc_limits,
+                plot_edges = plot_edges,
+                ...) +
+    facet_wrap(~facet_group)
+
+}
 
 
 plot_sub_contrast_2 = function(ccm,
@@ -650,18 +715,18 @@ single_thread_blas = function(){
 }
 
 #' function to easily plot to easily feed in normalized counts from ccs
-#' into boxplots 
-#' @param ccs 
+#' into boxplots
+#' @param ccs
 get_norm_df = function(ccs) {
-  
-  get_norm_counts(ccs) %>% 
-    as.data.frame() %>% 
-    rownames_to_column("cell_group") %>% 
-    pivot_longer(-cell_group, 
-                 names_to = "sample", 
-                 values_to = "count") %>% 
-    left_join(colData(ccs) %>% as.data.frame, by = "sample") 
-  
+
+  get_norm_counts(ccs) %>%
+    as.data.frame() %>%
+    rownames_to_column("cell_group") %>%
+    pivot_longer(-cell_group,
+                 names_to = "sample",
+                 values_to = "count") %>%
+    left_join(colData(ccs) %>% as.data.frame, by = "sample")
+
 }
 
 
