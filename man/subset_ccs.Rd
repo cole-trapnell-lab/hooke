@@ -2,10 +2,16 @@
 % Please edit documentation in R/methods-cell_count_model.R
 \name{subset_ccs}
 \alias{subset_ccs}
-\title{subset ccs by cell groups}
+\title{subset ccs by cell groups
+#' @param ccs
+#' @param cell_groups
+#' @export}
 \usage{
-subset_ccs(ccs, cell_groups)
+subset_ccs(ccs, ...)
 }
 \description{
 subset ccs by cell groups
+#' @param ccs
+#' @param cell_groups
+#' @export
 }

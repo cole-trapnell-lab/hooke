@@ -26,6 +26,8 @@ plot_contrast(
   switch_label = NULL,
   sub_cds = NULL,
   alpha = 1,
+  mask = list(),
+  downsample = NULL,
   x = 1,
   y = 2
 )

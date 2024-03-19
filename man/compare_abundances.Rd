@@ -8,6 +8,7 @@ compare_abundances(
   ccm,
   cond_x,
   cond_y,
+  by = "cell_group",
   method = c("BH", "bonferroni", "hochberg", "hommel", "BY")
 )
 }
@@ -16,7 +17,9 @@ compare_abundances(
 
 \item{cond_x}{tibble A cell type abundance estimate from estimate_abundances().}
 
-\item{cond_y}{tibble A cell type abundance estimate from estimate from estimate_abundances().}
+\item{cond_y}{tibble A cell type abundance estimate from estimate_abundances().}
+
+\item{by}{string The column name used to join the two estimates.}
 
 \item{method}{string A method for correcting P-value multiple comparisons.
 This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),

@@ -4,7 +4,15 @@
 \alias{pseudobulk_ccs_for_states}
 \title{Compute a pseudobulk expression matrix for a ccs}
 \usage{
-pseudobulk_ccs_for_states(ccs, state_col = NULL, collapse_samples = FALSE)
+pseudobulk_ccs_for_states(
+  ccs,
+  state_col = NULL,
+  collapse_samples = FALSE,
+  cell_agg_fun = "mean",
+  norm_method = "size_only",
+  scale_agg_values = FALSE,
+  pseudocount = 0
+)
 }
 \arguments{
 \item{ccs}{a cell count set object}
