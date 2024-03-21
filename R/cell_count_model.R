@@ -668,6 +668,7 @@ new_cell_count_model <- function(ccs,
                                                                                                         n_penalties = pln_num_penalties,
                                                                                                         min_ratio = pln_min_ratio,
                                                                                                         penalty_weights = initial_penalties,
+                                                                                                        #penalize_diagonal = FALSE,
                                                                                                         config_post = list(jackknife = FALSE,  # never jackknife the reduced model
                                                                                                                            bootstrap = FALSE, # never bootstrap the reduced model
                                                                                                                            variational_var = FALSE, # never compute variational variances on the reduced model

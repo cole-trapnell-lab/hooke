@@ -24,15 +24,17 @@ my_pln_predict_cond <- function (ccm,
                                  cond_responses,
                                  type = c("link", "response"),
                                  var_par = FALSE,
-                                 envir = parent.frame()
+                                 envir = parent.frame(),
+                                 pln_model = c("full", "reduced")
                                  )
 {
 
     type <- match.arg(type)
+    pln_model <- match.arg(pln_model)
 
     # Checks
     Yc <- as.matrix(cond_responses)
-    sp_names <- colnames(model(ccm)$model_par$B)
+    sp_names <- colnames(model(ccm, model_to_return = pln_model)$model_par$B)
     if (!any(colnames(cond_responses) %in% sp_names))
       stop("Yc must be a subset of the species in responses")
     if (!nrow(Yc) == nrow(newdata))
@@ -51,7 +53,7 @@ my_pln_predict_cond <- function (ccm,
     O <- NULL
     # O <- model.offset(model.frame(formula(private$formula)[-2], newdata))
     if (is.null(O)){
-      O <- matrix(0, n_new, model(ccm)$p)
+      O <- matrix(0, n_new, model(ccm, model_to_return = pln_model)$p)
     }
 
     # Compute parameters of the law
@@ -67,11 +69,11 @@ my_pln_predict_cond <- function (ccm,
     # Sigma21 <- vcov22 - A %*% vcov12
     Sigma21 <- as.matrix(Sigma[, , drop = FALSE]) - A %*% as.matrix(Sigma[cond, , drop = FALSE])
 
-    VE <- model(ccm)$optimize_vestep(covariates = X,
+    VE <- model(ccm, model_to_return = pln_model)$optimize_vestep(covariates = X,
                                offsets    = O[, cond, drop = FALSE],
                                responses  = Yc,
                                weights    = rep(1, n_new),
-                               B          = model(ccm)$model_par$B[, cond, drop = FALSE],
+                               B          = model(ccm, model_to_return = pln_model)$model_par$B[, cond, drop = FALSE],
                                Omega      = prec11)
 
     M <- tcrossprod(VE$M, A)
@@ -80,9 +82,9 @@ my_pln_predict_cond <- function (ccm,
 
     ## mean latent positions in the parameter space
 
-    EZ <- tcrossprod(X, t(model(ccm)$model_par$B[, , drop = FALSE])) + M + O[, , drop = FALSE]
-    EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm)$model_par$Sigma[, , drop = FALSE]), "+")
-    colnames(EZ) <- colnames(model(ccm)$model_par$Sigma[, , drop = FALSE])
+    EZ <- tcrossprod(X, t(model(ccm, model_to_return = pln_model)$model_par$B[, , drop = FALSE])) + M + O[, , drop = FALSE]
+    EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm, model_to_return = pln_model)$model_par$Sigma[, , drop = FALSE]), "+")
+    colnames(EZ) <- colnames(model(ccm, model_to_return = pln_model)$model_par$Sigma[, , drop = FALSE])
 
     # EZ <- X %*% model(ccm)$model_par$B[, !cond, drop = FALSE] + M + O[, !cond, drop = FALSE]
     # colnames(EZ) <- setdiff(sp_names, colnames(Yc))
@@ -226,7 +228,8 @@ estimate_abundances_cond = function(ccm,
                                     cond_responses,
                                     min_log_abund=-5,
                                     cell_group="cell_group",
-                                    type = c("link", "response")) {
+                                    type = c("link", "response"),
+                                    pln_model = c("reduced", "full")) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(newdata))
@@ -234,10 +237,13 @@ estimate_abundances_cond = function(ccm,
   assertthat::assert_that(is.character(cell_group))
 
   type <- match.arg(type)
+  pln_model <- match.arg(pln_model)
 
   newdata$Offset = 1
   pred_out = my_pln_predict_cond(ccm, newdata,
-                                 cond_responses, type=type)
+                                 cond_responses,
+                                 type=type,
+                                 pln_model=pln_model)
   log_abund = as.numeric(pred_out)
   newdata$Offset = NULL
 

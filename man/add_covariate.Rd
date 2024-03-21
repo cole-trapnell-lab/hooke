@@ -4,7 +4,7 @@
 \alias{add_covariate}
 \title{add metadata to pb_cds from cds}
 \usage{
-add_covariate(ccs, pb_cds, covariate)
+add_covariate(ccs, pb_cds, covariate, colname = covariate)
 }
 \arguments{
 \item{ccs}{a cell count set object}

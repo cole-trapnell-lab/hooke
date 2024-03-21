@@ -19,8 +19,8 @@ new_cell_count_model(
   pseudocount = 0,
   pln_min_ratio = 0.001,
   pln_num_penalties = 30,
-  vhat_method = c("bootstrap", "variational_var", "jackknife", "my_bootstrap"),
-  covariance_type = c("spherical", "diagonal"),
+  vhat_method = c("bootstrap", "variational_var", "jackknife"),
+  covariance_type = c("spherical", "full", "diagonal"),
   num_bootstraps = 10,
   inception = NULL,
   backend = c("nlopt", "torch"),
@@ -29,6 +29,7 @@ new_cell_count_model(
   penalize_by_distance = TRUE,
   penalty_scale_exponent = 2,
   reduction_method = "UMAP",
+  random.seed = 42,
   ...
 )
 }
