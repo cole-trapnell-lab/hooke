@@ -1,3 +1,19 @@
+#' Plot a UMAP colored by how cells shift in a given contrast
+#'
+#' @param ccm A cell_count_model object.
+#' @param cond_b_vs_a_tbl data.frame A data frame from compare_abundances.
+#' @param log_abundance_thresh numeric Select cell groups by log abundance.
+#' @param scale_shifts_by string A scale directed graph edges by "sender",
+#'    "receiver", or "none".
+#' @param edge_size numeric The size of edges in the plot.
+#' @param cell_size numeric The size of cells in the plot.
+#' @param q_value_thresh numeric Remove contrasts whose change in
+#'    q-value exceeds q_value_thresh.
+#' @param group_label_size numeric The size of group labels in the plot.
+#' @param plot_labels string Choose cell groups to label.
+#' @param fc_limits vector The range of cell abundance changes to
+#'    include in the plot.
+#' @export
 plot_abundance = function(ccs,
                           cond_b_vs_a_tbl,
                           mask = list(),
