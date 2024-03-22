@@ -310,6 +310,9 @@ plot_sub_abundance = function(ccs,
                              ...) {
 
   ccs = switch_ccs_space(ccs, umap_space = umap_space)
+  plot_labels <- match.arg(plot_labels)
+  # FIXME plot_abundance() currently expects plot_labels to be a bool, not a string
+  plot_labels <- plot_labels != "none"
 
   # ccm@ccs = subset_ccs(ccm@ccs, ...)
 
@@ -336,13 +339,13 @@ plot_sub_abundance = function(ccs,
 
   plot_abundance(ccs,
                 cond_a_v_b_tbl,
-                edge_size = edge_size,
+                #edge_size = edge_size,
                 cell_size = cell_size,
                 q_value_thresh = q_value_thresh,
                 group_label_size = group_label_size,
                 plot_labels = plot_labels,
                 fc_limits = fc_limits,
-                plot_edges = plot_edges,
+                #plot_edges = plot_edges,
                 ...) +
     facet_wrap(~facet_group)
 
