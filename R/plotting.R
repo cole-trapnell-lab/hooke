@@ -1,6 +1,6 @@
 #' Plot a UMAP colored by how cells shift in a given contrast
 #'
-#' @param ccm A cell_count_model object.
+#' @param ccs A cell_count_set object.
 #' @param cond_b_vs_a_tbl data.frame A data frame from compare_abundances.
 #' @param log_abundance_thresh numeric Select cell groups by log abundance.
 #' @param scale_shifts_by string A scale directed graph edges by "sender",
