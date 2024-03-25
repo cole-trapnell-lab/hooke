@@ -311,8 +311,6 @@ plot_sub_abundance = function(ccs,
 
   ccs = switch_ccs_space(ccs, umap_space = umap_space)
   plot_labels <- match.arg(plot_labels)
-  # FIXME plot_abundance() currently expects plot_labels to be a bool, not a string
-  plot_labels <- plot_labels != "none"
 
   # ccm@ccs = subset_ccs(ccm@ccs, ...)
 
