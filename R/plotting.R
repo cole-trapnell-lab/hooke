@@ -2,10 +2,7 @@
 #'
 #' @param ccs A cell_count_set object.
 #' @param cond_b_vs_a_tbl data.frame A data frame from compare_abundances.
-#' @param log_abundance_thresh numeric Select cell groups by log abundance.
-#' @param scale_shifts_by string A scale directed graph edges by "sender",
-#'    "receiver", or "none".
-#' @param edge_size numeric The size of edges in the plot.
+#' @param mask a list of cell types to gray out in the plots
 #' @param cell_size numeric The size of cells in the plot.
 #' @param q_value_thresh numeric Remove contrasts whose change in
 #'    q-value exceeds q_value_thresh.
@@ -13,24 +10,29 @@
 #' @param plot_labels string Choose cell groups to label.
 #' @param fc_limits vector The range of cell abundance changes to
 #'    include in the plot.
+#' @param downsample how much to downsample the plots 
+#' @param x numeric The column number for the UMAP x coordinate.
+#' @param y numeric The column number for the UMAP y coordinate.
 #' @export
 plot_abundance = function(ccs,
                           cond_b_vs_a_tbl,
                           mask = list(),
                           cell_size = 1,
                           q_value_thresh = 1.0,
-                          fc_limits=c(-3,3),
+                          fc_limits = c(-3,3),
+                          plot_labels = c("significant", "all", "none"), 
                           alpha = 1.0,
-                          group_label_size=2,
+                          group_label_size = 2,
                           x = 1,
                           y = 2,
-                          downsample = NULL,
-                          plot_labels = TRUE) {
+                          downsample = NULL) {
 
-
+  plot_labels = match.arg(plot_labels)
 
   cond_b_vs_a_tbl = cond_b_vs_a_tbl %>% dplyr::mutate(delta_log_abund =
                                                         ifelse(delta_q_value <= q_value_thresh, delta_log_abund, 0))
+  
+
 
 
   plot_df = ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
@@ -108,11 +110,19 @@ plot_abundance = function(ccs,
     guides(color=guide_colourbar(title="log(\u0394 Abundance)")) + #
     monocle3:::monocle_theme_opts()
 
+  
+  
+  
+  
 
-
-  if (plot_labels) {
+  if (plot_labels != "none") {
 
     label_df = centroids(ccs)
+    
+    if (plot_labels == "significant") {
+      sig_cell_groups = cond_b_vs_a_tbl %>% filter(delta_q_value < q_value_thresh) %>% pull(cell_group)
+      label_df = label_df %>% filter(cell_group %in% sig_cell_groups)
+    }
 
     gp = gp + ggrepel::geom_label_repel(data = label_df,
                                         mapping = aes(get(paste0("umap_", x)),
@@ -155,6 +165,7 @@ plot_abundance = function(ccs,
 #' @param switch_label string The name of the cell_data_set column with cell_group identifiers.
 #' @param sub_cds string A cell_data_set.
 #' @param alpha numeric A the ggplot opacity. A value between 0 and 1.
+#' @param downsample how much to downsample the plots 
 #' @param x numeric The column number for the UMAP x coordinate.
 #' @param y numeric The column number for the UMAP y coordinate.
 #' @return A ggplot2 plot object.
@@ -354,7 +365,7 @@ plot_contrast <- function(ccm,
 
   gp = plot_abundance(ccm@ccs, cond_b_vs_a_tbl, cell_size = cell_size, mask = mask, q_value_thresh = q_value_thresh,
                  fc_limits = fc_limits, alpha = alpha, x = x, y = y, downsample = downsample, group_label_size = group_label_size,
-                 plot_labels = FALSE)
+                 plot_labels = "none")
 
   # plot_df = ccm@ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
   # plot_df$cell = row.names(plot_df)
