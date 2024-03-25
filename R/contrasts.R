@@ -269,34 +269,36 @@ estimate_abundances_cond = function(ccm,
 #' @importFrom tibble tibble
 #' @export
 estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, min_log_abund=-5, ...) {
-
+  
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(is.numeric(interval_start))
   assertthat::assert_that(is.numeric(interval_stop))
   assertthat::assert_that(interval_stop >= interval_start)
   assertthat::assert_that(is.numeric(interval_step))
-
+  
   #assertthat::assert_that(interval_col %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
-
+  
   timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step), ...)
   colnames(timepoint_pred_df)[1] = interval_col
-
-  time_interval_pred_helper = function(tp, ...){
+  
+  time_interval_pred_helper = function(tp, min_log_abund = min_log_abund, ...){
     tp_tbl = tibble(IV=tp, ...)
     colnames(tp_tbl)[1] = interval_col
     estimate_abundances(ccm, tp_tbl, min_log_abund = min_log_abund)
   }
-
+  
   timepoint_pred_df = timepoint_pred_df %>%
     dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
       .f = time_interval_pred_helper, NA_real_),
       .x = !!sym(interval_col),
+      min_log_abund = min_log_abund,
       ...)) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
-
+  
   return(timepoint_pred_df)
 }
+
 
 
 #' Compare two estimates of cell abundances from a Hooke model.
