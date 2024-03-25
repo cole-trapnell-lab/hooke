@@ -102,7 +102,7 @@ subset_ccs = function(ccs, ...) {
   sub_ccs = ccs[cell_groups, samples]
   sub_ccs@metadata$cell_group_assignments = cell_group_assignments
   sub_ccs@cds = sub_ccs@cds[, colData(sub_ccs@cds)$cell %in% filtered_cds_coldata$cell]
-  sub_ccs@cds_coldata = filtered_cds_coldata
+  sub_ccs@cds_coldata = filtered_cds_coldata %>% as_tibble()
   
 
   return(sub_ccs)
