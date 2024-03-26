@@ -308,7 +308,7 @@ plot_sub_abundance = function(ccs,
                              plot_edges = c("none", "all", "directed", "undirected"),
                              fc_limits=c(-3,3),
                              ...) {
-
+  
   ccs = switch_ccs_space(ccs, umap_space = umap_space)
   plot_labels <- match.arg(plot_labels)
 

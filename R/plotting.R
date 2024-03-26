@@ -118,10 +118,12 @@ plot_abundance = function(ccs,
   if (plot_labels != "none") {
 
     label_df = centroids(ccs)
+    label_df = left_join(label_df, cond_b_vs_a_tbl, by = "cell_group")
     
     if (plot_labels == "significant") {
-      sig_cell_groups = cond_b_vs_a_tbl %>% filter(delta_q_value < q_value_thresh) %>% pull(cell_group)
-      label_df = label_df %>% filter(cell_group %in% sig_cell_groups)
+      # sig_cell_groups = cond_b_vs_a_tbl %>% filter(delta_q_value < q_value_thresh) %>% pull(cell_group)
+      # label_df = label_df %>% filter(cell_group %in% sig_cell_groups)
+      label_df = label_df %>% filter(delta_q_value < q_value_thresh) 
     }
 
     gp = gp + ggrepel::geom_label_repel(data = label_df,
