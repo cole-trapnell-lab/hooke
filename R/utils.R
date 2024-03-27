@@ -16,7 +16,7 @@ add_umap_coords <- function(df, umap_centers) {
 #' return the complementing edges
 #' @noRd
 #' @importFrom igraph graph_from_data_frame
-blacklist <- function(edges) {
+denylist <- function(edges) {
   igraph::graph_from_data_frame(edges) %>%
     igraph::complementer() %>%
     igraph::as_data_frame()
@@ -308,7 +308,7 @@ plot_sub_abundance = function(ccs,
                              plot_edges = c("none", "all", "directed", "undirected"),
                              fc_limits=c(-3,3),
                              ...) {
-  
+
   ccs = switch_ccs_space(ccs, umap_space = umap_space)
   plot_labels <- match.arg(plot_labels)
 
@@ -490,7 +490,7 @@ fit_perturb_ccm = function(perturbation,
                                 sparsity_factor = 0.2,
                                 main_model_formula_string = NULL,
                                 nuisance_model_formula_string = NULL,
-                                whitelist = NULL,
+                                allowlist = NULL,
                                 interaction = F){
 
   subset_ccs = ccs[, !is.na(colData(ccs)[[col_name]]) ]
@@ -546,7 +546,7 @@ fit_perturb_ccm = function(perturbation,
   perturb_ccm = suppressWarnings(new_cell_count_model(subset_ccs,
                                                        main_model_formula_str = main_model_formula_str,
                                                        nuisance_model_formula_str = nuisance_model_formula_str,
-                                                       whitelist = whitelist
+                                                       allowlist = allowlist
   ))
 
   perturb_ccm = select_model(perturb_ccm, sparsity_factor = sparsity_factor)
