@@ -75,6 +75,8 @@ edges from the PLNnetwork.}
 
 \item{alpha}{numeric A the ggplot opacity. A value between 0 and 1.}
 
+\item{downsample}{how much to downsample the plots}
+
 \item{x}{numeric The column number for the UMAP x coordinate.}
 
 \item{y}{numeric The column number for the UMAP y coordinate.}

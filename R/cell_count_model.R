@@ -374,20 +374,20 @@ new_cell_count_set <- function(cds,
 #'   the PLN model, where N is the number of cell types. Entries must be
 #'   positive and the rows and columns must be named with the cell_group names.
 #'   Use to specify an undirected graph prior for the PLN model.
-#' @param whitelist list A data frame with two columns corresponding to (undirected)
+#' @param allowlist list A data frame with two columns corresponding to (undirected)
 #'    edges that should receive min_penalty. The columns are integers that refer to
 #'    cell clusters.
-#' @param blacklist list A data frame with two columns corresponding to (undirected)
+#' @param denylist list A data frame with two columns corresponding to (undirected)
 #'    edges that should receive max_penalty. The columns are integers that refer to
 #'    cell clusters.
 #' @param sparsity_factor A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
 #'    edges that should receive min_penalty. The columns are either cell_group
 #'    names or integers that refer to cell_groups in penalty_matrix.
 #' @param base_penalty numeric A factor that scales the penalty matrix.
-#' @param min_penalty numeric A positive value that is assigned to whitelisted
-#'    penalty matrix elements, which over-write existing values.
-#' @param max_penalty numeric A positive value that is assigned to blacklisted
-#'    penalty matrix elements. which over-write existing values.
+#' @param min_penalty numeric A positive value that is assigned to penalty
+#'    matrix elements in the allowlist, which over-write existing values.
+#' @param max_penalty numeric A positive value that is assigned to penalty
+#'    matrix elements in the denylist, which over-write existing values.
 #' @param verbose logical Whether to emit verbose output.
 #' @param pseudocount integer A value added to the elements of the initial
 #'    cell_count_set matrix.
@@ -409,8 +409,8 @@ new_cell_count_model <- function(ccs,
                                  main_model_formula_str,
                                  nuisance_model_formula_str = "1",
                                  penalty_matrix = NULL,
-                                 whitelist=NULL,
-                                 blacklist=NULL,
+                                 allowlist=NULL,
+                                 denylist=NULL,
                                  sparsity_factor=0.1,
                                  base_penalty = 1,
                                  min_penalty=0.01,
@@ -449,7 +449,7 @@ new_cell_count_model <- function(ccs,
 
   # Check that penalty matrix dimensions are N x N where N is the number of cell types.
   # Check that the penalty matrix has row/columm names that belong to the cell_groups,
-  # which may be used for the whitelist and blacklist, and for ordering the matrix rows
+  # which may be used for the allowlist and denylist, and for ordering the matrix rows
   # and columns. See the line:
   #   initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   #
@@ -461,45 +461,45 @@ new_cell_count_model <- function(ccs,
   assertthat::assert_that(is.null(penalty_matrix) || (!is.null(rownames(penalty_matrix)) && all(rownames(penalty_matrix) %in% ccs_cell_group_names)))
   assertthat::assert_that(is.null(penalty_matrix) || (!is.null(rownames(penalty_matrix)) && all(colnames(penalty_matrix) %in% ccs_cell_group_names)))
 
-  # Check the whitelist and blacklist for expected values.
-  assertthat::assert_that(is.null(whitelist) || (is.numeric(whitelist[[1]][[1]]) &&
-                                                 range(whitelist[[1]])[[1]] >= 0 &&
-                                                 range(whitelist[[1]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(whitelist[[1]][[1]])))
-  if (!all(whitelist[[1]] %in% ccs_cell_group_names)){
-    message ("Warning: whitelist refers to cell groups missing from cell count set")
+  # Check the allowlist and denylist for expected values.
+  assertthat::assert_that(is.null(allowlist) || (is.numeric(allowlist[[1]][[1]]) &&
+                                                 range(allowlist[[1]])[[1]] >= 0 &&
+                                                 range(allowlist[[1]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(allowlist[[1]][[1]])))
+  if (!all(allowlist[[1]] %in% ccs_cell_group_names)){
+    message ("Warning: allowlist refers to cell groups missing from cell count set")
   }
 
-  assertthat::assert_that(is.null(whitelist) || (is.numeric(whitelist[[2]][[1]]) &&
-                                                 range(whitelist[[2]])[[1]] >= 0 &&
-                                                 range(whitelist[[2]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(whitelist[[2]][[1]])))
-  if (!all(whitelist[[2]] %in% ccs_cell_group_names)){
-    message ("Warning: whitelist refers to cell groups missing from cell count set")
+  assertthat::assert_that(is.null(allowlist) || (is.numeric(allowlist[[2]][[1]]) &&
+                                                 range(allowlist[[2]])[[1]] >= 0 &&
+                                                 range(allowlist[[2]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(allowlist[[2]][[1]])))
+  if (!all(allowlist[[2]] %in% ccs_cell_group_names)){
+    message ("Warning: allowlist refers to cell groups missing from cell count set")
   }
 
-  assertthat::assert_that(is.null(blacklist) || (is.numeric(blacklist[[1]][[1]]) &&
-                                                 range(blacklist[[1]])[[1]] >= 0 &&
-                                                 range(blacklist[[1]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(blacklist[[1]][[1]])))
-  if (!all(blacklist[[1]] %in% ccs_cell_group_names)){
-    message ("Warning: blacklist refers to cell groups missing from cell count set")
+  assertthat::assert_that(is.null(denylist) || (is.numeric(denylist[[1]][[1]]) &&
+                                                 range(denylist[[1]])[[1]] >= 0 &&
+                                                 range(denylist[[1]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(denylist[[1]][[1]])))
+  if (!all(denylist[[1]] %in% ccs_cell_group_names)){
+    message ("Warning: denylist refers to cell groups missing from cell count set")
   }
 
 
-  assertthat::assert_that(is.null(blacklist) || (is.numeric(blacklist[[2]][[1]]) &&
-                                                 range(blacklist[[2]])[[1]] >= 0 &&
-                                                 range(blacklist[[2]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(blacklist[[2]][[1]])))
-  if (!all(blacklist[[2]] %in% ccs_cell_group_names)){
-    message ("Warning: blacklist refers to cell groups missing from cell count set")
+  assertthat::assert_that(is.null(denylist) || (is.numeric(denylist[[2]][[1]]) &&
+                                                 range(denylist[[2]])[[1]] >= 0 &&
+                                                 range(denylist[[2]])[[2]] <= ccs_num_cell_group) ||
+                                                (is.character(denylist[[2]][[1]])))
+  if (!all(denylist[[2]] %in% ccs_cell_group_names)){
+    message ("Warning: denylist refers to cell groups missing from cell count set")
   }
 
-  if (is.null(whitelist) == FALSE && is.character(whitelist[[2]][[1]]))
-    whitelist = whitelist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+  if (is.null(allowlist) == FALSE && is.character(allowlist[[2]][[1]]))
+    allowlist = allowlist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
 
-  if (is.null(blacklist) == FALSE && is.character(blacklist[[2]][[1]]))
-    blacklist = blacklist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+  if (is.null(denylist) == FALSE && is.character(denylist[[2]][[1]]))
+    denylist = denylist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
 
   assertthat::assert_that(assertthat::is.flag(verbose))
 
@@ -556,16 +556,16 @@ new_cell_count_model <- function(ccs,
 
   #pln_data <- as.name(deparse(substitute(pln_data)))
 
-  # Note: the whitelist and blacklist are applied later in this function
+  # Note: the allowlist and denylist are applied later in this function
   #       (new_cell_count_model), not in init_penalty_matrix() so the
   #       arguments in the call to init_penalty_matrix() are unused there.
-  #       This is so that the whitelist and blacklist penalties are applied
+  #       This is so that the allowlist and denylist penalties are applied
   #       to the user supplied penalty matrix.
     if (is.null(penalty_matrix)){
       if (penalize_by_distance){
         initial_penalties = init_penalty_matrix(ccs,
-                                                whitelist=whitelist,
-                                                blacklist=blacklist,
+                                                allowlist=allowlist,
+                                                denylist=denylist,
                                                 base_penalty=base_penalty,
                                                 min_penalty=min_penalty,
                                                 max_penalty=max_penalty,
@@ -585,14 +585,14 @@ new_cell_count_model <- function(ccs,
   # Note: this appears to work when the cell contents are character strings of cell.
   #       group names.
   if (is.null(initial_penalties) == FALSE){
-    if (is.null(whitelist) == FALSE){
-      initial_penalties[as.matrix(whitelist[,c(1,2)])] = min_penalty
-      initial_penalties[as.matrix(whitelist[,c(2,1)])] = min_penalty
+    if (is.null(allowlist) == FALSE){
+      initial_penalties[as.matrix(allowlist[,c(1,2)])] = min_penalty
+      initial_penalties[as.matrix(allowlist[,c(2,1)])] = min_penalty
     }
 
-    if (is.null(blacklist) == FALSE){
-      initial_penalties[as.matrix(blacklist[,c(1,2)])] = max_penalty
-      initial_penalties[as.matrix(blacklist[,c(2,1)])] = max_penalty
+    if (is.null(denylist) == FALSE){
+      initial_penalties[as.matrix(denylist[,c(1,2)])] = max_penalty
+      initial_penalties[as.matrix(denylist[,c(2,1)])] = max_penalty
     }
 
     #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
@@ -820,14 +820,14 @@ select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_fa
 }
 
 
-#' Initialize the PLN network penalty matrix, accepting optional whitelists and
-#' blacklists of edges that are "free" or "off limits" between cell groups
+#' Initialize the PLN network penalty matrix, accepting optional allowlists and
+#' denylists of edges that are "free" or "off limits" between cell groups
 #' @param ccs A cell_count_set of aggregated cell counts
-#' @param whitelist a data frame with two columns corresponding to (undirected) edges that should receive no penalty
-#' @param blacklist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
+#' @param allowlist a data frame with two columns corresponding to (undirected) edges that should receive no penalty
+#' @param denylist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
 #' @noRd
-init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6, penalty_scale_exponent=2, reduction_method="UMAP"){
+init_penalty_matrix = function(ccs, allowlist=NULL, denylist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6, penalty_scale_exponent=2, reduction_method="UMAP"){
   cell_group_centroids = centroids(ccs, reduction_method=reduction_method)
   dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
 
@@ -852,7 +852,7 @@ init_penalty_matrix = function(ccs, whitelist=NULL, blacklist=NULL, base_penalty
 
   penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, s=penalty_scale_exponent))
 
-  # TODO: add support for whitelisting and blacklisting
+  # TODO: add support for allowlisting and denylisting
   #qplot(as.numeric(dist_matrix), as.numeric(out))
   return(penalty_matrix)
 }

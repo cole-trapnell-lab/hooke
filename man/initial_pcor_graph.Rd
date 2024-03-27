@@ -2,7 +2,7 @@
 % Please edit documentation in R/edges.R
 \name{initial_pcor_graph}
 \alias{initial_pcor_graph}
-\title{Get an initial graph for use as a whitelist in fitting a cell count model}
+\title{Get an initial graph for use as a allowlist in fitting a cell count model}
 \usage{
 initial_pcor_graph(ccs)
 }
@@ -10,5 +10,5 @@ initial_pcor_graph(ccs)
 \item{ccs}{A cell_count_model object.}
 }
 \description{
-Get an initial graph for use as a whitelist in fitting a cell count model
+Get an initial graph for use as a allowlist in fitting a cell count model
 }

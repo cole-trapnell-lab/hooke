@@ -115,7 +115,7 @@ get_paga_graph <- function(cds, reduction_method = "UMAP", partition_q_value=0.0
   cluster_g
 }
 
-#' Get an initial graph for use as a whitelist in fitting a cell count model
+#' Get an initial graph for use as a allowlist in fitting a cell count model
 #'
 #' @param ccs A cell_count_model object.
 #'

@@ -9,8 +9,8 @@ new_cell_count_model(
   main_model_formula_str,
   nuisance_model_formula_str = "1",
   penalty_matrix = NULL,
-  whitelist = NULL,
-  blacklist = NULL,
+  allowlist = NULL,
+  denylist = NULL,
   sparsity_factor = 0.1,
   base_penalty = 1,
   min_penalty = 0.01,
@@ -48,11 +48,11 @@ the PLN model, where N is the number of cell types. Entries must be
 positive and the rows and columns must be named with the cell_group names.
 Use to specify an undirected graph prior for the PLN model.}
 
-\item{whitelist}{list A data frame with two columns corresponding to (undirected)
+\item{allowlist}{list A data frame with two columns corresponding to (undirected)
 edges that should receive min_penalty. The columns are integers that refer to
 cell clusters.}
 
-\item{blacklist}{list A data frame with two columns corresponding to (undirected)
+\item{denylist}{list A data frame with two columns corresponding to (undirected)
 edges that should receive max_penalty. The columns are integers that refer to
 cell clusters.}
 
@@ -62,11 +62,11 @@ names or integers that refer to cell_groups in penalty_matrix.}
 
 \item{base_penalty}{numeric A factor that scales the penalty matrix.}
 
-\item{min_penalty}{numeric A positive value that is assigned to whitelisted
-penalty matrix elements, which over-write existing values.}
+\item{min_penalty}{numeric A positive value that is assigned to penalty
+matrix elements in the allowlist, which over-write existing values.}
 
-\item{max_penalty}{numeric A positive value that is assigned to blacklisted
-penalty matrix elements. which over-write existing values.}
+\item{max_penalty}{numeric A positive value that is assigned to penalty
+matrix elements in the denylist, which over-write existing values.}
 
 \item{verbose}{logical Whether to emit verbose output.}
 
