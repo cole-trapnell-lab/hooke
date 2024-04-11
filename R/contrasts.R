@@ -268,7 +268,7 @@ estimate_abundances_cond = function(ccm,
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, min_log_abund=-5, ...) {
+estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, min_log_abund=-5, newdata = tibble()) {
   
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(is.numeric(interval_start))
@@ -278,26 +278,48 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
   
   #assertthat::assert_that(interval_col %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
   
-  timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step), ...)
+  # make it so that if new data has interval col in it, override
+  
+  timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step))
   colnames(timepoint_pred_df)[1] = interval_col
   
-  time_interval_pred_helper = function(tp, min_log_abund = min_log_abund, ...){
-    tp_tbl = tibble(IV=tp, ...)
-    colnames(tp_tbl)[1] = interval_col
-    estimate_abundances(ccm, tp_tbl, min_log_abund = min_log_abund)
+  if (interval_col %in% colnames(newdata)) {
+    newdata[[interval_col]] = NULL
+  }
+  
+  if (nrow(newdata) > 0) {
+    timepoint_pred_df = cross_join(timepoint_pred_df, newdata)
   }
   
   timepoint_pred_df = timepoint_pred_df %>%
-    dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
-      .f = time_interval_pred_helper, NA_real_),
-      .x = !!sym(interval_col),
-      min_log_abund = min_log_abund,
-      ...)) %>%
+    group_split(row_number(), .keep = FALSE) %>%
+    map_df(nest) %>% 
+    mutate(timepoint_abund = purrr::map(.f = estimate_abundances, 
+                                        .x = data, 
+                                        ccm = ccm, 
+                                        min_log_abund = min_log_abund)) %>% 
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
   
+  # time_interval_pred_helper = function(tp, ...){
+  #   tp_tbl = tibble(IV=tp, ...)
+  #   colnames(tp_tbl)[1] = interval_col
+  #   estimate_abundances(ccm, tp_tbl, min_log_abund = min_log_abund)
+  # }
+  # 
+  # cross_join(timepoint_pred_df, tibble(expt = "GAP16"))
+  # 
+  # timepoint_pred_df = timepoint_pred_df %>%
+  #   dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
+  #     .f = time_interval_pred_helper, NA_real_),
+  #     .x = !!sym(interval_col),
+  #     ...)) %>%
+  #   select(timepoint_abund) %>%
+  #   tidyr::unnest(c(timepoint_abund))
+  
   return(timepoint_pred_df)
 }
+
 
 
 
