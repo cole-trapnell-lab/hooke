@@ -31,7 +31,7 @@ my_pln_predict_cond <- function (ccm,
 
     type <- match.arg(type)
     pln_model <- match.arg(pln_model)
-
+    
     # Checks
     Yc <- as.matrix(cond_responses)
     sp_names <- colnames(model(ccm, model_to_return = pln_model)$model_par$B)
@@ -118,6 +118,10 @@ my_pln_predict_cond <- function (ccm,
 #' @export
 estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell_group") {
 
+  if (!tibble::is_tibble(newdata)) {
+    newdata = newdata %>% as_tibble()
+  }
+  
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(newdata))
   assertthat::assert_that(is.numeric(min_log_abund))
@@ -142,72 +146,89 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
 
 
   }
+  
+  estimate_abundance_row = function(ccm, model_terms, newdata, min_log_abund) {
+    
+    # assertthat::assert_that(
+    #   tryCatch(expr = length(missing_terms) == 0,
+    #            error = function(e) FALSE),
+    #   msg = paste0(missing_terms, " missing from newdata columns"))
+    
+    #stopifnot(nrow(newdata) == 1)
+    newdata$Offset = 1
+    
+    model_terms = terms(ccm@model_aux[["model_frame"]])
+    base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
+                                          xlev = ccm@model_aux[["xlevels"]])
+    
+    #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
+    #                  xlev = ccm@model_aux[["xlevels"]])
+    X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
+    
+    # if it doesn't exist, use orig computation
+    # if (is.na(ccm@bootstrapped_vhat)[[1]]) {
+    #   v_hat = compute_vhat(ccm)
+    # } else {
+    #   v_hat = ccm@bootstrapped_vhat
+    # }
+    
+    # vhat_coef <- coef(model(ccm), type="main")
+    
+    # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
+    v_hat <- ccm@vhat
+    v_hat_method <- ccm@vhat_method
+    
+    se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+    
+    # if (v_hat_method == "wald") {
+    #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
+    # } else {
+    #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+    # }
+    
+    pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
+    #pred_out = max(pred_out, -5)
+    #log_abund = pred_out[1,]
+    log_abund = as.numeric(pred_out)
+    
+    log_abund_sd = sqrt(Matrix::diag(coef(model(ccm), type="covariance")))
+    names(log_abund_sd) = colnames(coef(model(ccm), type="covariance"))
+    log_abund_se = se_fit
+    
+    below_thresh = log_abund < min_log_abund
+    log_abund[below_thresh] = min_log_abund
+    log_abund_se[below_thresh] = 0
+    
+    #max_log_abundances = log(matrixStats::colMaxs(pln_model$fitted))
+    #min_log_abundances = log(matrixStats::colMins(pln_model$fitted))
+    #percent_max = 100 * (exp(log_abund)/exp(max_log_abundances))
+    #percent_range = 100 * (exp(log_abund) - exp(min_log_abundances)) / (exp(max_log_abundances) - exp(min_log_abundances))
+    pred_out_tbl = tibble::tibble(!!cell_group:=colnames(pred_out),
+                                  log_abund,
+                                  log_abund_se)
+    pred_out_tbl = left_join(pred_out_tbl,  tibble::tibble(!!cell_group:=names(log_abund_sd), log_abund_sd), by=cell_group)
+    #max_log_abundances,
+    #min_log_abundances,
+    #percent_max,
+    #percent_range)
+    newdata$Offset = NULL
+    pred_out_tbl = cbind(newdata, pred_out_tbl)
+    pred_out_tbl <- tibble::tibble(pred_out_tbl)
+    
+  }
+  
+  pred_out_tbl = newdata %>% 
+    group_split(row_number(), .keep = FALSE) %>%
+    map_df(nest) %>% 
+    mutate(timepoint_abund = purrr::map(.f = estimate_abundance_row, 
+                                        .x = data, 
+                                        ccm = ccm, 
+                                        model_terms = model_terms,
+                                        min_log_abund = min_log_abund)) %>% 
+    select(timepoint_abund) %>%
+    tidyr::unnest(c(timepoint_abund))
 
-  # assertthat::assert_that(
-  #   tryCatch(expr = length(missing_terms) == 0,
-  #            error = function(e) FALSE),
-  #   msg = paste0(missing_terms, " missing from newdata columns"))
-
-  #stopifnot(nrow(newdata) == 1)
-  newdata$Offset = 1
-
-  model_terms = terms(ccm@model_aux[["model_frame"]])
-  base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
-                         xlev = ccm@model_aux[["xlevels"]])
-
-  #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
-  #                  xlev = ccm@model_aux[["xlevels"]])
-  X = Matrix::bdiag(rep.int(list(base_X), model(ccm)$p))
-
-  # if it doesn't exist, use orig computation
-  # if (is.na(ccm@bootstrapped_vhat)[[1]]) {
-  #   v_hat = compute_vhat(ccm)
-  # } else {
-  #   v_hat = ccm@bootstrapped_vhat
-  # }
-
-  # vhat_coef <- coef(model(ccm), type="main")
-
-  # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
-  v_hat <- ccm@vhat
-  v_hat_method <- ccm@vhat_method
-
-  se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
-
-  # if (v_hat_method == "wald") {
-  #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
-  # } else {
-  #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
-  # }
-
-  pred_out = my_plnnetwork_predict(ccm, newdata=newdata)
-  #pred_out = max(pred_out, -5)
-  #log_abund = pred_out[1,]
-  log_abund = as.numeric(pred_out)
-
-  log_abund_sd = sqrt(Matrix::diag(coef(model(ccm), type="covariance")))
-  names(log_abund_sd) = colnames(coef(model(ccm), type="covariance"))
-  log_abund_se = se_fit
-
-  below_thresh = log_abund < min_log_abund
-  log_abund[below_thresh] = min_log_abund
-  log_abund_se[below_thresh] = 0
-
-  #max_log_abundances = log(matrixStats::colMaxs(pln_model$fitted))
-  #min_log_abundances = log(matrixStats::colMins(pln_model$fitted))
-  #percent_max = 100 * (exp(log_abund)/exp(max_log_abundances))
-  #percent_range = 100 * (exp(log_abund) - exp(min_log_abundances)) / (exp(max_log_abundances) - exp(min_log_abundances))
-  pred_out_tbl = tibble::tibble(!!cell_group:=colnames(pred_out),
-                        log_abund,
-                        log_abund_se)
-  pred_out_tbl = left_join(pred_out_tbl,  tibble::tibble(!!cell_group:=names(log_abund_sd), log_abund_sd), by=cell_group)
-  #max_log_abundances,
-  #min_log_abundances,
-  #percent_max,
-  #percent_range)
-  newdata$Offset = NULL
-  pred_out_tbl = cbind(newdata, pred_out_tbl)
-  pred_out_tbl <- tibble::tibble(pred_out_tbl)
+  
 
   return(pred_out_tbl)
 }
@@ -229,7 +250,7 @@ estimate_abundances_cond = function(ccm,
                                     min_log_abund=-5,
                                     cell_group="cell_group",
                                     type = c("link", "response"),
-                                    pln_model = c("reduced", "full")) {
+                                    pln_model = c("full", "reduced")) {
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(newdata))
@@ -240,20 +261,63 @@ estimate_abundances_cond = function(ccm,
   pln_model <- match.arg(pln_model)
 
   newdata$Offset = 1
-  pred_out = my_pln_predict_cond(ccm, newdata,
-                                 cond_responses,
-                                 type=type,
-                                 pln_model=pln_model)
-  log_abund = as.numeric(pred_out)
-  newdata$Offset = NULL
-
-  below_thresh = log_abund < min_log_abund
-  log_abund[below_thresh] = min_log_abund
-
-  pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
-
-  pred_out_tbl = cbind(newdata, pred_out_tbl)
-  pred_out_tbl <- tibble::tibble(pred_out_tbl)
+  
+  cond_responses = t(as.matrix(cond_responses))
+  if (nrow(cond_responses) != nrow(newdata) & nrow(newdata)==1 ){
+    newdata = newdata %>% slice(rep(1:n(), each = nrow(cond_responses)))
+  } else if (nrow(cond_responses) == nrow(newdata)) {
+    newdata = newdata
+  }else {
+   stop("The number of rows of cond_responses must match the number of rows in newdata or the newdata must have one row.")
+  }
+  
+  
+  estimate_abundance_cond_row = function(ccm, newdata, cond_responses,
+                                        type=type,
+                                        pln_model=pln_model) {
+    pred_out = my_pln_predict_cond(ccm, newdata,
+                                   cond_responses,
+                                   type=type,
+                                   pln_model=pln_model)
+    log_abund = as.numeric(pred_out)
+    newdata$Offset = NULL
+    
+    below_thresh = log_abund < min_log_abund
+    log_abund[below_thresh] = min_log_abund
+    
+    pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
+    
+    pred_out_tbl = cbind(newdata, pred_out_tbl)
+    pred_out_tbl <- tibble::tibble(pred_out_tbl)
+  }
+  
+  
+  x = newdata %>% 
+    group_split(row_number(), .keep = FALSE) %>%
+    map_df(nest)
+  colnames(x) = "x"
+  
+  y = cond_responses %>% as.data.frame %>% 
+    group_split(row_number(), .keep = FALSE) %>%
+    map_df(nest)
+  colnames(y) = "y"
+  
+  
+  pred_out_tbl = cbind(x, y) %>% 
+    ungroup() %>% 
+    mutate(rn = row_number()) %>% group_by(rn) %>% 
+    mutate(timepoint_abund = purrr::map2(.f = estimate_abundance_cond_row, 
+                                        .x = x, 
+                                        .y = y, 
+                                        ccm = ccm, 
+                                        type=type, 
+                                        pln_model=pln_model)) %>% 
+    select(timepoint_abund) %>%
+    tidyr::unnest(c(timepoint_abund)) 
+  
+  pred_out_tbl$rn =NULL
+  
+ 
   return(pred_out_tbl)
 }
 
