@@ -712,8 +712,11 @@ new_cell_count_model <- function(ccs,
   })
 
 
-  model_frame = model.frame(full_model_formula[-2], pln_data)
-  xlevels = .getXlevels(terms(model_frame), model_frame)
+  full_model_frame = model.frame(full_model_formula[-2], pln_data)
+  full_model_xlevels = .getXlevels(terms(full_model_frame), full_model_frame)
+
+  reduced_model_frame = model.frame(reduced_model_formula[-2], pln_data)
+  reduced_model_xlevels = .getXlevels(terms(reduced_model_frame), reduced_model_frame)
 
   # Choose a model that isn't very aggressively sparsified
   best_reduced_model <- PLNmodels::getBestModel(reduced_pln_model, "EBIC")
@@ -756,7 +759,10 @@ new_cell_count_model <- function(ccs,
                       best_reduced_model = best_reduced_model,
                       reduced_model_family = reduced_pln_model,
                       sparsity = sparsity_factor,
-                      model_aux = SimpleList(model_frame=model_frame, xlevels=xlevels),
+                      model_aux = SimpleList(full_model_frame=full_model_frame,
+                                             full_model_xlevels=full_model_xlevels,
+                                             reduced_model_frame=reduced_model_frame,
+                                             reduced_model_xlevels=reduced_model_xlevels),
                       vhat = vhat,
                       vhat_method = vhat_method,
                       info=SimpleList()
