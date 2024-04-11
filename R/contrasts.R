@@ -4,9 +4,9 @@
 my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), envir = parent.frame())
 {
   type = match.arg(type)
-  X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
-                         xlev = ccm@model_aux[["xlevels"]])
-  #O <- model.offset(ccm@model_aux[["model_frame"]])
+  X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+                         xlev = ccm@model_aux[["full_model_xlevels"]])
+  #O <- model.offset(ccm@model_aux[["full_model_frame"]])
   EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
   #if (!is.null(O))
   #  EZ <- EZ + O
@@ -46,8 +46,13 @@ my_pln_predict_cond <- function (ccm,
 
     ## Extract the model matrices from the new data set with initial formula
     # X <- model.matrix(formula(private$formula)[-2], newdata, xlev = attr(private$formula, "xlevels"))
-    X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
-                      xlev = ccm@model_aux[["xlevels"]])
+    if (pln_model == "full"){
+      X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+                      xlev = ccm@model_aux[["full_model_xlevels"]])
+    }else if (pln_model == "reduced"){
+      X <- model.matrix(terms(ccm@model_aux[["reduced_model_frame"]]), newdata,
+                        xlev = ccm@model_aux[["reduced_model_xlevels"]])
+    }
 
     # O <- model.offset(model.frame(formula(ccm@full_model_formula)[-2], newdata))
     O <- NULL
@@ -124,24 +129,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
   assertthat::assert_that(is.character(cell_group))
 
   # check that all terms in new data have been specified
-  missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
-
-  if (length(missing_terms) >= 1) {
-
-    default_df = lapply(missing_terms, function(term){
-      df = data.frame(t = levels(factor(colData(ccm@ccs)[[term]]))[1])
-      names(df) = term
-      df
-    }) %>% bind_cols()
-
-    newdata = cbind(newdata, tibble(default_df))
-
-    print( paste0(paste(missing_terms,collapse = ", "),
-                  " missing from specified newdata columns. Assuming default values: ",
-                  paste(default_df[1,],collapse = ", ")))
-
-
-  }
+  newdata = fill_missing_terms_with_default_values(ccm, newdata, pln_model = "full")
 
   # assertthat::assert_that(
   #   tryCatch(expr = length(missing_terms) == 0,
@@ -151,9 +139,9 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
   #stopifnot(nrow(newdata) == 1)
   newdata$Offset = 1
 
-  model_terms = terms(ccm@model_aux[["model_frame"]])
+  model_terms = terms(ccm@model_aux[["full_model_frame"]])
   base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
-                         xlev = ccm@model_aux[["xlevels"]])
+                         xlev = ccm@model_aux[["full_model_xlevels"]])
 
   #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
   #                  xlev = ccm@model_aux[["xlevels"]])
@@ -217,6 +205,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
 #'
 #' @param ccm A cell_count_model.
 #' @param newdata tibble A tibble of variables used for the prediction.
+#' Must either be a single row or a tibble with one row per sample of the cell
+#' count set for ccm.
 #' @param cond_responses a data frame containing the counts of the observed variables
 #' @param min_log_abund numeric Minimum log abundance value.
 #' @param cell_group string The name of the groups that are being estimated.
@@ -239,20 +229,34 @@ estimate_abundances_cond = function(ccm,
   type <- match.arg(type)
   pln_model <- match.arg(pln_model)
 
+  newdata = fill_missing_terms_with_default_values(ccm, newdata, pln_model)
+
   newdata$Offset = 1
   pred_out = my_pln_predict_cond(ccm, newdata,
                                  cond_responses,
                                  type=type,
                                  pln_model=pln_model)
-  log_abund = as.numeric(pred_out)
+  log_abund = as.numeric(t(pred_out))
   newdata$Offset = NULL
 
   below_thresh = log_abund < min_log_abund
   log_abund[below_thresh] = min_log_abund
 
-  pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
+  #pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
+  pred_out_tbl = cbind(
+    cell_group=rep(colnames(pred_out), each=length(log_abund)/ncol(pred_out)),
+    #log_abund,
+    do.call("rbind", replicate(length(log_abund)/nrow(newdata),  newdata, simplify=FALSE))
+  )
 
-  pred_out_tbl = cbind(newdata, pred_out_tbl)
+  pred_out_tbl = left_join(pred_out_tbl,
+                           tibble(log_abund = log_abund,
+                                  cell_group=rep(colnames(pred_out), times=length(log_abund)/ncol(pred_out)),
+                                  sample=rep(newdata$sample, each=length(log_abund)/nrow(newdata))),
+                           by=c("cell_group", "sample"))
+  #pred_out_tbl$log_abund = log_abund
+
+  #pred_out_tbl = cbind(newdata, pred_out_tbl)
   pred_out_tbl <- tibble::tibble(pred_out_tbl)
   return(pred_out_tbl)
 }
@@ -268,25 +272,29 @@ estimate_abundances_cond = function(ccm,
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col="timepoint", interval_step=2, min_log_abund=-5, ...) {
-  
+estimate_abundances_over_interval <- function(ccm,
+                                              interval_start,
+                                              interval_stop,
+                                              interval_col="timepoint",
+                                              interval_step=2,
+                                              min_log_abund=-5,
+                                              ...) {
+
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(is.numeric(interval_start))
   assertthat::assert_that(is.numeric(interval_stop))
   assertthat::assert_that(interval_stop >= interval_start)
   assertthat::assert_that(is.numeric(interval_step))
-  
-  #assertthat::assert_that(interval_col %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
-  
+
   timepoint_pred_df = tibble(IV= seq(interval_start, interval_stop, interval_step), ...)
   colnames(timepoint_pred_df)[1] = interval_col
-  
+
   time_interval_pred_helper = function(tp, min_log_abund = min_log_abund, ...){
     tp_tbl = tibble(IV=tp, ...)
     colnames(tp_tbl)[1] = interval_col
     estimate_abundances(ccm, tp_tbl, min_log_abund = min_log_abund)
   }
-  
+
   timepoint_pred_df = timepoint_pred_df %>%
     dplyr::mutate(timepoint_abund = purrr::map(.f = purrr::possibly(
       .f = time_interval_pred_helper, NA_real_),
@@ -295,7 +303,7 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
       ...)) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
-  
+
   return(timepoint_pred_df)
 }
 
