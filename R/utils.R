@@ -732,5 +732,31 @@ get_norm_df = function(ccs) {
 
 
 
-
+fill_missing_terms_with_default_values = function(ccm, newdata, pln_model = c("full", "reduced"), verbose=FALSE){
+  pln_model <- match.arg(pln_model)
+  
+  # check that all terms in new data have been specified
+  if (pln_model == "reduced")
+    missing_terms = setdiff(names(ccm@model_aux[["reduced_model_xlevels"]]), names(newdata))
+  else if (pln_model == "full")
+    missing_terms = setdiff(names(ccm@model_aux[["full_model_xlevels"]]), names(newdata))
+  
+  if (length(missing_terms) >= 1) {
+    
+    default_df = lapply(missing_terms, function(term){
+      df = data.frame(t = levels(factor(colData(ccm@ccs)[[term]]))[1])
+      names(df) = term
+      df
+    }) %>% bind_cols()
+    
+    newdata = cbind(newdata, tibble(default_df))
+    
+    if (verbose){
+      print( paste0(paste(missing_terms,collapse = ", "),
+                    " missing from specified newdata columns. Assuming default values: ",
+                    paste(default_df[1,],collapse = ", ")))
+    }
+  }
+  return (newdata)
+}
 

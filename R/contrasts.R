@@ -4,9 +4,9 @@
 my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), envir = parent.frame())
 {
   type = match.arg(type)
-  X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
-                         xlev = ccm@model_aux[["xlevels"]])
-  #O <- model.offset(ccm@model_aux[["model_frame"]])
+  X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+                    xlev = ccm@model_aux[["full_model_xlevels"]])
+  #O <- model.offset(ccm@model_aux[["full_model_frame"]])
   EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
   #if (!is.null(O))
   #  EZ <- EZ + O
@@ -16,6 +16,7 @@ my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), e
   attr(results, "type") <- type
   results
 }
+
 
 
 
@@ -46,8 +47,16 @@ my_pln_predict_cond <- function (ccm,
 
     ## Extract the model matrices from the new data set with initial formula
     # X <- model.matrix(formula(private$formula)[-2], newdata, xlev = attr(private$formula, "xlevels"))
-    X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
-                      xlev = ccm@model_aux[["xlevels"]])
+    # X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
+                      # xlev = ccm@model_aux[["xlevels"]])
+    
+    if (pln_model == "full"){
+      X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+                        xlev = ccm@model_aux[["full_model_xlevels"]])
+    }else if (pln_model == "reduced"){
+      X <- model.matrix(terms(ccm@model_aux[["reduced_model_frame"]]), newdata,
+                        xlev = ccm@model_aux[["reduced_model_xlevels"]])
+    }
 
     # O <- model.offset(model.frame(formula(ccm@full_model_formula)[-2], newdata))
     O <- NULL
@@ -128,24 +137,26 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
   assertthat::assert_that(is.character(cell_group))
 
   # check that all terms in new data have been specified
-  missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
-
-  if (length(missing_terms) >= 1) {
-
-    default_df = lapply(missing_terms, function(term){
-      df = data.frame(t = levels(factor(colData(ccm@ccs)[[term]]))[1])
-      names(df) = term
-      df
-    }) %>% bind_cols()
-
-    newdata = cbind(newdata, tibble(default_df))
-
-    print( paste0(paste(missing_terms,collapse = ", "),
-                  " missing from specified newdata columns. Assuming default values: ",
-                  paste(default_df[1,],collapse = ", ")))
-
-
-  }
+  # missing_terms = setdiff(names(ccm@model_aux$xlevels), names(newdata))
+  # 
+  # if (length(missing_terms) >= 1) {
+  # 
+  #   default_df = lapply(missing_terms, function(term){
+  #     df = data.frame(t = levels(factor(colData(ccm@ccs)[[term]]))[1])
+  #     names(df) = term
+  #     df
+  #   }) %>% bind_cols()
+  # 
+  #   newdata = cbind(newdata, tibble(default_df))
+  # 
+  #   print( paste0(paste(missing_terms,collapse = ", "),
+  #                 " missing from specified newdata columns. Assuming default values: ",
+  #                 paste(default_df[1,],collapse = ", ")))
+  # 
+  # 
+  # }
+  
+  newdata = fill_missing_terms_with_default_values(ccm, newdata, pln_model = "full")
   
   estimate_abundance_row = function(ccm, model_terms, newdata, min_log_abund) {
     
@@ -157,9 +168,9 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
     #stopifnot(nrow(newdata) == 1)
     newdata$Offset = 1
     
-    model_terms = terms(ccm@model_aux[["model_frame"]])
+    model_terms = terms(ccm@model_aux[["full_model_frame"]])
     base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
-                                          xlev = ccm@model_aux[["xlevels"]])
+                                          xlev = ccm@model_aux[["full_model_xlevels"]])
     
     #base_X <- model.matrix(formula(ccm@model_formula_str)[-2], newdata,
     #                  xlev = ccm@model_aux[["xlevels"]])
@@ -217,7 +228,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
     
   }
   
-  pred_out_tbl = newdata %>% 
+  pred_out_tbl = newdata %>% as.data.frame %>% 
     group_split(row_number(), .keep = FALSE) %>%
     map_df(nest) %>% 
     mutate(timepoint_abund = purrr::map(.f = estimate_abundance_row, 
@@ -229,7 +240,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
     tidyr::unnest(c(timepoint_abund))
 
   
-
+  pred_out_tbl <- tibble::tibble(pred_out_tbl)
   return(pred_out_tbl)
 }
 
@@ -238,6 +249,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
 #'
 #' @param ccm A cell_count_model.
 #' @param newdata tibble A tibble of variables used for the prediction.
+# Must either be a single row or a tibble with one row per sample of the cell
+#' count set for ccm.
 #' @param cond_responses a data frame containing the counts of the observed variables
 #' @param min_log_abund numeric Minimum log abundance value.
 #' @param cell_group string The name of the groups that are being estimated.
@@ -251,6 +264,10 @@ estimate_abundances_cond = function(ccm,
                                     cell_group="cell_group",
                                     type = c("link", "response"),
                                     pln_model = c("full", "reduced")) {
+  
+  if (!tibble::is_tibble(newdata)) {
+    newdata = newdata %>% as_tibble()
+  }
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(newdata))
@@ -259,7 +276,8 @@ estimate_abundances_cond = function(ccm,
 
   type <- match.arg(type)
   pln_model <- match.arg(pln_model)
-
+  
+  newdata = fill_missing_terms_with_default_values(ccm, newdata, pln_model)
   newdata$Offset = 1
   
   cond_responses = t(as.matrix(cond_responses))
@@ -274,41 +292,62 @@ estimate_abundances_cond = function(ccm,
   
   estimate_abundance_cond_row = function(ccm, newdata, cond_responses,
                                         type=type,
-                                        pln_model=pln_model) {
+                                        pln_model=pln_model, 
+                                        min_log_abund = -5) {
+    
+    newdata$Offset = 1
+  
+    
     pred_out = my_pln_predict_cond(ccm, newdata,
                                    cond_responses,
                                    type=type,
                                    pln_model=pln_model)
     log_abund = as.numeric(pred_out)
+    log_abund = as.numeric(t(pred_out))
     newdata$Offset = NULL
     
     below_thresh = log_abund < min_log_abund
     log_abund[below_thresh] = min_log_abund
+    # log_abund_se[below_thresh] = 0
     
-    pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
     
-    pred_out_tbl = cbind(newdata, pred_out_tbl)
+    # pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
+    # pred_out_tbl = cbind(newdata, pred_out_tbl)
+    # pred_out_tbl <- tibble::tibble(pred_out_tbl)
+    pred_out_tbl = cbind(
+      cell_group=rep(colnames(pred_out), each=length(log_abund)/ncol(pred_out)),
+      log_abund,
+      # log_abund_se, 
+      do.call("rbind", replicate(length(log_abund)/nrow(newdata),  newdata, simplify=FALSE))
+    )
+    # pred_out_tbl = left_join(pred_out_tbl,
+    #                          tibble(log_abund = log_abund,
+    #                                 cell_group=rep(colnames(pred_out), times=length(log_abund)/ncol(pred_out)),
+    #                                 sample=rep(newdata$sample, each=length(log_abund)/nrow(newdata))),
+    #                          by=c("cell_group", "sample"))
     pred_out_tbl <- tibble::tibble(pred_out_tbl)
+    return(pred_out_tbl)
   }
   
   
-  x = newdata %>% 
+  newdata_nest = newdata %>% 
     group_split(row_number(), .keep = FALSE) %>%
     map_df(nest)
-  colnames(x) = "x"
+  colnames(newdata_nest) = "data"
   
-  y = cond_responses %>% as.data.frame %>% 
+  cond_responses_nest = cond_responses %>% as.data.frame %>% 
     group_split(row_number(), .keep = FALSE) %>%
     map_df(nest)
-  colnames(y) = "y"
+  colnames(cond_responses_nest) = "cond_response"
   
+
   
-  pred_out_tbl = cbind(x, y) %>% 
+  pred_out_tbl = cbind(newdata_nest, cond_responses_nest) %>% 
     ungroup() %>% 
     mutate(rn = row_number()) %>% group_by(rn) %>% 
     mutate(timepoint_abund = purrr::map2(.f = estimate_abundance_cond_row, 
-                                        .x = x, 
-                                        .y = y, 
+                                        .x = data, 
+                                        .y = cond_response, 
                                         ccm = ccm, 
                                         type=type, 
                                         pln_model=pln_model)) %>% 
