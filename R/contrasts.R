@@ -230,7 +230,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
   
   pred_out_tbl = newdata %>% as.data.frame %>% 
     group_split(row_number(), .keep = FALSE) %>%
-    purrr::map_df(nest) %>% 
+    purrr::map_df(tidyr::nest) %>% 
     mutate(timepoint_abund = purrr::map(.f = estimate_abundance_row, 
                                         .x = data, 
                                         ccm = ccm, 
@@ -332,12 +332,12 @@ estimate_abundances_cond = function(ccm,
   
   newdata_nest = newdata %>% 
     group_split(row_number(), .keep = FALSE) %>%
-    purrr::map_df(nest)
+    purrr::map_df(tidyr::nest)
   colnames(newdata_nest) = "data"
   
   cond_responses_nest = cond_responses %>% as.data.frame %>% 
     group_split(row_number(), .keep = FALSE) %>%
-    purrr::map_df(nest)
+    purrr::map_df(tidyr::nest)
   colnames(cond_responses_nest) = "cond_response"
   
 
@@ -396,7 +396,7 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
   
   timepoint_pred_df = timepoint_pred_df %>%
     group_split(row_number(), .keep = FALSE) %>%
-    purrr::map_df(nest) %>% 
+    purrr::map_df(tidyr::nest) %>% 
     mutate(timepoint_abund = purrr::map(.f = estimate_abundances, 
                                         .x = data, 
                                         ccm = ccm, 
