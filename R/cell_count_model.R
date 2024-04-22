@@ -874,6 +874,7 @@ init_penalty_matrix = function(ccs, allowlist=NULL, denylist=NULL, base_penalty 
 #' @param character interval_var
 #' @param numeric interval_start Interval start value.
 #' @param numeric interval_stop Interval stop value.
+#' @import splines
 #' @return An interval model formula.
 #' @export
 build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){

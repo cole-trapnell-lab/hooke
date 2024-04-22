@@ -329,7 +329,6 @@ estimate_abundances_cond = function(ccm,
     return(pred_out_tbl)
   }
   
-  
   newdata_nest = newdata %>% 
     group_split(row_number(), .keep = FALSE) %>%
     purrr::map_df(tidyr::nest)
@@ -339,8 +338,6 @@ estimate_abundances_cond = function(ccm,
     group_split(row_number(), .keep = FALSE) %>%
     purrr::map_df(tidyr::nest)
   colnames(cond_responses_nest) = "cond_response"
-  
-
   
   pred_out_tbl = cbind(newdata_nest, cond_responses_nest) %>% 
     ungroup() %>% 
