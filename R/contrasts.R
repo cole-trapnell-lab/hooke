@@ -53,7 +53,7 @@ my_pln_predict_cond <- function (ccm,
     if (pln_model == "full"){
       X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
                         xlev = ccm@model_aux[["full_model_xlevels"]])
-    }else if (pln_model == "reduced"){
+    } else if (pln_model == "reduced"){
       X <- model.matrix(terms(ccm@model_aux[["reduced_model_frame"]]), newdata,
                         xlev = ccm@model_aux[["reduced_model_xlevels"]])
     }
@@ -249,7 +249,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
 #'
 #' @param ccm A cell_count_model.
 #' @param newdata tibble A tibble of variables used for the prediction.
-# Must either be a single row or a tibble with one row per sample of the cell
+#  Must either be a single row or a tibble with one row per sample of the cell
 #' count set for ccm.
 #' @param cond_responses a data frame containing the counts of the observed variables
 #' @param min_log_abund numeric Minimum log abundance value.
@@ -285,7 +285,7 @@ estimate_abundances_cond = function(ccm,
     newdata = newdata %>% slice(rep(1:n(), each = nrow(cond_responses)))
   } else if (nrow(cond_responses) == nrow(newdata)) {
     newdata = newdata
-  }else {
+  } else {
    stop("The number of rows of cond_responses must match the number of rows in newdata or the newdata must have one row.")
   }
   
@@ -302,14 +302,13 @@ estimate_abundances_cond = function(ccm,
                                    cond_responses,
                                    type=type,
                                    pln_model=pln_model)
-    log_abund = as.numeric(pred_out)
+    # log_abund = as.numeric(pred_out)
     log_abund = as.numeric(t(pred_out))
     newdata$Offset = NULL
     
     below_thresh = log_abund < min_log_abund
     log_abund[below_thresh] = min_log_abund
     # log_abund_se[below_thresh] = 0
-    
     
     # pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
     # pred_out_tbl = cbind(newdata, pred_out_tbl)
@@ -320,11 +319,13 @@ estimate_abundances_cond = function(ccm,
       # log_abund_se, 
       do.call("rbind", replicate(length(log_abund)/nrow(newdata),  newdata, simplify=FALSE))
     )
+    
     # pred_out_tbl = left_join(pred_out_tbl,
     #                          tibble(log_abund = log_abund,
     #                                 cell_group=rep(colnames(pred_out), times=length(log_abund)/ncol(pred_out)),
     #                                 sample=rep(newdata$sample, each=length(log_abund)/nrow(newdata))),
     #                          by=c("cell_group", "sample"))
+    
     pred_out_tbl <- tibble::tibble(pred_out_tbl)
     return(pred_out_tbl)
   }
