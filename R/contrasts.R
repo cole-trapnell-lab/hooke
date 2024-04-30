@@ -330,19 +330,24 @@ estimate_abundances_cond = function(ccm,
     return(pred_out_tbl)
   }
   
-  newdata_nest = newdata %>% 
+  # newdata_nest = newdata %>%
+  #   group_split(row_number(), .keep = FALSE) %>%
+  #   purrr::map_df(tidyr::nest)
+  # colnames(newdata_nest) = "data"
+  # # 
+  # cond_responses_nest = cond_responses %>% as.data.frame %>%
+  #   group_split(row_number(), .keep = FALSE) %>%
+  #   purrr::map_df(tidyr::nest)
+  # colnames(cond_responses_nest) = "cond_response"
+  # 
+  # pred_out_tbl = cbind(newdata_nest, cond_responses_nest) %>% 
+  #   ungroup() %>% 
+  #   mutate(rn = row_number()) %>% group_by(rn) %>% 
+  pred_out_tbl = cbind(newdata, cond_responses) %>% 
     group_split(row_number(), .keep = FALSE) %>%
-    purrr::map_df(tidyr::nest)
-  colnames(newdata_nest) = "data"
-  
-  cond_responses_nest = cond_responses %>% as.data.frame %>% 
-    group_split(row_number(), .keep = FALSE) %>%
-    purrr::map_df(tidyr::nest)
-  colnames(cond_responses_nest) = "cond_response"
-  
-  pred_out_tbl = cbind(newdata_nest, cond_responses_nest) %>% 
-    ungroup() %>% 
-    mutate(rn = row_number()) %>% group_by(rn) %>% 
+    purrr::map_df(tidyr::nest, 
+                  data = colnames(newdata), 
+                  cond_response = colnames(cond_responses)) %>% 
     mutate(timepoint_abund = purrr::map2(.f = estimate_abundance_cond_row, 
                                         .x = data, 
                                         .y = cond_response, 
