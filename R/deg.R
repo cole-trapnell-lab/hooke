@@ -2,14 +2,31 @@
 #' @param ccs a cell count set object
 #' @param state_col column to aggregate expression. Defaults using the cell_group used in ccs construction.
 #' @param collapse_samples boolean Whether to collapse sample groups into one.
+#' @param gene_group_df A dataframe in which the first column contains gene ids or short gene names and the second contains group membership for creating metagene. If NULL, genes are not grouped.
+#' @param agg_rowdata A dataframe with metagene information, with the rows equal to the number of gene groupings. Must be specified if `gene_group_df` is not NULL. Otherwise this is ignored.
 #' @export
 pseudobulk_ccs_for_states <- function(ccs,
-                                      state_col=NULL,
-                                      collapse_samples=FALSE,
+                                      state_col = NULL,
+                                      collapse_samples = FALSE,
+                                      gene_group_df = NULL,
+                                      agg_rowdata = NULL,
                                       cell_agg_fun = "mean",
-                                      norm_method="size_only",
+                                      gene_agg_fun = "sum",
+                                      norm_method = "size_only",
                                       scale_agg_values = FALSE,
                                       pseudocount = 0){
+
+  if (!is.null(gene_group_df)) {
+    assertthat::assert_that(
+      !is.null(agg_rowdata),
+      msg = "agg_rowdata must be specified if gene_group_df is not NULL"
+    )
+
+    assertthat::assert_that(
+      is.data.frame(agg_rowdata) && nrow(agg_rowdata) == length(unique(gene_group_df[[2]])),
+      msg = "agg_rowdata must be a data.frame with the same number of rows as the number of unique values in the second column of gene_group_df"
+    )
+  }
 
   if (is.null(state_col)){
     cell_group_df = tibble::rownames_to_column(ccs@metadata[["cell_group_assignments"]])
@@ -37,14 +54,35 @@ pseudobulk_ccs_for_states <- function(ccs,
       as.data.frame
   }
 
-  agg_expr_mat = monocle3::aggregate_gene_expression(ccs@cds,
-                                                     cell_group_df=cell_group_df,
-                                                     norm_method=norm_method,
-                                                     scale_agg_values = scale_agg_values,
-                                                     pseudocount=pseudocount,
-                                                     cell_agg_fun=cell_agg_fun)
+  if (is.null(gene_group_df)) {
+    agg_expr_mat = monocle3::aggregate_gene_expression(ccs@cds,
+                                                       cell_group_df=cell_group_df,
+                                                       norm_method=norm_method,
+                                                       scale_agg_values = scale_agg_values,
+                                                       pseudocount=pseudocount,
+                                                       cell_agg_fun=cell_agg_fun)
 
-  agg_expr_mat = as(agg_expr_mat, "dgCMatrix") 
+    agg_rowdata = rowData(ccs@cds) %>% as.data.frame()
+
+  }
+  else {
+    sub_cds = ccs@cds[gene_group_df$id,]
+    agg_expr_mat = monocle3::aggregate_gene_expression(
+      sub_cds,
+      cell_group_df = cell_group_df,
+      gene_group_df = gene_group_df,
+      norm_method = norm_method,
+      scale_agg_values = scale_agg_values,
+      pseudocount = pseudocount,
+      cell_agg_fun = cell_agg_fun,
+      gene_agg_fun = gene_agg_fun
+    )
+
+    agg_rowdata = agg_rowdata[row.names(agg_expr_mat),]
+  }
+
+
+  agg_expr_mat = as(agg_expr_mat, "dgCMatrix")
   agg_expr_mat = agg_expr_mat[,agg_coldata$pseudobulk_id]
 
   row.names(agg_coldata) = agg_coldata$pseudobulk_id
@@ -63,7 +101,7 @@ pseudobulk_ccs_for_states <- function(ccs,
   agg_coldata = left_join(agg_coldata, ccs_covariates_df, by = "sample")
   row.names(agg_coldata) = agg_coldata$pseudobulk_id
 
-  pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, rowData(ccs@cds) %>% as.data.frame)
+  pseudobulk_cds = new_cell_data_set(agg_expr_mat, cell_metadata = agg_coldata, agg_rowdata)
   pseudobulk_cds = estimate_size_factors(pseudobulk_cds, round_exprs = FALSE)
   return(pseudobulk_cds)
 }
