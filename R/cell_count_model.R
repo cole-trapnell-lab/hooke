@@ -356,6 +356,23 @@ new_cell_count_set <- function(cds,
 }
 
 
+# construct an empty ccs object
+empty_ccs <- function() {
+  
+  suppressMessages(
+    methods::new("cell_count_set",
+               new_cell_data_set(hooke:::empty_sparse_matrix(format="C")),
+               cds=ccm@ccs@cds,
+               cds_coldata=tibble(),
+               cds_reduced_dims=SimpleList(),
+               info=SimpleList(sample_group="",
+                               cell_group="",
+                               norm_method = ""))
+  )
+}
+
+
+
 
 
 #' Create a new cell_count_model object.
@@ -417,6 +434,7 @@ new_cell_count_model <- function(ccs,
                                  max_penalty=1e6,
                                  verbose=FALSE,
                                  pseudocount=0,
+                                 keep_ccs=TRUE,
                                  pln_min_ratio=0.001,
                                  pln_num_penalties=30,
                                  vhat_method = c("bootstrap", "variational_var", "jackknife"),
@@ -770,6 +788,11 @@ new_cell_count_model <- function(ccs,
                       vhat_method = vhat_method,
                       info=SimpleList()
                       )
+  
+  if (keep_ccs == FALSE) {
+    ccm@ccs = empty_ccs()
+  }
+  
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
   # clusters <- stats::setNames(SimpleList(), character(0))
@@ -778,7 +801,7 @@ new_cell_count_model <- function(ccs,
   #ccm@model_aux[["best_model"]] = best_model
   #ccm@model_aux[["model_family"]] = pln_model
 
-  ccm
+  return(ccm)
 }
 
 
