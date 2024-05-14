@@ -17,6 +17,7 @@ new_cell_count_model(
   max_penalty = 1e+06,
   verbose = FALSE,
   pseudocount = 0,
+  keep_ccs = TRUE,
   pln_min_ratio = 0.001,
   pln_num_penalties = 30,
   vhat_method = c("bootstrap", "variational_var", "jackknife"),
