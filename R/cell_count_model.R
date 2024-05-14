@@ -362,7 +362,7 @@ empty_ccs <- function() {
   suppressMessages(
     methods::new("cell_count_set",
                new_cell_data_set(hooke:::empty_sparse_matrix(format="C")),
-               cds=ccm@ccs@cds,
+               cds=new_cell_data_set(empty_sparse_matrix(format="C")),
                cds_coldata=tibble(),
                cds_reduced_dims=SimpleList(),
                info=SimpleList(sample_group="",
