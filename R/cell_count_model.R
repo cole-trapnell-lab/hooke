@@ -421,7 +421,7 @@ empty_ccs <- function() {
 #' @importFrom PLNmodels PLNnetwork
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
-#' @import spines
+#' @import splines
 #' @export
 new_cell_count_model <- function(ccs,
                                  main_model_formula_str,
