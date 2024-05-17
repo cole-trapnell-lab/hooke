@@ -398,8 +398,6 @@ empty_ccs <- function() {
 #'    edges that should receive max_penalty. The columns are integers that refer to
 #'    cell clusters.
 #' @param sparsity_factor A positive number to control how sparse the PLN network is. Larger values make the network more sparse.
-#'    edges that should receive min_penalty. The columns are either cell_group
-#'    names or integers that refer to cell_groups in penalty_matrix.
 #' @param base_penalty numeric A factor that scales the penalty matrix.
 #' @param min_penalty numeric A positive value that is assigned to penalty
 #'    matrix elements in the allowlist, which over-write existing values.
