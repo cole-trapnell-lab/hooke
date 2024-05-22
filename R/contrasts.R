@@ -4,8 +4,11 @@
 my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), envir = parent.frame())
 {
   type = match.arg(type)
-  X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+  # X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+  #                   xlev = ccm@model_aux[["full_model_xlevels"]])
+  X <- model.matrix(ccm@model_aux[["full_model_terms"]], newdata,
                     xlev = ccm@model_aux[["full_model_xlevels"]])
+  
   #O <- model.offset(ccm@model_aux[["full_model_frame"]])
   EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
   #if (!is.null(O))
@@ -51,10 +54,14 @@ my_pln_predict_cond <- function (ccm,
                       # xlev = ccm@model_aux[["xlevels"]])
     
     if (pln_model == "full"){
-      X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+      # X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
+      #                   xlev = ccm@model_aux[["full_model_xlevels"]])
+      X <- model.matrix(ccm@model_aux[["full_model_terms"]], newdata,
                         xlev = ccm@model_aux[["full_model_xlevels"]])
     } else if (pln_model == "reduced"){
-      X <- model.matrix(terms(ccm@model_aux[["reduced_model_frame"]]), newdata,
+      # X <- model.matrix(terms(ccm@model_aux[["reduced_model_frame"]]), newdata,
+      #                   xlev = ccm@model_aux[["reduced_model_xlevels"]])
+      X <- model.matrix(ccm@model_aux[["reduced_model_terms"]], newdata,
                         xlev = ccm@model_aux[["reduced_model_xlevels"]])
     }
 
@@ -168,7 +175,8 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
     #stopifnot(nrow(newdata) == 1)
     newdata$Offset = 1
     
-    model_terms = terms(ccm@model_aux[["full_model_frame"]])
+    # model_terms = terms(ccm@model_aux[["full_model_frame"]])
+    model_terms = ccm@model_aux[["full_model_terms"]]
     base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
                                           xlev = ccm@model_aux[["full_model_xlevels"]])
     
