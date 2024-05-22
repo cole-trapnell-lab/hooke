@@ -421,7 +421,7 @@ empty_ccs <- function() {
 #' @importFrom PLNmodels PLNnetwork
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
-#' @import splines
+#' @importFrom splines ns
 #' @export
 new_cell_count_model <- function(ccs,
                                  main_model_formula_str,
@@ -898,7 +898,7 @@ init_penalty_matrix = function(ccs, allowlist=NULL, denylist=NULL, base_penalty 
 #' @param character interval_var
 #' @param numeric interval_start Interval start value.
 #' @param numeric interval_stop Interval stop value.
-#' @import splines
+#' @importFrom splines ns
 #' @return An interval model formula.
 #' @export
 build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){
