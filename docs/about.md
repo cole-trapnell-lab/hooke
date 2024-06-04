@@ -11,7 +11,7 @@ The authors performed a longitudinal transcriptomic analysis using scRNA-sequenc
 The data includes 12 whole lung samples across pre- and post- intratracheal silica. 35 unique cell states were identified using highly and specifically expressed marker genes. For simplicity, we are splitting samples into 2 levels: exposed and not exposed. The goal is to identify which cell types are differentially abundant post-silica exposure. 
 
 ```
-cds = readRDS("silicosis_cds.cds")
+cds = readRDS("silicosis_cds.rds")
 
 # for simplicity, we are lumping together pre and post i.t. silica
 colData(cds)$exposed = ifelse(colData(cds)$Timepoint == 0, "not exposed", "exposed")
