@@ -48,10 +48,10 @@ setMethod("is.na", "cell_count_set", function(x) FALSE)
 #' @exportClass cell_count_model
 setClass("cell_count_model",
          slots = c(ccs = "cell_count_set",
-                   full_model_formula = "formula",
+                   full_model_formula = "character",
                    full_model_family = "ANY", # this is probably unsafe
                    best_full_model = "ANY", # this is probably unsafe
-                   reduced_model_formula = "formula",
+                   reduced_model_formula = "character",
                    reduced_model_family = "PLNnetworkfamily",
                    best_reduced_model = "PLNnetworkfit",
                    sparsity = "numeric",
@@ -353,6 +353,18 @@ new_cell_count_set <- function(cds,
   row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
 
   return (ccs)
+}
+
+#' function to get rid of extra stuff we don't ened to store
+clean_pln_model_object = function(ccm) {
+  
+  model(ccm)$latent = NULL
+  model(ccm)$latent_pos = NULL
+  model(ccm)$fitted = NULL
+  model(ccm)$nb_param = NULL 
+  model(ccm)$model_par = NULL
+  
+  return(ccm)
 }
 
 
@@ -771,14 +783,17 @@ new_cell_count_model <- function(ccs,
     vhat <- vcov(best_full_model, type= "main")
     vhat <- methods::as(vhat, "dgCMatrix")
   }
+  
+  attributes(full_model_formula)$.Environment = NULL
+  attributes(reduced_model_formula)$.Environment = NULL
 
 
   ccm <- methods::new("cell_count_model",
                       ccs = ccs,
-                      full_model_formula = full_model_formula,
+                      full_model_formula = full_model_formula_str,
                       best_full_model = best_full_model,
                       full_model_family = full_pln_model,
-                      reduced_model_formula = reduced_model_formula,
+                      reduced_model_formula = reduced_model_formula_str,
                       best_reduced_model = best_reduced_model,
                       reduced_model_family = reduced_pln_model,
                       sparsity = sparsity_factor,
