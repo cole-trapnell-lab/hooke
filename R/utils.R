@@ -307,6 +307,8 @@ plot_sub_abundance = function(ccs,
                              plot_labels = c("significant", "all", "none"),
                              plot_edges = c("none", "all", "directed", "undirected"),
                              fc_limits=c(-3,3),
+                             nrow = NULL, 
+                             ncol = NULL, 
                              ...) {
 
   ccs = switch_ccs_space(ccs, umap_space = umap_space)
@@ -345,7 +347,7 @@ plot_sub_abundance = function(ccs,
                 fc_limits = fc_limits,
                 #plot_edges = plot_edges,
                 ...) +
-    facet_wrap(~facet_group)
+    facet_wrap(~facet_group, nrow = nrow, ncol = ncol)
 
 }
 
