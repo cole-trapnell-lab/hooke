@@ -4,18 +4,27 @@
 my_plnnetwork_predict <- function (ccm, newdata, type = c("link", "response"), envir = parent.frame())
 {
   type = match.arg(type)
-  # X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
-  #                   xlev = ccm@model_aux[["full_model_xlevels"]])
+  n_new <- nrow(newdata)
   X <- model.matrix(ccm@model_aux[["full_model_terms"]], newdata,
                     xlev = ccm@model_aux[["full_model_xlevels"]])
   
-  #O <- model.offset(ccm@model_aux[["full_model_frame"]])
+  # #O <- model.offset(ccm@model_aux[["full_model_frame"]])
   EZ <- tcrossprod(X, t(model(ccm)$model_par$B))
-  #if (!is.null(O))
-  #  EZ <- EZ + O
-  EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm)$model_par$Sigma), "+")
+  # #if (!is.null(O))
+  # #  EZ <- EZ + O
+  # EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm)$model_par$Sigma), "+")
+  
   colnames(EZ) <- colnames(model(ccm)$model_par$Sigma)
-  results <- switch(type, link = EZ, response = exp(EZ))
+  
+  M <- matrix(0, nrow = n_new, ncol = model(ccm)$p)
+  S <- matrix(Matrix::diag(model(ccm)$model_par$Sigma), nrow = n_new, ncol = model(ccm)$p, byrow = TRUE)
+  
+  # results <- switch(type, link = EZ, response = exp(EZ))
+  results <- switch(
+    type,
+    link = EZ + M,
+    response = exp(EZ + M + 0.5 * S)
+  )
   attr(results, "type") <- type
   results
 }
@@ -99,7 +108,7 @@ my_pln_predict_cond <- function (ccm,
     ## mean latent positions in the parameter space
 
     EZ <- tcrossprod(X, t(model(ccm, model_to_return = pln_model)$model_par$B[, , drop = FALSE])) + M + O[, , drop = FALSE]
-    EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm, model_to_return = pln_model)$model_par$Sigma[, , drop = FALSE]), "+")
+    # EZ <- sweep(EZ, 2, 0.5 * Matrix::diag(model(ccm, model_to_return = pln_model)$model_par$Sigma[, , drop = FALSE]), "+")
     colnames(EZ) <- colnames(model(ccm, model_to_return = pln_model)$model_par$Sigma[, , drop = FALSE])
 
     # EZ <- X %*% model(ccm)$model_par$B[, !cond, drop = FALSE] + M + O[, !cond, drop = FALSE]
