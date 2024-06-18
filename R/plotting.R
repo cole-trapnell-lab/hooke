@@ -136,6 +136,8 @@ plot_abundance = function(ccs,
 
   }
 
+  gp = gp + xlab(paste0("UMAP",x)) + ylab(paste0("UMAP",y))
+  
   return(gp)
 }
 
