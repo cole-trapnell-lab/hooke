@@ -89,6 +89,7 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
                                                            cell_group_df = cell_group_df,
                                                            norm_method = "size_only",
                                                            scale_agg_values=FALSE))
+  rownames(cluster_mean_exprs) = rownames(cluster_binary_exprs)
 
   cluster_expr_table = tibble::rownames_to_column(as.data.frame(cluster_mean_exprs))
   cluster_expr_table = tidyr::gather(cluster_expr_table, "cell_group",
