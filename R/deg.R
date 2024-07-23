@@ -67,6 +67,13 @@ pseudobulk_ccs_for_states <- function(ccs,
   }
   else {
     sub_cds = ccs@cds[gene_group_df$id,]
+
+    sub_cds = sub_cds[, Matrix::colSums(counts(sub_cds)) > 0]
+    cell_group_df = cell_group_df %>%
+      filter(rowname %in% colnames(sub_cds))
+    agg_coldata = agg_coldata %>%
+      filter(pseudobulk_id %in% cell_group_df$pseudobulk_id)
+
     agg_expr_mat = monocle3::aggregate_gene_expression(
       sub_cds,
       cell_group_df = cell_group_df,
