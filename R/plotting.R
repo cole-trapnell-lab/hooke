@@ -37,6 +37,8 @@ plot_abundance = function(ccs,
 
   plot_df = ccs@metadata[["cell_group_assignments"]] %>% dplyr::select(cell_group)
   plot_df$cell = row.names(plot_df)
+  
+  plot_df = plot_df[rownames(reducedDim(ccs@cds, type="UMAP")),]
 
   plot_df$umap2D_1 <- reducedDim(ccs@cds, type="UMAP")[plot_df$cell,x]
   plot_df$umap2D_2 <- reducedDim(ccs@cds, type="UMAP")[plot_df$cell,y]
