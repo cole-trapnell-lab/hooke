@@ -64,7 +64,7 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 #' @param group_cells_by
 #' @noRd
 #'
-aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
+aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad", gene_group_df=NULL){
 
   cds = cds[, !is.na(colData(cds)$timepoint)]
   cds = cds[, !is.na(colData(cds)[[group_cells_by]])]
@@ -77,6 +77,7 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
   cell_group_df$cell_group <- as.character(cell_group_df$cell_group)
   cluster_binary_exprs = as.matrix(aggregate_gene_expression(cds,
                                                              cell_group_df = cell_group_df,
+                                                             gene_group_df = gene_group_df,
                                                              norm_method = "binary",
                                                              scale_agg_values=FALSE))
 
@@ -87,8 +88,10 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 
   cluster_mean_exprs = as.matrix(aggregate_gene_expression(cds,
                                                            cell_group_df = cell_group_df,
+                                                           gene_group_df= gene_group_df,
                                                            norm_method = "size_only",
                                                            scale_agg_values=FALSE))
+  rownames(cluster_mean_exprs) = rownames(cluster_binary_exprs)
 
   cluster_expr_table = tibble::rownames_to_column(as.data.frame(cluster_mean_exprs))
   cluster_expr_table = tidyr::gather(cluster_expr_table, "cell_group",

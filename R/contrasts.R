@@ -204,6 +204,7 @@ estimate_abundances <- function(ccm, newdata, min_log_abund=-5, cell_group="cell
     
     # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
     v_hat <- ccm@vhat
+    v_hat[is.na(v_hat)] <- 0
     v_hat_method <- ccm@vhat_method
     
     se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))

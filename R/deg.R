@@ -78,6 +78,10 @@ pseudobulk_ccs_for_states <- function(ccs,
       gene_agg_fun = gene_agg_fun
     )
 
+    agg_expr_mat = agg_expr_mat[,Matrix::colSums(agg_expr_mat) > 0]
+    agg_coldata = agg_coldata %>%
+      filter(pseudobulk_id %in% colnames(agg_expr_mat))
+
     agg_rowdata = agg_rowdata[row.names(agg_expr_mat),]
   }
 

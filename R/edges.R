@@ -121,7 +121,31 @@ get_paga_graph <- function(cds, reduction_method = "UMAP", partition_q_value=0.0
 #'
 #' @export
 initial_pcor_graph = function(ccs) {
-  paga_edges = get_paga_graph(ccs@cds) %>% igraph::as_data_frame() %>% as_tibble()
+  
+  cds = ccs@cds
+  paga_graph = get_paga_graph(cds) 
+  
+  # if the ccs isnt cluster based -- contract the cluster-based paga_graph 
+  # to be cell_group based
+  if (ccs@info$cell_group != "cell_state") {
+    
+    colData(cds)$cell_state = monocle3:::clusters(cds)
+    
+    cs_ccs = new_cell_count_set(cds, 
+                             cell_group = "cell_state", 
+                             sample_group = "embryo")
+    paga_graph = paga_graph %>% 
+      igraph::as_data_frame() %>% 
+      filter(from %in% rownames(cs_ccs), to %in% rownames(cs_ccs)) %>% 
+      igraph::graph_from_data_frame()
+    
+    paga_graph = contract_state_graph(cs_ccs, paga_graph, group_nodes_by = ccs@info$cell_group)
+    
+  }
+  
+  paga_edges = paga_graph %>% igraph::as_data_frame() %>% as_tibble()
+  
+  
 
   # filter out values that aren't in the cds anymore
   cell_groups = unique(colData(ccs@cds)[[ccs@info$cell_group]])
