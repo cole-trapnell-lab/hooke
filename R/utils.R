@@ -96,7 +96,7 @@ aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad"){
 
   cluster_fraction_expressing_table$mean_expression = cluster_expr_table$mean_expression
 
-  cluster_spec_mat = monocle3:::specificity_matrix(cluster_mean_exprs, cores = 4)
+  cluster_spec_mat = monocle3:::specificity_matrix(cluster_mean_exprs)
   cluster_spec_table = tibble::rownames_to_column(as.data.frame(cluster_spec_mat))
   cluster_spec_table = tidyr::gather(cluster_spec_table, "cell_group",
                                      "specificity", -rowname)
@@ -307,8 +307,8 @@ plot_sub_abundance = function(ccs,
                              plot_labels = c("significant", "all", "none"),
                              plot_edges = c("none", "all", "directed", "undirected"),
                              fc_limits=c(-3,3),
-                             nrow = NULL, 
-                             ncol = NULL, 
+                             nrow = NULL,
+                             ncol = NULL,
                              ...) {
 
   ccs = switch_ccs_space(ccs, umap_space = umap_space)
@@ -736,23 +736,23 @@ get_norm_df = function(ccs) {
 
 fill_missing_terms_with_default_values = function(ccm, newdata, pln_model = c("full", "reduced"), verbose=FALSE){
   pln_model <- match.arg(pln_model)
-  
+
   # check that all terms in new data have been specified
   if (pln_model == "reduced")
     missing_terms = setdiff(names(ccm@model_aux[["reduced_model_xlevels"]]), names(newdata))
   else if (pln_model == "full")
     missing_terms = setdiff(names(ccm@model_aux[["full_model_xlevels"]]), names(newdata))
-  
+
   if (length(missing_terms) >= 1) {
-    
+
     default_df = lapply(missing_terms, function(term){
       df = data.frame(t = levels(factor(colData(ccm@ccs)[[term]]))[1])
       names(df) = term
       df
     }) %>% bind_cols()
-    
+
     newdata = cbind(newdata, tibble(default_df))
-    
+
     if (verbose){
       print( paste0(paste(missing_terms,collapse = ", "),
                     " missing from specified newdata columns. Assuming default values: ",
