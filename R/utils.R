@@ -64,7 +64,8 @@ get_distances <- function(ccs, method="euclidean", matrix=T) {
 #' @param group_cells_by
 #' @noRd
 #'
-aggregated_expr_data <- function(cds, group_cells_by = "cell_type_broad", gene_group_df=NULL){
+aggregated_expr_data <- function(cds, group_cells_by = "cell_type", gene_group_df=NULL, 
+                                 gene_agg_fun = "sum", cell_agg_fun = "mean"){
 
   cds = cds[, !is.na(colData(cds)$timepoint)]
   cds = cds[, !is.na(colData(cds)[[group_cells_by]])]
