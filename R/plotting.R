@@ -816,6 +816,27 @@ my_plot_cells <- function(cds,
 
 }
 
+# plot a subset of labels on the plot 
+# returns a label df, use as follows: 
+# ggrepel::geom_text_repel(data = label_df, aes(label=cell_type, x=x, y=y), size=3)
+my_plot_labels = function(p, cds, x=1, y=2, relevant_cell_types = NULL){
+  
+  colData(cds)$umap3d_1 = reducedDims(cds)[["UMAP"]][,x]
+  colData(cds)$umap3d_2 = reducedDims(cds)[["UMAP"]][,y]
+  label_df = colData(cds) %>% as.data.frame %>%
+    group_by(projection_group, cell_type) %>%
+    summarise(x = mean(umap3d_1), y= mean(umap3d_2))
+  
+  if (is.null(relevant_cell_types)==FALSE) {
+    label_df = label_df %>% 
+      filter(cell_type %in% relevant_cell_types)
+  }
+  
+  return(label_df)
+  
+}
+
+
 #' plots a path on top of
 #' @param data
 #' @param path_df
