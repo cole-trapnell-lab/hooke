@@ -755,7 +755,7 @@ new_cell_count_model <- function(ccs,
 
   # Choose a model that isn't very aggressively sparsified
   best_reduced_model <- PLNmodels::getBestModel(reduced_pln_model, "EBIC")
-  best_reduced_model <- PLNmodels::getModel(reduced_pln_model, var=best_reduced_model$penalty * sparsity_factor)
+  best_reduced_model <- suppressMessages(suppressWarnings(PLNmodels::getModel(reduced_pln_model, var=best_reduced_model$penalty * sparsity_factor)))
 
   # Choose a model that isn't very aggressively sparsified
   #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
