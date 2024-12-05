@@ -66,7 +66,7 @@ pseudobulk_ccs_for_states <- function(ccs,
 
   }
   else {
-    sub_cds = ccs@cds[gene_group_df$id,]
+    sub_cds = ccs@cds[unique(gene_group_df$id),]
     agg_expr_mat = monocle3::aggregate_gene_expression(
       sub_cds,
       cell_group_df = cell_group_df,
