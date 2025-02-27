@@ -432,6 +432,34 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
 }
 
 
+# Calculates the power to detect a significant change in a given contrast
+calculate_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
+  # Wald test statistic for comparing two groups
+  Z <- (beta_x - beta_y) / sqrt(SE_x^2 + SE_y^2)
+  
+  # Critical value for a two-tailed test at alpha
+  Z_alpha <- qnorm(1 - alpha / 2)
+  
+  # Compute power: 1 - Type II error probability
+  power <- 1 - pnorm(Z_alpha - Z) + pnorm(-Z_alpha - Z)
+  
+  return(power)
+}
+
+# Estimates the smallest fold change you can detect at a given power level
+calculate_mdfc <- function(SE_x, SE_y, alpha = 0.05, power = 0.8) {
+  # Z-scores for significance and power
+  Z_alpha <- qnorm(1 - alpha / 2)  # Two-tailed
+  Z_power <- qnorm(power)
+  
+  # Compute minimum detectable effect size (beta difference)
+  delta_beta <- (Z_alpha + Z_power) * sqrt(SE_x^2 + SE_y^2)
+  
+  # Convert to fold change
+  MDFC <- exp(delta_beta)
+  
+  return(MDFC)
+}
 
 
 #' Compare two estimates of cell abundances from a Hooke model.
@@ -443,10 +471,18 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
 #' @param method string A method for correcting P-value multiple comparisons.
 #'    This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 #'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
+#' @param alpha Desired significance level
+#' @param power Desired power level for calculating minimum detectable fold change
 #' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X).
 #' @importFrom dplyr full_join
 #' @export
-compare_abundances <- function(ccm, cond_x, cond_y, by = "cell_group", method = c("BH","bonferroni", "hochberg", "hommel", "BY")){
+compare_abundances <- function(ccm, 
+                               cond_x, 
+                               cond_y, 
+                               by = "cell_group", 
+                               method = c("BH","bonferroni", "hochberg", "hommel", "BY"), 
+                               alpha = 0.05, 
+                               power = 0.8){
 
   assertthat::assert_that(is(ccm, 'cell_count_model'))
   assertthat::assert_that(tibble::is_tibble(cond_x))
@@ -474,7 +510,9 @@ compare_abundances <- function(ccm, cond_x, cond_y, by = "cell_group", method = 
                                                 delta_p_value = 2 * pt(-abs(tvalue), df.r),
                                                 delta_p_value = ifelse(is.nan(delta_p_value), 1, delta_p_value),
                                                 # delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
-                                                delta_q_value = p.adjust(delta_p_value, method = method)) %>% select(-tvalue)
+                                                delta_q_value = p.adjust(delta_p_value, method = method), 
+                                                power = calculate_power(log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y, alpha=alpha), 
+                                                mdfc = calculate_mdfc(log_abund_se_x, log_abund_se_y, power = power)) %>% select(-tvalue)
   return(contrast_tbl)
 }
 
