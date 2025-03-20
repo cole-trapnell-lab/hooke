@@ -288,6 +288,10 @@ new_cell_count_set <- function(cds,
   # calculated by PLNmodels::prepare_data.
   if (norm_method == "size_factors") {
     if (!is.null(size_factors)) {
+      
+      intersection = intersect(colnames(ccs), names(size_factors))
+      size_factors = size_factors[intersection]
+      
       assertthat::assert_that(
         tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
                  error = function(e) FALSE),
