@@ -725,14 +725,18 @@ single_thread_blas = function(){
 #' into boxplots
 #' @param ccs
 get_norm_df = function(ccs) {
-
+  
+  cell_type_total <- Matrix::colSums(counts(ccs))
+  geometric_mean = exp(mean(log(cell_type_total)))
+  
   get_norm_counts(ccs) %>%
     as.data.frame() %>%
     rownames_to_column("cell_group") %>%
     pivot_longer(-cell_group,
                  names_to = "sample",
                  values_to = "count") %>%
-    left_join(colData(ccs) %>% as.data.frame, by = "sample")
+    left_join(colData(ccs) %>% as.data.frame, by = "sample") %>% 
+    mutate(count_per_1000 = count*1000/geometric_mean)
 
 }
 
