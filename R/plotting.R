@@ -1188,6 +1188,7 @@ plot_cells_per_sample <- function(ccs,
                                   color_by = "cell_group",
                                   plot_zeroes = F,
                                   plot_points = F,
+                                  facet = T, 
                                   log_scale = F,
                                   nrow = 1,
                                   legend_position = "none") {
@@ -1219,6 +1220,10 @@ plot_cells_per_sample <- function(ccs,
 
   if (log_scale) {
     p <- p + scale_y_log10()
+  }
+  
+  if (facet) {
+    p <- p + facet_wrap(~cell_group, scale = "free")
   }
 
   return(p)
