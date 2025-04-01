@@ -269,6 +269,10 @@ new_cell_count_set <- function(cds,
   cds_reducedDims = reducedDims(ccs_cds)
 
   cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide),,drop=FALSE]
+  
+  cell_type_total <- Matrix::colSums(cell_counts_wide)
+  geometric_mean = exp(mean(log(cell_type_total)))
+  
   ccs = methods::new("cell_count_set",
                      monocle3::new_cell_data_set(cell_counts_wide,
                                                  cell_metadata=cds_covariates_df,
@@ -278,7 +282,8 @@ new_cell_count_set <- function(cds,
                      cds_reduced_dims=cds_reducedDims,
                      info=SimpleList(sample_group=sample_group,
                                      cell_group=cell_group,
-                                     norm_method = norm_method))
+                                     norm_method = norm_method, 
+                                     geometric_mean = geometric_mean))
 
   #
   # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
