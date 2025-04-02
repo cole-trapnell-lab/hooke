@@ -1185,30 +1185,29 @@ plot_cells_per_sample <- function(ccs,
                                   x_col,
                                   y_col = c("count", "count_per_1000"),
                                   cell_groups = c(),
-                                  batch_col = NULL, 
+                                  batch_col = NULL,
                                   color_by = "cell_group",
                                   plot_zeroes = T,
                                   plot_points = F,
-                                  facet = T, 
+                                  facet = T,
                                   log_scale = F,
                                   nrow = 1,
                                   legend_position = "none") {
-  
   y_col <- match.arg(y_col)
-  
-  
+
+
   if (is.null(batch_col) == FALSE) {
-    batches_to_keep = colData(ccs) %>% as.data.frame %>% 
-      group_by(!!sym(batch_col), !!sym(x_col)) %>% 
-      tally() %>% 
-      group_by(!!sym(batch_col)) %>% 
-      filter(n()>1) %>% 
+    batches_to_keep <- colData(ccs) %>%
+      as.data.frame() %>%
+      group_by(!!sym(batch_col), !!sym(x_col)) %>%
+      tally() %>%
+      group_by(!!sym(batch_col)) %>%
+      filter(n() > 1) %>%
       pull(!!sym(batch_col))
-    
-    ccs = subset_ccs(ccs, !!sym(batch_col) %in% batches_to_keep)
-    
+
+    ccs <- subset_ccs(ccs, !!sym(batch_col) %in% batches_to_keep)
   }
-  
+
   count_df <- get_norm_df(ccs)
 
   if (length(cell_groups) != 0) {
@@ -1235,7 +1234,7 @@ plot_cells_per_sample <- function(ccs,
   if (log_scale) {
     p <- p + scale_y_log10()
   }
-  
+
   if (facet) {
     p <- p + facet_wrap(~cell_group, scale = "free")
   }

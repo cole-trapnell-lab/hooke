@@ -27,4 +27,3 @@ Finally, install the hooke package as follows:
 ```r
 devtools::install_github("cole-trapnell-lab/hooke")
 ```
-
