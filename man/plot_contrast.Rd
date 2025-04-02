@@ -26,6 +26,8 @@ plot_contrast(
   switch_label = NULL,
   sub_cds = NULL,
   alpha = 1,
+  mask = list(),
+  downsample = NULL,
   x = 1,
   y = 2
 )
@@ -72,6 +74,8 @@ edges from the PLNnetwork.}
 \item{sub_cds}{string A cell_data_set.}
 
 \item{alpha}{numeric A the ggplot opacity. A value between 0 and 1.}
+
+\item{downsample}{how much to downsample the plots}
 
 \item{x}{numeric The column number for the UMAP x coordinate.}
 

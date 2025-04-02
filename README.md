@@ -16,9 +16,7 @@ Hooke builds on top of the [Monocle3 package](https://cole-trapnell-lab.github.i
 devtools::install_github("cole-trapnell-lab/monocle3")
 ```
 
-Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html). 
-
-Use the github install: 
+Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html).
 
 ```r 
 remotes::install_github("pln-team/PLNmodels")

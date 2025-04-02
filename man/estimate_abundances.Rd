@@ -4,7 +4,12 @@
 \alias{estimate_abundances}
 \title{Predict cell type abundances given a PLN model and a set of inputs for its covariates}
 \usage{
-estimate_abundances(ccm, newdata, min_log_abund = -5)
+estimate_abundances(
+  ccm,
+  newdata,
+  min_log_abund = -5,
+  cell_group = "cell_group"
+)
 }
 \arguments{
 \item{ccm}{A cell_count_model.}
@@ -12,6 +17,8 @@ estimate_abundances(ccm, newdata, min_log_abund = -5)
 \item{newdata}{tibble A tibble of variables used for the prediction.}
 
 \item{min_log_abund}{numeric Minimum log abundance value.}
+
+\item{cell_group}{string The name of the groups that are being estimated.}
 }
 \value{
 A tibble of cell abundance predictions.
