@@ -719,9 +719,14 @@ new_cell_count_model <- function(ccs,
   tryCatch({
     old_omp_threads = RhpcBLASctl::omp_get_num_procs()
     old_blas_threads = RhpcBLASctl::blas_get_num_procs()
-    RhpcBLASctl::omp_set_num_threads(1)
-    RhpcBLASctl::blas_set_num_threads(num_threads)
-    print(paste("fitting model with", RhpcBLASctl::blas_get_num_procs(), "threads"))
+    if (num_threads > 1 && is.na(RhpcBLASctl::omp_get_num_procs())) {
+      warning("OpenMP not available, no control over threads is possible.")
+      num_threads <- 1
+    } else {
+      RhpcBLASctl::omp_set_num_threads(1)
+      RhpcBLASctl::blas_set_num_threads(num_threads)
+    }
+    print(paste("fitting model with", num_threads, "threads"))
 
     if (backend == "torch") {
       control_optim_args <- list(
