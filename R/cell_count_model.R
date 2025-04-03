@@ -1,8 +1,8 @@
-setOldClass(c("igraph"), prototype=structure(list(), class="igraph"))
-setOldClass(c("PLNnetworkfamily"), prototype=structure(list(), class="PLNnetworkfamily"))
-setOldClass(c("PLNnetworkfit"), prototype=structure(list(), class="PLNnetworkfit"))
-setOldClass(c("PLNfamily"), prototype=structure(list(), class="PLNfamily"))
-setOldClass(c("PLNfit"), prototype=structure(list(), class="PLNfit"))
+setOldClass(c("igraph"), prototype = structure(list(), class = "igraph"))
+setOldClass(c("PLNnetworkfamily"), prototype = structure(list(), class = "PLNnetworkfamily"))
+setOldClass(c("PLNnetworkfit"), prototype = structure(list(), class = "PLNnetworkfit"))
+setOldClass(c("PLNfamily"), prototype = structure(list(), class = "PLNfamily"))
+setOldClass(c("PLNfit"), prototype = structure(list(), class = "PLNfit"))
 
 #' The cell_count_set class
 #'
@@ -18,11 +18,13 @@ setOldClass(c("PLNfit"), prototype=structure(list(), class="PLNfit"))
 #' @aliases cell_count_set-class
 #' @exportClass cell_count_set
 setClass("cell_count_set",
-         contains = "cell_data_set",
-         slots = c(cds = "cell_data_set",
-                   cds_coldata = "tbl_df",
-                   cds_reduced_dims = "SimpleList",
-                   info = "SimpleList")
+  contains = "cell_data_set",
+  slots = c(
+    cds = "cell_data_set",
+    cds_coldata = "tbl_df",
+    cds_reduced_dims = "SimpleList",
+    info = "SimpleList"
+  )
 )
 setMethod("is.na", "cell_count_set", function(x) FALSE)
 
@@ -47,40 +49,44 @@ setMethod("is.na", "cell_count_set", function(x) FALSE)
 #' @import PLNmodels
 #' @exportClass cell_count_model
 setClass("cell_count_model",
-         slots = c(ccs = "cell_count_set",
-                   full_model_formula = "character",
-                   full_model_family = "ANY", # this is probably unsafe
-                   best_full_model = "ANY", # this is probably unsafe
-                   reduced_model_formula = "character",
-                   reduced_model_family = "PLNnetworkfamily",
-                   best_reduced_model = "PLNnetworkfit",
-                   sparsity = "numeric",
-                   model_aux = "SimpleList",
-                   vhat = "dgCMatrix",
-                   vhat_method = "character",
-                   info = "SimpleList")
+  slots = c(
+    ccs = "cell_count_set",
+    full_model_formula = "character",
+    full_model_family = "ANY", # this is probably unsafe
+    best_full_model = "ANY", # this is probably unsafe
+    reduced_model_formula = "character",
+    reduced_model_family = "PLNnetworkfamily",
+    best_reduced_model = "PLNnetworkfit",
+    sparsity = "numeric",
+    model_aux = "SimpleList",
+    vhat = "dgCMatrix",
+    vhat_method = "character",
+    info = "SimpleList"
+  )
 )
 setMethod("is.na", "cell_count_model", function(x) FALSE)
 
-empty_sparse_matrix = function (nrow = 0L, ncol = 0L, format = "R", dtype = "d")
-{
-  if (NROW(format) != 1L || !(format %in% c("R", "C", "T")))
+empty_sparse_matrix <- function(nrow = 0L, ncol = 0L, format = "R", dtype = "d") {
+  if (NROW(format) != 1L || !(format %in% c("R", "C", "T"))) {
     stop("'format' must be one of 'R', 'C', 'T'.")
-  if (NROW(dtype) != 1L || !(dtype %in% c("d", "l", "n")))
+  }
+  if (NROW(dtype) != 1L || !(dtype %in% c("d", "l", "n"))) {
     stop("'dtype' must be one of 'd', 'l', 'n'.")
+  }
   nrow <- as.integer(nrow)
   ncol <- as.integer(ncol)
-  if (NROW(nrow) != 1L || is.na(nrow) || nrow < 0)
+  if (NROW(nrow) != 1L || is.na(nrow) || nrow < 0) {
     stop("'nrow' must be a non-negative integer.")
-  if (NROW(ncol) != 1L || is.na(ncol) || ncol < 0)
+  }
+  if (NROW(ncol) != 1L || is.na(ncol) || ncol < 0) {
     stop("'ncol' must be a non-negative integer.")
+  }
   target_class <- sprintf("%sg%sMatrix", dtype, format)
   out <- new(target_class)
   out@Dim <- as.integer(c(nrow, ncol))
   if (format == "R") {
     out@p <- integer(nrow + 1L)
-  }
-  else if (format == "C") {
+  } else if (format == "C") {
     out@p <- integer(ncol + 1L)
   }
   return(out)
@@ -118,139 +124,176 @@ new_cell_count_set <- function(cds,
                                cell_metadata = NULL,
                                lower_threshold = NULL,
                                upper_threshold = NULL,
-                               keep_cds=TRUE,
-                               norm_method = c("size_factors","TSS", "CSS",
-                                               "RLE", "GMPR", "Wrench", "none"),
+                               keep_cds = TRUE,
+                               norm_method = c(
+                                 "size_factors", "TSS", "CSS",
+                                 "RLE", "GMPR", "Wrench", "none"
+                               ),
                                size_factors = NULL,
                                pseudocount = 0) {
-
-  assertthat::assert_that(is(cds, 'cell_data_set'),
-                          msg = paste('Argument cds must be a cell_data_set.'))
+  assertthat::assert_that(is(cds, "cell_data_set"),
+    msg = paste("Argument cds must be a cell_data_set.")
+  )
 
   assertthat::assert_that(sample_group %in% colnames(colData(cds)),
-                          msg = paste('Argument sample_group value must be a column name in the cell_data_set.'))
+    msg = paste("Argument sample_group value must be a column name in the cell_data_set.")
+  )
 
   assertthat::assert_that(cell_group %in% colnames(colData(cds)),
-                          msg = paste('Argument cell_group value must be a column name in the cell_data_set.'))
+    msg = paste("Argument cell_group value must be a column name in the cell_data_set.")
+  )
 
   assertthat::assert_that(is.null(sample_metadata) || is.data.frame(sample_metadata),
-                          msg = paste('Argument sample_metadata must be a data frame.'))
+    msg = paste("Argument sample_metadata must be a data frame.")
+  )
 
   sample_group_names_cds <- unique(colData(cds)[[sample_group]])
   assertthat::assert_that(is.null(sample_metadata) || nrow(sample_metadata) == length(sample_group_names_cds),
-                          msg = paste('Argument sample_metadata must have the same',
-                                      'number of rows as there are distinct sample',
-                                      'names in the cds column data.'))
+    msg = paste(
+      "Argument sample_metadata must have the same",
+      "number of rows as there are distinct sample",
+      "names in the cds column data."
+    )
+  )
 
-  assertthat::assert_that(is.null(sample_metadata) || all(sample_group_names_cds %in% sample_metadata[['sample']]),
-                          msg = paste('Argument sample_metadata must have sample group names in',
-                                       'a column called \'sample\'.'))
+  assertthat::assert_that(is.null(sample_metadata) || all(sample_group_names_cds %in% sample_metadata[["sample"]]),
+    msg = paste(
+      "Argument sample_metadata must have sample group names in",
+      "a column called 'sample'."
+    )
+  )
 
   assertthat::assert_that(is.null(cell_metadata) || is.data.frame(cell_metadata),
-                          msg = paste('Argument cell_metadata must be a data frame.'))
+    msg = paste("Argument cell_metadata must be a data frame.")
+  )
 
   cell_group_names_cds <- unique(colData(cds)[[cell_group]])
   assertthat::assert_that(is.null(cell_metadata) || nrow(cell_metadata) == length(cell_group_names_cds),
-                          msg = paste('Argument cell_metadata must have the same',
-                                      'number of rows as there are distinct cell_group',
-                                      'names in the cds column data.'))
+    msg = paste(
+      "Argument cell_metadata must have the same",
+      "number of rows as there are distinct cell_group",
+      "names in the cds column data."
+    )
+  )
 
   assertthat::assert_that(is.null(cell_metadata) || all(cell_group_names_cds %in% row.names(cell_metadata)),
-                          msg = paste('Argument cell_metadata row names must contain the cell_group',
-                                       'names.'))
+    msg = paste(
+      "Argument cell_metadata row names must contain the cell_group",
+      "names."
+    )
+  )
 
   assertthat::assert_that(is.null(lower_threshold) || is.numeric(lower_threshold),
-                          msg = paste('Argument lower_threshold must be numeric.'))
+    msg = paste("Argument lower_threshold must be numeric.")
+  )
 
   assertthat::assert_that(is.null(upper_threshold) || is.numeric(upper_threshold),
-                          msg = paste('Argument upper_threshold must be numeric.'))
+    msg = paste("Argument upper_threshold must be numeric.")
+  )
 
   assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste('Argument norm_method must be one of "size_factors",',
-                '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'))
+    tryCatch(
+      expr = ifelse(match.arg(norm_method) == "", TRUE, TRUE),
+      error = function(e) FALSE
+    ),
+    msg = paste(
+      'Argument norm_method must be one of "size_factors",',
+      '"TSS", "CSS", "RLE", "GMPR", "Wrench", or "none".'
+    )
+  )
   norm_method <- match.arg(norm_method)
 
-  if(sample_group != 'sample')
-    colData(cds)$sample = NULL
+  if (sample_group != "sample") {
+    colData(cds)$sample <- NULL
+  }
 
   # check if anything contains NAs in it
   # if so drop them
-  num_sample_group_NAs = sum(is.na(colData(cds)[[sample_group]]))
+  num_sample_group_NAs <- sum(is.na(colData(cds)[[sample_group]]))
   if (num_sample_group_NAs != 0) {
     message(paste(num_sample_group_NAs, "NAs found in sample group. Dropping NAs."))
-    cds = cds[, !is.na(colData(cds)[[sample_group]])]
+    cds <- cds[, !is.na(colData(cds)[[sample_group]])]
   }
 
-  num_cell_group_NAs = sum(is.na(colData(cds)[[cell_group]]))
+  num_cell_group_NAs <- sum(is.na(colData(cds)[[cell_group]]))
   if (num_cell_group_NAs != 0) {
     message(paste(num_cell_group_NAs, "NAs found in cell group. Dropping NAs."))
-    cds = cds[, !is.na(colData(cds)[[cell_group]])]
+    cds <- cds[, !is.na(colData(cds)[[cell_group]])]
   }
 
-  if (is.character(colData(cds)[[cell_group]])){
-    num_cell_group_blanks = sum(colData(cds)[[cell_group]] == "")
+  if (is.character(colData(cds)[[cell_group]])) {
+    num_cell_group_blanks <- sum(colData(cds)[[cell_group]] == "")
     if (num_cell_group_blanks != 0) {
       message(paste(num_cell_group_blanks, "unlabeled cells found in cell group. Dropping unlabled cells."))
-      cds = cds[, colData(cds)[[cell_group]] != ""]
+      cds <- cds[, colData(cds)[[cell_group]] != ""]
     }
   }
 
-  coldata_df = colData(cds) %>% tibble::as_tibble()
+  coldata_df <- colData(cds) %>% tibble::as_tibble()
   # current commented out bc mess w projection clusters
   # coldata_df$cluster = monocle3::clusters(cds)
   # coldata_df$partition = partitions(cds)
 
-  coldata_df = coldata_df %>% dplyr::rename("sample" = sample_group, "cell_group" = as.character(cell_group))
-  #coldata_df$cell_group = factor(coldata_df$cell_group, levels=unique(colData(cds)[,cell_group]))
+  coldata_df <- coldata_df %>% dplyr::rename("sample" = sample_group, "cell_group" = as.character(cell_group))
+  # coldata_df$cell_group = factor(coldata_df$cell_group, levels=unique(colData(cds)[,cell_group]))
 
-  coldata_df$group_id = coldata_df %>%
+  coldata_df$group_id <- coldata_df %>%
     dplyr::group_by(sample, cell_group) %>%
-    dplyr::group_indices() %>% as.character
+    dplyr::group_indices() %>%
+    as.character()
 
   # add to cds
-  colData(cds)$group_id = coldata_df$group_id
+  colData(cds)$group_id <- coldata_df$group_id
 
-  cds_summary = coldata_df %>%
+  cds_summary <- coldata_df %>%
     dplyr::group_by(sample, cell_group) %>%
     dplyr::summarize(cells = dplyr::n())
 
-  cds_covariates_df = coldata_df %>%
+  cds_covariates_df <- coldata_df %>%
     dplyr::select(-cell_group) %>%
     dplyr::group_by(sample) %>%
-    dplyr::summarize(across(where(is.numeric), function(x){mean(x)}),
-                     across(where(is.factor), function(x) { tail(names(sort(table(x))), 1) }),
-                     across(where(is.character), function(x) { tail(names(sort(table(x, useNA="ifany"))), 1) }),
-                     across(where(is.logical), function(x) { (sum(x, na.rm = T)==1) }))
+    dplyr::summarize(
+      across(where(is.numeric), function(x) {
+        mean(x)
+      }),
+      across(where(is.factor), function(x) {
+        tail(names(sort(table(x))), 1)
+      }),
+      across(where(is.character), function(x) {
+        tail(names(sort(table(x, useNA = "ifany"))), 1)
+      }),
+      across(where(is.logical), function(x) {
+        (sum(x, na.rm = T) == 1)
+      })
+    )
 
-  if (is.null(sample_metadata) == FALSE){
-    cds_covariates_df = left_join(cds_covariates_df, sample_metadata, by=c("sample"="sample"))
+  if (is.null(sample_metadata) == FALSE) {
+    cds_covariates_df <- left_join(cds_covariates_df, sample_metadata, by = c("sample" = "sample"))
   }
 
-  cds_covariates_df = cds_covariates_df %>% as.data.frame(cds_covariates_df, stringsAsFactors=FALSE)
-  row.names(cds_covariates_df) = cds_covariates_df %>% dplyr::pull(sample)
+  cds_covariates_df <- cds_covariates_df %>% as.data.frame(cds_covariates_df, stringsAsFactors = FALSE)
+  row.names(cds_covariates_df) <- cds_covariates_df %>% dplyr::pull(sample)
 
-  cell_counts_wide = tidyr::spread(cds_summary, sample, cells, fill=0)
-  cell_states = as.character(cell_counts_wide %>% dplyr::pull("cell_group"))
-  cell_counts_wide = as.matrix(cell_counts_wide[,2:ncol(cell_counts_wide)])
+  cell_counts_wide <- tidyr::spread(cds_summary, sample, cells, fill = 0)
+  cell_states <- as.character(cell_counts_wide %>% dplyr::pull("cell_group"))
+  cell_counts_wide <- as.matrix(cell_counts_wide[, 2:ncol(cell_counts_wide)])
 
-  row.names(cell_counts_wide) = cell_states
+  row.names(cell_counts_wide) <- cell_states
 
   # filter out cell groups based on counts
   if (is.null(lower_threshold) == FALSE) {
-    cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) >= lower_threshold, ]
+    cell_counts_wide <- cell_counts_wide[Matrix::rowSums(cell_counts_wide) >= lower_threshold, ]
   }
   if (is.null(upper_threshold) == FALSE) {
-    cell_counts_wide = cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
+    cell_counts_wide <- cell_counts_wide[Matrix::rowSums(cell_counts_wide) <= upper_threshold, ]
   }
 
   # remove from cds
-  removed_cell_states = setdiff(cell_states, rownames(cell_counts_wide))
+  removed_cell_states <- setdiff(cell_states, rownames(cell_counts_wide))
 
-  #cell_counts_wide = t(cell_counts_wide)
+  # cell_counts_wide = t(cell_counts_wide)
 
-  cds_covariates_df = cds_covariates_df[colnames(cell_counts_wide),]
+  cds_covariates_df <- cds_covariates_df[colnames(cell_counts_wide), ]
 
   # This is super confusing because of the way the arguments are
   # named in new_cell_data_set. We are making a matrix of
@@ -259,31 +302,35 @@ new_cell_count_set <- function(cds,
   # normally expects will actually be used to hold cell group
   # metadata.
 
-  ccs_cds = cds[, !colData(cds)[[cell_group]] %in% removed_cell_states]
+  ccs_cds <- cds[, !colData(cds)[[cell_group]] %in% removed_cell_states]
 
   # TODO: We could probably avoid duplicating this info if keep_cds == TRUE, providing it
   # through accessor functions directly from the cds
 
   # FIXME: potentially we should be using the filtered one above? Potentially rename cell_group, sample, etc?
-  cds_coldata = colData(ccs_cds) %>% as_tibble
-  cds_reducedDims = reducedDims(ccs_cds)
+  cds_coldata <- colData(ccs_cds) %>% as_tibble()
+  cds_reducedDims <- reducedDims(ccs_cds)
 
-  cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide),,drop=FALSE]
-  
+  cell_metadata_subset <- cell_metadata[rownames(cell_counts_wide), , drop = FALSE]
+
   cell_type_total <- Matrix::colSums(cell_counts_wide)
-  geometric_mean = exp(mean(log(cell_type_total)))
-  
-  ccs = methods::new("cell_count_set",
-                     monocle3::new_cell_data_set(cell_counts_wide,
-                                                 cell_metadata=cds_covariates_df,
-                                                 gene_metadata=cell_metadata_subset),
-                     cds=ccs_cds,
-                     cds_coldata=cds_coldata,
-                     cds_reduced_dims=cds_reducedDims,
-                     info=SimpleList(sample_group=sample_group,
-                                     cell_group=cell_group,
-                                     norm_method = norm_method, 
-                                     geometric_mean = geometric_mean))
+  geometric_mean <- exp(mean(log(cell_type_total)))
+
+  ccs <- methods::new("cell_count_set",
+    monocle3::new_cell_data_set(cell_counts_wide,
+      cell_metadata = cds_covariates_df,
+      gene_metadata = cell_metadata_subset
+    ),
+    cds = ccs_cds,
+    cds_coldata = cds_coldata,
+    cds_reduced_dims = cds_reducedDims,
+    info = SimpleList(
+      sample_group = sample_group,
+      cell_group = cell_group,
+      norm_method = norm_method,
+      geometric_mean = geometric_mean
+    )
+  )
 
   #
   # PLNmodels::prepare_data returns (1) a matrix of cell abundances,
@@ -293,43 +340,55 @@ new_cell_count_set <- function(cds,
   # calculated by PLNmodels::prepare_data.
   if (norm_method == "size_factors") {
     if (!is.null(size_factors)) {
-      
-      intersection = intersect(colnames(ccs), names(size_factors))
-      size_factors = size_factors[intersection]
-      
-      assertthat::assert_that(
-        tryCatch(expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
-                 error = function(e) FALSE),
-        msg = "Argument size factor names must match ccs column names.")
+      intersection <- intersect(colnames(ccs), names(size_factors))
+      size_factors <- size_factors[intersection]
 
-      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                          covariates = colData(ccs) %>% as.data.frame,
-                                          offset = size_factors)
+      assertthat::assert_that(
+        tryCatch(
+          expr = identical(sort(colnames(ccs)), sort(names(size_factors))),
+          error = function(e) FALSE
+        ),
+        msg = "Argument size factor names must match ccs column names."
+      )
+
+      pln_data <- PLNmodels::prepare_data(
+        counts = counts(ccs) + pseudocount,
+        covariates = colData(ccs) %>% as.data.frame(),
+        offset = size_factors
+      )
     } else {
-      pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                          covariates = colData(ccs) %>% as.data.frame,
-                                          offset = monocle3::size_factors(ccs))
+      pln_data <- PLNmodels::prepare_data(
+        counts = counts(ccs) + pseudocount,
+        covariates = colData(ccs) %>% as.data.frame(),
+        offset = monocle3::size_factors(ccs)
+      )
     }
   } else if (norm_method == "RLE") {
-    pln_data <- PLNmodels::prepare_data(counts = counts(ccs),
-                                        covariates = colData(ccs) %>% as.data.frame,
-                                        offset = norm_method,
-                                        type="poscounts")
+    pln_data <- PLNmodels::prepare_data(
+      counts = counts(ccs),
+      covariates = colData(ccs) %>% as.data.frame(),
+      offset = norm_method,
+      type = "poscounts"
+    )
   } else {
-    pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                        covariates = colData(ccs) %>% as.data.frame,
-                                        offset = norm_method)
+    pln_data <- PLNmodels::prepare_data(
+      counts = counts(ccs) + pseudocount,
+      covariates = colData(ccs) %>% as.data.frame(),
+      offset = norm_method
+    )
 
     if (norm_method == "none") {
-      pln_data$Offset = 1
+      pln_data$Offset <- 1
     }
   }
 
-  if (norm_method != "size_factors")
-    colData(ccs)$Size_Factor = pln_data$Offset
+  if (norm_method != "size_factors") {
+    colData(ccs)$Size_Factor <- pln_data$Offset
+  }
 
-  if (keep_cds == FALSE)
-    ccs@cds = new_cell_data_set(empty_sparse_matrix(format="C"))
+  if (keep_cds == FALSE) {
+    ccs@cds <- new_cell_data_set(empty_sparse_matrix(format = "C"))
+  }
 
 
   # if (!is.null(cell_metadata)) {
@@ -357,38 +416,41 @@ new_cell_count_set <- function(cds,
   #      several renamed columns.
   #   o  coldata_df has all rows
   #   o  ccs_cds has rows filtered by thresholds
-  ccs@metadata[["cell_group_assignments"]] = coldata_df %>% dplyr::select(group_id, sample, cell_group) %>% as.data.frame
-  ccs@metadata[["cell_group_assignments"]] = ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
-  row.names(ccs@metadata[["cell_group_assignments"]]) = colnames(ccs_cds)
+  ccs@metadata[["cell_group_assignments"]] <- coldata_df %>%
+    dplyr::select(group_id, sample, cell_group) %>%
+    as.data.frame()
+  ccs@metadata[["cell_group_assignments"]] <- ccs@metadata[["cell_group_assignments"]] %>% filter(!cell_group %in% removed_cell_states)
+  row.names(ccs@metadata[["cell_group_assignments"]]) <- colnames(ccs_cds)
 
-  return (ccs)
+  return(ccs)
 }
 
 #' function to get rid of extra stuff we don't ened to store
-clean_pln_model_object = function(ccm) {
-  
-  model(ccm)$latent = NULL
-  model(ccm)$latent_pos = NULL
-  model(ccm)$fitted = NULL
-  model(ccm)$nb_param = NULL 
-  model(ccm)$model_par = NULL
-  
+clean_pln_model_object <- function(ccm) {
+  model(ccm)$latent <- NULL
+  model(ccm)$latent_pos <- NULL
+  model(ccm)$fitted <- NULL
+  model(ccm)$nb_param <- NULL
+  model(ccm)$model_par <- NULL
+
   return(ccm)
 }
 
 
 # construct an empty ccs object
 empty_ccs <- function() {
-  
   suppressMessages(
     methods::new("cell_count_set",
-               new_cell_data_set(hooke:::empty_sparse_matrix(format="C")),
-               cds=new_cell_data_set(empty_sparse_matrix(format="C")),
-               cds_coldata=tibble(),
-               cds_reduced_dims=SimpleList(),
-               info=SimpleList(sample_group="",
-                               cell_group="",
-                               norm_method = ""))
+      new_cell_data_set(hooke:::empty_sparse_matrix(format = "C")),
+      cds = new_cell_data_set(empty_sparse_matrix(format = "C")),
+      cds_coldata = tibble(),
+      cds_reduced_dims = SimpleList(),
+      info = SimpleList(
+        sample_group = "",
+        cell_group = "",
+        norm_method = ""
+      )
+    )
   )
 }
 
@@ -446,31 +508,30 @@ new_cell_count_model <- function(ccs,
                                  main_model_formula_str,
                                  nuisance_model_formula_str = "1",
                                  penalty_matrix = NULL,
-                                 allowlist=NULL,
-                                 denylist=NULL,
-                                 sparsity_factor=0.1,
+                                 allowlist = NULL,
+                                 denylist = NULL,
+                                 sparsity_factor = 0.1,
                                  base_penalty = 1,
-                                 min_penalty=0.01,
-                                 max_penalty=1e6,
-                                 verbose=FALSE,
-                                 pseudocount=0,
-                                 keep_ccs=TRUE,
-                                 pln_min_ratio=0.001,
-                                 pln_num_penalties=30,
+                                 min_penalty = 0.01,
+                                 max_penalty = 1e6,
+                                 verbose = FALSE,
+                                 pseudocount = 0,
+                                 keep_ccs = TRUE,
+                                 pln_min_ratio = 0.001,
+                                 pln_num_penalties = 30,
                                  vhat_method = c("bootstrap", "variational_var", "jackknife"),
                                  covariance_type = c("spherical", "full", "diagonal"),
                                  num_bootstraps = 10,
                                  inception = NULL,
                                  backend = c("nlopt", "torch"),
-                                 num_threads=1,
+                                 num_threads = 1,
                                  ftol_rel = 1e-6,
-                                 penalize_by_distance=TRUE,
-                                 penalty_scale_exponent=2,
-                                 reduction_method="UMAP",
+                                 penalize_by_distance = TRUE,
+                                 penalty_scale_exponent = 2,
+                                 reduction_method = "UMAP",
                                  random.seed = 42,
                                  ...) {
-
-  assertthat::assert_that(is(ccs, 'cell_count_set'))
+  assertthat::assert_that(is(ccs, "cell_count_set"))
 
   assertthat::assert_that(assertthat::is.string(main_model_formula_str))
   assertthat::assert_that(assertthat::is.string(nuisance_model_formula_str))
@@ -494,147 +555,161 @@ new_cell_count_model <- function(ccs,
   ccs_num_cell_group <- dim(counts(ccs))[[1]]
   ccs_cell_group_names <- rownames(counts(ccs))
 
-  assertthat::assert_that(is.null(penalty_matrix) || ( is.matrix(penalty_matrix) && is.numeric(penalty_matrix[1][1])))
+  assertthat::assert_that(is.null(penalty_matrix) || (is.matrix(penalty_matrix) && is.numeric(penalty_matrix[1][1])))
   assertthat::assert_that(is.null(penalty_matrix) || identical(dim(penalty_matrix), c(ccs_num_cell_group, ccs_num_cell_group)))
   assertthat::assert_that(is.null(penalty_matrix) || (!is.null(rownames(penalty_matrix)) && all(rownames(penalty_matrix) %in% ccs_cell_group_names)))
   assertthat::assert_that(is.null(penalty_matrix) || (!is.null(rownames(penalty_matrix)) && all(colnames(penalty_matrix) %in% ccs_cell_group_names)))
 
   # Check the allowlist and denylist for expected values.
   assertthat::assert_that(is.null(allowlist) || (is.numeric(allowlist[[1]][[1]]) &&
-                                                 range(allowlist[[1]])[[1]] >= 0 &&
-                                                 range(allowlist[[1]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(allowlist[[1]][[1]])))
-  if (!all(allowlist[[1]] %in% ccs_cell_group_names)){
-    message ("Warning: allowlist refers to cell groups missing from cell count set")
+    range(allowlist[[1]])[[1]] >= 0 &&
+    range(allowlist[[1]])[[2]] <= ccs_num_cell_group) ||
+    (is.character(allowlist[[1]][[1]])))
+  if (!all(allowlist[[1]] %in% ccs_cell_group_names)) {
+    message("Warning: allowlist refers to cell groups missing from cell count set")
   }
 
   assertthat::assert_that(is.null(allowlist) || (is.numeric(allowlist[[2]][[1]]) &&
-                                                 range(allowlist[[2]])[[1]] >= 0 &&
-                                                 range(allowlist[[2]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(allowlist[[2]][[1]])))
-  if (!all(allowlist[[2]] %in% ccs_cell_group_names)){
-    message ("Warning: allowlist refers to cell groups missing from cell count set")
+    range(allowlist[[2]])[[1]] >= 0 &&
+    range(allowlist[[2]])[[2]] <= ccs_num_cell_group) ||
+    (is.character(allowlist[[2]][[1]])))
+  if (!all(allowlist[[2]] %in% ccs_cell_group_names)) {
+    message("Warning: allowlist refers to cell groups missing from cell count set")
   }
 
   assertthat::assert_that(is.null(denylist) || (is.numeric(denylist[[1]][[1]]) &&
-                                                 range(denylist[[1]])[[1]] >= 0 &&
-                                                 range(denylist[[1]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(denylist[[1]][[1]])))
-  if (!all(denylist[[1]] %in% ccs_cell_group_names)){
-    message ("Warning: denylist refers to cell groups missing from cell count set")
+    range(denylist[[1]])[[1]] >= 0 &&
+    range(denylist[[1]])[[2]] <= ccs_num_cell_group) ||
+    (is.character(denylist[[1]][[1]])))
+  if (!all(denylist[[1]] %in% ccs_cell_group_names)) {
+    message("Warning: denylist refers to cell groups missing from cell count set")
   }
 
 
   assertthat::assert_that(is.null(denylist) || (is.numeric(denylist[[2]][[1]]) &&
-                                                 range(denylist[[2]])[[1]] >= 0 &&
-                                                 range(denylist[[2]])[[2]] <= ccs_num_cell_group) ||
-                                                (is.character(denylist[[2]][[1]])))
-  if (!all(denylist[[2]] %in% ccs_cell_group_names)){
-    message ("Warning: denylist refers to cell groups missing from cell count set")
+    range(denylist[[2]])[[1]] >= 0 &&
+    range(denylist[[2]])[[2]] <= ccs_num_cell_group) ||
+    (is.character(denylist[[2]][[1]])))
+  if (!all(denylist[[2]] %in% ccs_cell_group_names)) {
+    message("Warning: denylist refers to cell groups missing from cell count set")
   }
 
-  if (is.null(allowlist) == FALSE && is.character(allowlist[[2]][[1]]))
-    allowlist = allowlist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+  if (is.null(allowlist) == FALSE && is.character(allowlist[[2]][[1]])) {
+    allowlist <- allowlist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+  }
 
-  if (is.null(denylist) == FALSE && is.character(denylist[[2]][[1]]))
-    denylist = denylist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+  if (is.null(denylist) == FALSE && is.character(denylist[[2]][[1]])) {
+    denylist <- denylist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
+  }
 
+  assertthat::assert_that(assertthat::is.count(num_threads), num_threads > 0)
   assertthat::assert_that(assertthat::is.flag(verbose))
 
   # TO DO: FIX THIS
   assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste( 'Argument vhat_method must be one of "variational_var",',
-                 '"jackknife", or "bootstrap".'))
+    tryCatch(
+      expr = ifelse(match.arg(vhat_method) == "", TRUE, TRUE),
+      error = function(e) FALSE
+    ),
+    msg = paste(
+      'Argument vhat_method must be one of "variational_var",',
+      '"jackknife", or "bootstrap".'
+    )
+  )
   vhat_method <- match.arg(vhat_method)
 
   assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(backend) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste( 'Argument backend must be one of "nlopt" or "torch".'))
+    tryCatch(
+      expr = ifelse(match.arg(backend) == "", TRUE, TRUE),
+      error = function(e) FALSE
+    ),
+    msg = paste('Argument backend must be one of "nlopt" or "torch".')
+  )
   backend <- match.arg(backend)
-
-  covariance_type = match.arg(covariance_type)
-
+  covariance_type <- match.arg(covariance_type)
 
   set.seed(random.seed)
-  pln_data <- PLNmodels::prepare_data(counts = counts(ccs) + pseudocount,
-                                      covariates = colData(ccs) %>% as.data.frame,
-                                      offset = monocle3::size_factors(ccs))
+  pln_data <- PLNmodels::prepare_data(
+    counts = counts(ccs) + pseudocount,
+    covariates = colData(ccs) %>% as.data.frame(),
+    offset = monocle3::size_factors(ccs)
+  )
 
-  main_model_formula_str = stringr::str_replace_all(main_model_formula_str, "~", "")
-  nuisance_model_formula_str = stringr::str_replace_all(nuisance_model_formula_str, "~", "")
+  main_model_formula_str <- stringr::str_replace_all(main_model_formula_str, "~", "")
+  nuisance_model_formula_str <- stringr::str_replace_all(nuisance_model_formula_str, "~", "")
 
-  full_model_formula_str = paste("Abundance~", main_model_formula_str, "+", nuisance_model_formula_str, " + offset(log(Offset))")
+  full_model_formula_str <- paste("Abundance~", main_model_formula_str, "+", nuisance_model_formula_str, " + offset(log(Offset))")
   # full_model_formula = as.formula(full_model_formula_str)
   full_model_formula <- tryCatch(
-                          {
-                            as.formula(full_model_formula_str)
-                          },
-                          error = function(condition) {
-                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condition, '.')
-                          },
-                          warn = function(condition) {
-                            message(paste('Bad full_model_formula string', full_model_formula_str), ': ', condition, '.')
-                          })
+    {
+      as.formula(full_model_formula_str)
+    },
+    error = function(condition) {
+      message(paste("Bad full_model_formula string", full_model_formula_str), ": ", condition, ".")
+    },
+    warn = function(condition) {
+      message(paste("Bad full_model_formula string", full_model_formula_str), ": ", condition, ".")
+    }
+  )
 
-  reduced_model_formula_str = paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
-#  reduced_model_formula = as.formula(reduced_model_formula_str)
+  reduced_model_formula_str <- paste("Abundance~", nuisance_model_formula_str, " + offset(log(Offset))")
+  #  reduced_model_formula = as.formula(reduced_model_formula_str)
   reduced_model_formula <- tryCatch(
-                          {
-                            as.formula(reduced_model_formula_str)
-                          },
-                          error = function(condition) {
-                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condition, '.')
-                          },
-                          warn = function(condition) {
-                            message(paste('Bad reduced_model_formula string', reduced_model_formula_str), ': ', condition, '.')
-                          })
+    {
+      as.formula(reduced_model_formula_str)
+    },
+    error = function(condition) {
+      message(paste("Bad reduced_model_formula string", reduced_model_formula_str), ": ", condition, ".")
+    },
+    warn = function(condition) {
+      message(paste("Bad reduced_model_formula string", reduced_model_formula_str), ": ", condition, ".")
+    }
+  )
 
-  #pln_data <- as.name(deparse(substitute(pln_data)))
+  # pln_data <- as.name(deparse(substitute(pln_data)))
 
   # Note: the allowlist and denylist are applied later in this function
   #       (new_cell_count_model), not in init_penalty_matrix() so the
   #       arguments in the call to init_penalty_matrix() are unused there.
   #       This is so that the allowlist and denylist penalties are applied
   #       to the user supplied penalty matrix.
-    if (is.null(penalty_matrix)){
-      if (penalize_by_distance){
-        initial_penalties = init_penalty_matrix(ccs,
-                                                allowlist=allowlist,
-                                                denylist=denylist,
-                                                base_penalty=base_penalty,
-                                                min_penalty=min_penalty,
-                                                max_penalty=max_penalty,
-                                                penalty_scale_exponent=penalty_scale_exponent,
-                                                reduction_method=reduction_method)
-        initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
-      }else{
-        initial_penalties = NULL
-      }
-    }else{
-      initial_penalties = penalty_matrix
+  if (is.null(penalty_matrix)) {
+    if (penalize_by_distance) {
+      initial_penalties <- init_penalty_matrix(ccs,
+        allowlist = allowlist,
+        denylist = denylist,
+        base_penalty = base_penalty,
+        min_penalty = min_penalty,
+        max_penalty = max_penalty,
+        penalty_scale_exponent = penalty_scale_exponent,
+        reduction_method = reduction_method
+      )
+      initial_penalties <- initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+    } else {
+      initial_penalties <- NULL
     }
+  } else {
+    initial_penalties <- penalty_matrix
+  }
 
   # FIXME: This might only actually work when grouping cells by clusters and cluster names are
   # integers. We should make sure this generalizes when making white/black lists of cell groups
   # by type or other groupings.
   # Note: this appears to work when the cell contents are character strings of cell.
   #       group names.
-  if (is.null(initial_penalties) == FALSE){
-    if (is.null(allowlist) == FALSE){
-      initial_penalties[as.matrix(allowlist[,c(1,2)])] = min_penalty
-      initial_penalties[as.matrix(allowlist[,c(2,1)])] = min_penalty
+  if (is.null(initial_penalties) == FALSE) {
+    if (is.null(allowlist) == FALSE) {
+      initial_penalties[as.matrix(allowlist[, c(1, 2)])] <- min_penalty
+      initial_penalties[as.matrix(allowlist[, c(2, 1)])] <- min_penalty
     }
 
-    if (is.null(denylist) == FALSE){
-      initial_penalties[as.matrix(denylist[,c(1,2)])] = max_penalty
-      initial_penalties[as.matrix(denylist[,c(2,1)])] = max_penalty
+    if (is.null(denylist) == FALSE) {
+      initial_penalties[as.matrix(denylist[, c(1, 2)])] <- max_penalty
+      initial_penalties[as.matrix(denylist[, c(2, 1)])] <- max_penalty
     }
 
-    #penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
-    initial_penalties = initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
+    # penalty_matrix = penalty_matrix[row.names(counts(ccs)), row.names(counts(ccs))]
+    initial_penalties <- initial_penalties[colnames(pln_data$Abundance), colnames(pln_data$Abundance)]
   }
 
   # INSANE R BULLSHIT ALERT: for reasons I do not understand,
@@ -642,23 +717,27 @@ new_cell_count_model <- function(ccs,
   # created with as.formula (e.g. after pasting).
 
   tryCatch({
-    if (num_threads > 1){
-      print (paste("fitting model with", num_threads, "threads"))
+    old_omp_threads = RhpcBLASctl::omp_get_num_procs()
+    old_blas_threads = RhpcBLASctl::blas_get_num_procs()
+    if (num_threads > 1 && is.na(RhpcBLASctl::omp_get_num_procs())) {
+      warning("OpenMP not available, no control over threads is possible.")
+      num_threads <- 1
+    } else {
       RhpcBLASctl::omp_set_num_threads(1)
       RhpcBLASctl::blas_set_num_threads(num_threads)
-    }else{
-      print (paste("fitting model with", 1, "threads"))
     }
+    print(paste("fitting model with", num_threads, "threads"))
 
     if (backend == "torch") {
-      control_optim_args = list(
+      control_optim_args <- list(
         # algorithm = 'CCSAQ',
         maxeval = 10000,
         ftol_rel = ftol_rel,
-        xtol_rel = 1e-6)
+        xtol_rel = 1e-6
+      )
     } else {
-      control_optim_args = list(
-        algorithm = 'CCSAQ',
+      control_optim_args <- list(
+        algorithm = "CCSAQ",
         maxeval = 10000,
         ftol_rel = ftol_rel,
         xtol_rel = 1e-6,
@@ -666,67 +745,77 @@ new_cell_count_model <- function(ccs,
         maxit_out = 50,
         ftol_abs = 0.0,
         xtol_abs = 0.0,
-        maxtime = -1)
-
+        maxtime = -1
+      )
     }
 
-    variational_var = TRUE
-    sandwich_var = FALSE
-    jackknife = FALSE
-    bootstrap = FALSE
+    variational_var <- TRUE
+    sandwich_var <- FALSE
+    jackknife <- FALSE
+    bootstrap <- FALSE
 
     if (vhat_method == "variational_var") {
-      variational_var = TRUE
-    }else{
-      variational_var = FALSE # Don't compute the variational variance unless we have to, because it sometimes throws exceptions
+      variational_var <- TRUE
+    } else {
+      variational_var <- FALSE # Don't compute the variational variance unless we have to, because it sometimes throws exceptions
     }
 
     if (vhat_method == "sandwich_var") {
-      sandwich_var = TRUE
+      sandwich_var <- TRUE
     }
 
     if (vhat_method == "jackknife") {
-      jackknife = TRUE
+      jackknife <- TRUE
     }
 
     if (vhat_method == "bootstrap") {
-      bootstrap = num_bootstraps
+      bootstrap <- num_bootstraps
     }
 
 
-# bge (20221227): notes:
-#                   o I am trying to track the code in the PLNmodels master branch at Github
-#                   o I revert to the original because the PLNmodels changes break hooke.
+    # bge (20221227): notes:
+    #                   o I am trying to track the code in the PLNmodels master branch at Github
+    #                   o I revert to the original because the PLNmodels changes break hooke.
 
-    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(reduced_model_formula_str,
-                                                                  data=pln_data,
-                                                                  control = PLNmodels::PLNnetwork_param(backend = backend,
-                                                                                                        trace = ifelse(verbose, 2, 0),
-                                                                                                        # inception_cov = covariance_type,
-                                                                                                        n_penalties = pln_num_penalties,
-                                                                                                        min_ratio = pln_min_ratio,
-                                                                                                        penalty_weights = initial_penalties,
-                                                                                                        #penalize_diagonal = FALSE,
-                                                                                                        config_post = list(jackknife = FALSE,  # never jackknife the reduced model
-                                                                                                                           bootstrap = FALSE, # never bootstrap the reduced model
-                                                                                                                           variational_var = FALSE, # never compute variational variances on the reduced model
-                                                                                                                           sandwich_var = FALSE,  # never bootstrap the reduced model
-                                                                                                                           rsquared = FALSE),
-                                                                                                        config_optim = control_optim_args),
-                                                                  ...),)
+    reduced_pln_model <- do.call(PLNmodels::PLNnetwork, args = list(reduced_model_formula_str,
+      data = pln_data,
+      control = PLNmodels::PLNnetwork_param(
+        backend = backend,
+        trace = ifelse(verbose, 2, 0),
+        # inception_cov = covariance_type,
+        n_penalties = pln_num_penalties,
+        min_ratio = pln_min_ratio,
+        penalty_weights = initial_penalties,
+        # penalize_diagonal = FALSE,
+        config_post = list(
+          jackknife = FALSE, # never jackknife the reduced model
+          bootstrap = FALSE, # never bootstrap the reduced model
+          variational_var = FALSE, # never compute variational variances on the reduced model
+          sandwich_var = FALSE, # never bootstrap the reduced model
+          rsquared = FALSE
+        ),
+        config_optim = control_optim_args
+      ),
+      ...
+    ), )
 
-   full_pln_model <- do.call(PLNmodels::PLN, args=list(full_model_formula_str,
-                                                          data=pln_data,
-                                                          control = PLNmodels::PLN_param(backend = backend,
-                                                                                         covariance = covariance_type,
-                                                                                         trace = ifelse(verbose, 2, 0),
-                                                                                         config_post = list(jackknife = jackknife,
-                                                                                                            bootstrap = bootstrap,
-                                                                                                            variational_var = variational_var,
-                                                                                                            sandwich_var = sandwich_var,
-                                                                                                            rsquared = FALSE),
-                                                                                         config_optim = control_optim_args),
-                                                          ...),)
+    full_pln_model <- do.call(PLNmodels::PLN, args = list(full_model_formula_str,
+      data = pln_data,
+      control = PLNmodels::PLN_param(
+        backend = backend,
+        covariance = covariance_type,
+        trace = ifelse(verbose, 2, 0),
+        config_post = list(
+          jackknife = jackknife,
+          bootstrap = bootstrap,
+          variational_var = variational_var,
+          sandwich_var = sandwich_var,
+          rsquared = FALSE
+        ),
+        config_optim = control_optim_args
+      ),
+      ...
+    ), )
 
 
 
@@ -734,47 +823,46 @@ new_cell_count_model <- function(ccs,
 
 
 
-# bge (20221227): notes:
-#                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
-#   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
-#                                                                data=pln_data,
-#                                                                penalties = reduced_pln_model$penalties,
-#                                                                control_init=list(min.ratio=pln_min_ratio,
-#                                                                                  nPenalties=pln_num_penalties,
-#                                                                                  penalty_weights=initial_penalties),
-#                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
-#                                                                ...),)
+    # bge (20221227): notes:
+    #                   o the previous version of PLNmodels was PLNmodels    * 0.11.7-9600 2022-11-29 [1] Github (PLN-team/PLNmodels@022d59d)
+    #   full_pln_model <- do.call(PLNmodels::PLNnetwork, args=list(full_model_formula_str,
+    #                                                                data=pln_data,
+    #                                                                penalties = reduced_pln_model$penalties,
+    #                                                                control_init=list(min.ratio=pln_min_ratio,
+    #                                                                                  nPenalties=pln_num_penalties,
+    #                                                                                  penalty_weights=initial_penalties),
+    #                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
+    #                                                                ...),)
   }, finally = {
-    RhpcBLASctl::omp_set_num_threads(1)
-    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(old_omp_threads)
+    RhpcBLASctl::blas_set_num_threads(old_blas_threads)
   })
 
 
   # model_frame = model.frame(full_model_formula[-2], pln_data)
   # xlevels = .getXlevels(terms(model_frame), model_frame)
-  full_model_frame = model.frame(full_model_formula[-2], pln_data)
-  full_model_terms = terms(full_model_frame)
-  full_model_xlevels = .getXlevels(terms(full_model_frame), full_model_frame)
-  full_model_offsets = model.offset(full_model_frame)
-  
-  reduced_model_frame = model.frame(reduced_model_formula[-2], pln_data)
-  reduced_model_terms = terms(reduced_model_frame)
-  reduced_model_xlevels = .getXlevels(terms(reduced_model_frame), reduced_model_frame)
-  reduced_model_offsets = model.offset(reduced_model_frame)
+  full_model_frame <- model.frame(full_model_formula[-2], pln_data)
+  full_model_terms <- terms(full_model_frame)
+  full_model_xlevels <- .getXlevels(terms(full_model_frame), full_model_frame)
+  full_model_offsets <- model.offset(full_model_frame)
+
+  reduced_model_frame <- model.frame(reduced_model_formula[-2], pln_data)
+  reduced_model_terms <- terms(reduced_model_frame)
+  reduced_model_xlevels <- .getXlevels(terms(reduced_model_frame), reduced_model_frame)
+  reduced_model_offsets <- model.offset(reduced_model_frame)
 
   # Choose a model that isn't very aggressively sparsified
   best_reduced_model <- PLNmodels::getBestModel(reduced_pln_model, "EBIC")
-  best_reduced_model <- suppressMessages(suppressWarnings(PLNmodels::getModel(reduced_pln_model, var=best_reduced_model$penalty * sparsity_factor)))
+  best_reduced_model <- suppressMessages(suppressWarnings(PLNmodels::getModel(reduced_pln_model, var = best_reduced_model$penalty * sparsity_factor)))
 
   # Choose a model that isn't very aggressively sparsified
-  #best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
+  # best_full_model <- PLNmodels::getBestModel(full_pln_model, "EBIC")
   # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
   best_full_model <- full_pln_model
 
   if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
-
-    vhat_coef = coef(best_full_model, type = "main")
-    var_jack_mat = attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
+    vhat_coef <- coef(best_full_model, type = "main")
+    var_jack_mat <- attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
     # var_jack_mat = var_jack %>% as.data.frame %>%
     #   tibble::rownames_to_column("term") %>%
     #   tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>%
@@ -787,49 +875,50 @@ new_cell_count_model <- function(ccs,
     #   tibble::column_to_rownames("rowname") %>%
     #   as.matrix()
     vhat <- methods::as(var_jack_mat, "dgCMatrix")
-
   } else {
-    vhat <- vcov(best_full_model, type= "main")
+    vhat <- vcov(best_full_model, type = "main")
     vhat <- methods::as(vhat, "dgCMatrix")
   }
-  
-  attributes(full_model_formula)$.Environment = NULL
-  attributes(reduced_model_formula)$.Environment = NULL
+
+  attributes(full_model_formula)$.Environment <- NULL
+  attributes(reduced_model_formula)$.Environment <- NULL
 
 
   ccm <- methods::new("cell_count_model",
-                      ccs = ccs,
-                      full_model_formula = full_model_formula_str,
-                      best_full_model = best_full_model,
-                      full_model_family = full_pln_model,
-                      reduced_model_formula = reduced_model_formula_str,
-                      best_reduced_model = best_reduced_model,
-                      reduced_model_family = reduced_pln_model,
-                      sparsity = sparsity_factor,
-                      model_aux = SimpleList(full_model_terms=full_model_terms, 
-                                             # full_model_frame=full_model_frame,
-                                             full_model_xlevels=full_model_xlevels,
-                                             full_model_offsets=full_model_offsets,
-                                             reduced_model_terms=reduced_model_terms,
-                                             # reduced_model_frame=reduced_model_frame,
-                                             reduced_model_xlevels=reduced_model_xlevels, 
-                                             reduced_model_offsets=reduced_model_offsets ),
-                      vhat = vhat,
-                      vhat_method = vhat_method,
-                      info=SimpleList()
-                      )
-  
+    ccs = ccs,
+    full_model_formula = full_model_formula_str,
+    best_full_model = best_full_model,
+    full_model_family = full_pln_model,
+    reduced_model_formula = reduced_model_formula_str,
+    best_reduced_model = best_reduced_model,
+    reduced_model_family = reduced_pln_model,
+    sparsity = sparsity_factor,
+    model_aux = SimpleList(
+      full_model_terms = full_model_terms,
+      # full_model_frame=full_model_frame,
+      full_model_xlevels = full_model_xlevels,
+      full_model_offsets = full_model_offsets,
+      reduced_model_terms = reduced_model_terms,
+      # reduced_model_frame=reduced_model_frame,
+      reduced_model_xlevels = reduced_model_xlevels,
+      reduced_model_offsets = reduced_model_offsets
+    ),
+    vhat = vhat,
+    vhat_method = vhat_method,
+    info = SimpleList()
+  )
+
   if (keep_ccs == FALSE) {
-    ccm@ccs = empty_ccs()
+    ccm@ccs <- empty_ccs()
   }
-  
+
   #
   # metadata(cds)$cds_version <- Biobase::package.version("monocle3")
   # clusters <- stats::setNames(SimpleList(), character(0))
   # cds <- estimate_size_factors(cds)
   # cds
-  #ccm@model_aux[["best_model"]] = best_model
-  #ccm@model_aux[["model_family"]] = pln_model
+  # ccm@model_aux[["best_model"]] = best_model
+  # ccm@model_aux[["model_family"]] = pln_model
 
   return(ccm)
 }
@@ -846,37 +935,41 @@ new_cell_count_model <- function(ccs,
 #' @importFrom PLNmodels getBestModel
 #' @importFrom PLNmodels getModel
 #' @export
-select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_factor=1.0, models_to_update = c("both", "full", "reduced"))
-{
-
-  assertthat::assert_that(is(ccm, 'cell_count_model'))
+select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_factor = 1.0, models_to_update = c("both", "full", "reduced")) {
+  assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(assertthat::is.number(sparsity_factor) && sparsity_factor >= 0.0)
 
   assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(criterion) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste('Argument criterion must be one of "BIC","EBIC", or "StARS".'))
+    tryCatch(
+      expr = ifelse(match.arg(criterion) == "", TRUE, TRUE),
+      error = function(e) FALSE
+    ),
+    msg = paste('Argument criterion must be one of "BIC","EBIC", or "StARS".')
+  )
   criterion <- match.arg(criterion)
 
   assertthat::assert_that(
-    tryCatch(expr = ifelse(match.arg(models_to_update) == "", TRUE, TRUE),
-             error = function(e) FALSE),
-    msg = paste('Argument models_to_update must be one of "both","full", or "reduced".'))
-  models_to_update = match.arg(models_to_update)
+    tryCatch(
+      expr = ifelse(match.arg(models_to_update) == "", TRUE, TRUE),
+      error = function(e) FALSE
+    ),
+    msg = paste('Argument models_to_update must be one of "both","full", or "reduced".')
+  )
+  models_to_update <- match.arg(models_to_update)
 
-  #if (models_to_update == "reduced" || models_to_update == "both"){
-    base_reduced_model <- PLNmodels::getBestModel(ccm@reduced_model_family, criterion)
-    best_reduced_model <- PLNmodels::getModel(ccm@reduced_model_family, var=base_reduced_model$penalty * sparsity_factor)
-    ccm@best_reduced_model = best_reduced_model
-  #}
+  # if (models_to_update == "reduced" || models_to_update == "both"){
+  base_reduced_model <- PLNmodels::getBestModel(ccm@reduced_model_family, criterion)
+  best_reduced_model <- PLNmodels::getModel(ccm@reduced_model_family, var = base_reduced_model$penalty * sparsity_factor)
+  ccm@best_reduced_model <- best_reduced_model
+  # }
 
-  #if (models_to_update == "full" || models_to_update == "both"){
+  # if (models_to_update == "full" || models_to_update == "both"){
   #  best_full_model <- PLNmodels::getBestModel(ccm@full_model_family, criterion)
   #  best_full_model <- PLNmodels::getModel(ccm@full_model_family, var=base_reduced_model$penalty * sparsity_factor)
   #  ccm@best_full_model = best_full_model
-  #}
+  # }
 
-  ccm@sparsity = sparsity_factor
+  ccm@sparsity <- sparsity_factor
 
   return(ccm)
 }
@@ -889,33 +982,33 @@ select_model <- function(ccm, criterion = c("BIC", "EBIC", "StARS"), sparsity_fa
 #' @param denylist a data frame with two columns corresponding to (undirected) edges that should receive very high penalty
 #' @param dist_fun A function that returns a penalty based given a distance between two clusters
 #' @noRd
-init_penalty_matrix = function(ccs, allowlist=NULL, denylist=NULL, base_penalty = 1, min_penalty=0.01, max_penalty=1e6, penalty_scale_exponent=2, reduction_method="UMAP"){
-  cell_group_centroids = centroids(ccs, reduction_method=reduction_method)
-  dist_matrix = as.matrix(dist(cell_group_centroids[,-1], method = "euclidean", upper=T, diag = T))
+init_penalty_matrix <- function(ccs, allowlist = NULL, denylist = NULL, base_penalty = 1, min_penalty = 0.01, max_penalty = 1e6, penalty_scale_exponent = 2, reduction_method = "UMAP") {
+  cell_group_centroids <- centroids(ccs, reduction_method = reduction_method)
+  dist_matrix <- as.matrix(dist(cell_group_centroids[, -1], method = "euclidean", upper = T, diag = T))
 
   row.names(dist_matrix) <- cell_group_centroids$cell_group
   colnames(dist_matrix) <- cell_group_centroids$cell_group
 
   # TODO: do I need this? Probably the caller can and should do this.
-  #dist_matrix = dist_matrix[colnames(data$Abundance), colnames(data$Abundance)]
+  # dist_matrix = dist_matrix[colnames(data$Abundance), colnames(data$Abundance)]
 
-  get_rho_mat <- function(DM, s=2, xmin = NULL) {
-    if (is.null(xmin)){
-      xmin = min(DM[DM > 0]) / 2
+  get_rho_mat <- function(DM, s = 2, xmin = NULL) {
+    if (is.null(xmin)) {
+      xmin <- min(DM[DM > 0]) / 2
     }
-    #out <- (1-(xmin/DM)^s) * distance_parameter
-    out = min_penalty + (DM / max(DM))^s
-    #out =  1 + DM^s
+    # out <- (1-(xmin/DM)^s) * distance_parameter
+    out <- min_penalty + (DM / max(DM))^s
+    # out =  1 + DM^s
     # penalties have to be > 0
     out[!is.finite(out)] <- max_penalty
     out[out < 0] <- min_penalty
     return(out)
   }
 
-  penalty_matrix = base_penalty * (min_penalty + get_rho_mat(dist_matrix, s=penalty_scale_exponent))
+  penalty_matrix <- base_penalty * (min_penalty + get_rho_mat(dist_matrix, s = penalty_scale_exponent))
 
   # TODO: add support for allowlisting and denylisting
-  #qplot(as.numeric(dist_matrix), as.numeric(out))
+  # qplot(as.numeric(dist_matrix), as.numeric(out))
   return(penalty_matrix)
 }
 
@@ -930,32 +1023,29 @@ init_penalty_matrix = function(ccs, allowlist=NULL, denylist=NULL, base_penalty 
 #' @importFrom splines ns
 #' @return An interval model formula.
 #' @export
-build_interval_formula <- function(ccs, num_breaks, interval_var="timepoint", interval_start=NULL, interval_stop=NULL){
-
-  assertthat::assert_that(is(ccs, 'cell_count_set'))
+build_interval_formula <- function(ccs, num_breaks, interval_var = "timepoint", interval_start = NULL, interval_stop = NULL) {
+  assertthat::assert_that(is(ccs, "cell_count_set"))
   assertthat::assert_that(is.numeric(num_breaks))
   assertthat::assert_that(is.numeric(interval_start))
   assertthat::assert_that(is.numeric(interval_stop))
   assertthat::assert_that(is.character(interval_var))
 
-  if (is.null(interval_start)){
-    interval_start = as.numeric(min(colData(ccs@cds)[,interval_var]))
+  if (is.null(interval_start)) {
+    interval_start <- as.numeric(min(colData(ccs@cds)[, interval_var]))
   }
-  if (is.null(interval_stop)){
-    interval_stop = as.numeric(max(colData(ccs@cds)[,interval_var]))
+  if (is.null(interval_stop)) {
+    interval_stop <- as.numeric(max(colData(ccs@cds)[, interval_var]))
   }
 
   if (num_breaks < 3) {
-    interval_formula_str = paste("~ ns(", interval_var," df=1)")
+    interval_formula_str <- paste("~ ns(", interval_var, " df=1)")
     return(interval_formula_str)
   } else {
-    interval_breakpoints = seq(interval_start, interval_stop, length.out=num_breaks)
-    interval_breakpoints = interval_breakpoints[2:(length(interval_breakpoints) - 1)] #exclude the first and last entry as these will become boundary knots
-    interval_formula_str = paste("~ ns(", interval_var, ", knots=", paste("c(",paste(interval_breakpoints, collapse=","), ")", sep=""), ")")
+    interval_breakpoints <- seq(interval_start, interval_stop, length.out = num_breaks)
+    interval_breakpoints <- interval_breakpoints[2:(length(interval_breakpoints) - 1)] # exclude the first and last entry as these will become boundary knots
+    interval_formula_str <- paste("~ ns(", interval_var, ", knots=", paste("c(", paste(interval_breakpoints, collapse = ","), ")", sep = ""), ")")
     return(interval_formula_str)
-
   }
 
   return(interval_formula_str)
 }
-#debug(build_interval_formula)
