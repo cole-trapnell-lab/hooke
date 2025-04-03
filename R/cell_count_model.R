@@ -602,6 +602,7 @@ new_cell_count_model <- function(ccs,
     denylist <- denylist %>% dplyr::filter(to %in% ccs_cell_group_names & from %in% ccs_cell_group_names)
   }
 
+  assertthat::assert_that(assertthat::is.count(num_threads), num_threads > 0)
   assertthat::assert_that(assertthat::is.flag(verbose))
 
   # TO DO: FIX THIS
@@ -625,11 +626,7 @@ new_cell_count_model <- function(ccs,
     msg = paste('Argument backend must be one of "nlopt" or "torch".')
   )
   backend <- match.arg(backend)
-
-  set.seed(42)
-
   covariance_type <- match.arg(covariance_type)
-
 
   set.seed(random.seed)
   pln_data <- PLNmodels::prepare_data(
@@ -720,13 +717,11 @@ new_cell_count_model <- function(ccs,
   # created with as.formula (e.g. after pasting).
 
   tryCatch({
-    if (num_threads > 1) {
-      print(paste("fitting model with", num_threads, "threads"))
-      RhpcBLASctl::omp_set_num_threads(1)
-      RhpcBLASctl::blas_set_num_threads(num_threads)
-    } else {
-      print(paste("fitting model with", 1, "threads"))
-    }
+    old_omp_threads = RhpcBLASctl::omp_get_num_procs()
+    old_blas_threads = RhpcBLASctl::blas_get_num_procs()
+    RhpcBLASctl::omp_set_num_threads(1)
+    RhpcBLASctl::blas_set_num_threads(num_threads)
+    print(paste("fitting model with", RhpcBLASctl::blas_get_num_procs(), "threads"))
 
     if (backend == "torch") {
       control_optim_args <- list(
@@ -834,8 +829,8 @@ new_cell_count_model <- function(ccs,
     #                                                                control_main=list(trace = ifelse(verbose, 2, 0)),
     #                                                                ...),)
   }, finally = {
-    RhpcBLASctl::omp_set_num_threads(1)
-    RhpcBLASctl::blas_set_num_threads(1)
+    RhpcBLASctl::omp_set_num_threads(old_omp_threads)
+    RhpcBLASctl::blas_set_num_threads(old_blas_threads)
   })
 
 
