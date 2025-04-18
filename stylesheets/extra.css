@@ -1,0 +1,18 @@
+[data-md-color-scheme="trapnell"] {
+    --md-primary-fg-color:        #2C3E50;
+    --md-primary-fg-color--light: #2C3E50;
+    --md-primary-fg-color--dark:  #2C3E50;
+  }
+
+body {
+/*    background-image: url('../assets/Cover_v02.144dpi.jpg'); */
+/*    background-size: cover; */
+    margin: 0; /* Remove default margins for the body */
+    padding: 0; /* Remove default padding for the body */
+}
+
+.md-main__inner {
+    background-color: #ffffff;
+    opacity: 0.85;
+    z-index: -1;
+  }
