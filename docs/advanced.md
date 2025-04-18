@@ -120,7 +120,7 @@ batches = batches %>% mutate(tp_preds = purrr::map(.f = function(batch) {
                                             knockout=FALSE,
                                             interval_col="timepoint",
                                             interval_step=2,
-                                            expt = batch)
+                                            tibble(expt = batch))
 }, .x=batch))
 
 wt_timepoint_pred_df = batches %>% select(tp_preds) %>% tidyr::unnest(tp_preds)
@@ -167,14 +167,14 @@ wt_timepoint_pred_df = estimate_abundances_over_interval(tfap2afoxd3_ccm,
                                                                  interval_stop=stop_time, 
                                                                  interval_col="timepoint", 
                                                                  interval_step=2, 
-                                                                 perturbation = "control")
+                                                                 tibble(perturbation = "control"))
 
 ko_timepoint_pred_df = estimate_abundances_over_interval(tfap2afoxd3_ccm, 
                                                                  interval_start=start_time, 
                                                                  interval_stop=stop_time, 
                                                                  interval_col="timepoint", 
                                                                  interval_step=2, 
-                                                                 perturbation = "tfap2a-foxd3")
+                                                                 tibble(perturbation = "tfap2a-foxd3"))
 timepoints = seq(start_time, stop_time, 2)
 perturb_vs_wt_nodes = tibble(t1=timepoints) %>%
   mutate(comp_abund = purrr::map(.f = compare_ko_to_wt_at_timepoint,
