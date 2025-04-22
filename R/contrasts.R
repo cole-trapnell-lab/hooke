@@ -142,7 +142,7 @@ my_pln_predict_cond <- function(ccm,
 #' @param newdata tibble A tibble of variables used for the prediction.
 #' @param min_log_abund numeric Minimum log abundance value.
 #' @param cell_group string The name of the groups that are being estimated.
-#' @param log_scale Desired log scale for the output. Default is natural log. 
+#' @param log_scale Desired log scale for the output. Default is natural log.
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
@@ -150,12 +150,17 @@ estimate_abundances <- function(ccm,
                                 newdata,
                                 min_log_abund = -5,
                                 cell_group = "cell_group",
-                                log_scale = c("log", "log10", "log2")) {
+                                scale = c("log", "log10", "log2", "per_1000")) {
   if (!tibble::is_tibble(newdata)) {
     newdata <- newdata %>% as_tibble()
   }
 
-  log_scale <- match.arg(log_scale)
+  scale <- match.arg(scale)
+  if (scale == "per_1000") {
+    type <- "response"
+  } else {
+    type <- "link"
+  }
 
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(tibble::is_tibble(newdata))
@@ -184,7 +189,7 @@ estimate_abundances <- function(ccm,
 
   newdata <- fill_missing_terms_with_default_values(ccm, newdata, pln_model = "full")
 
-  estimate_abundance_row <- function(ccm, model_terms, newdata, min_log_abund) {
+  estimate_abundance_row <- function(ccm, model_terms, newdata, min_log_abund, type) {
     # assertthat::assert_that(
     #   tryCatch(expr = length(missing_terms) == 0,
     #            error = function(e) FALSE),
@@ -225,7 +230,7 @@ estimate_abundances <- function(ccm,
     #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
     # }
 
-    pred_out <- my_plnnetwork_predict(ccm, newdata = newdata)
+    pred_out <- my_plnnetwork_predict(ccm, newdata = newdata, type = type)
     # pred_out = max(pred_out, -5)
     # log_abund = pred_out[1,]
     log_abund <- as.numeric(pred_out)
@@ -266,12 +271,13 @@ estimate_abundances <- function(ccm,
       .x = data,
       ccm = ccm,
       model_terms = model_terms,
-      min_log_abund = min_log_abund
+      min_log_abund = min_log_abund,
+      type = type
     )) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
 
-  if (log_scale == "log2") {
+  if (scale == "log2") {
     pred_out_tbl <- pred_out_tbl %>%
       mutate(
         log2_abund = log2(exp(log_abund)),
@@ -279,7 +285,7 @@ estimate_abundances <- function(ccm,
         log_abund_se = log2(exp(log_abund_sd))
       ) %>%
       select(-c(log_abund, log_abund_se, log_abund_sd))
-  } else if (log_scale == "log10") {
+  } else if (scale == "log10") {
     pred_out_tbl <- pred_out_tbl %>%
       mutate(
         log_abund = log10(exp(log_abund)),
@@ -476,7 +482,11 @@ calculate_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
 
   # Compute power: 1 - Type II error probability
   power <- 1 - pnorm(Z_alpha - Z) + pnorm(-Z_alpha - Z)
-
+  
+  # return 0 if divide by 0 
+  if (SE_x == 0 && SE_y == 0) {
+    power <- 0
+  }
   return(power)
 }
 
@@ -491,6 +501,11 @@ calculate_mdfc <- function(SE_x, SE_y, alpha = 0.05, power = 0.8) {
 
   # Convert to fold change
   MDFC <- exp(delta_beta)
+  
+  # if power is 0, no fold change is detectable
+  if (power == 0 && SE_x == 0 && SE_y == 0) {
+    MDFC <- Inf
+  }
 
   return(MDFC)
 }
@@ -523,8 +538,8 @@ convert_base <- function(value, from_base, to_base) {
 #'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
 #' @param alpha Desired significance level
 #' @param power Desired power level for calculating minimum detectable fold change
-#' @param convert_scale Whether to convert to log2 scale.  
-#' @param log_scale Log scale used for estimate_abundances. 
+#' @param convert_scale Whether to convert to log2 scale.
+#' @param log_scale Log scale used for estimate_abundances.
 #' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X).
 #' @importFrom dplyr full_join
 #' @export
@@ -591,7 +606,7 @@ compare_abundances <- function(ccm,
         log_abund_sd_y = log2(exp(log_abund_sd_y))
       )
   }
-  # otherwise do nothing 
+  # otherwise do nothing
 
   contrast_tbl <- contrast_tbl %>%
     dplyr::mutate(
