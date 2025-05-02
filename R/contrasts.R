@@ -484,10 +484,10 @@ calculate_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
   power <- 1 - pnorm(Z_alpha - Z) + pnorm(-Z_alpha - Z)
   
   # return 0 if divide by 0 
-  if (SE_x == 0 && SE_y == 0) {
-    power <- 0
-  }
+  power = ifelse(SE_x == 0 & SE_y == 0, 0, power)
+  
   return(power)
+
 }
 
 # Estimates the smallest fold change you can detect at a given power level
@@ -503,9 +503,7 @@ calculate_mdfc <- function(SE_x, SE_y, alpha = 0.05, power = 0.8) {
   MDFC <- exp(delta_beta)
   
   # if power is 0, no fold change is detectable
-  if (power == 0 && SE_x == 0 && SE_y == 0) {
-    MDFC <- Inf
-  }
+  MDFC <- ifelse(power == 0 & SE_x == 0 & SE_y == 0, Inf, MDFC )
 
   return(MDFC)
 }
