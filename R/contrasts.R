@@ -604,8 +604,7 @@ compare_abundances <- function(ccm,
         log_abund_sd_y = log2(exp(log_abund_sd_y))
       )
   }
-  # otherwise do nothing
-
+  
   contrast_tbl <- contrast_tbl %>%
     dplyr::mutate(
       delta_log_abund = log_abund_y - log_abund_x,
@@ -621,6 +620,29 @@ compare_abundances <- function(ccm,
     select(-tvalue)
 
   return(contrast_tbl)
+}
+
+# redo multiple hypothesis correction 
+# by only including cell coutns where we have power
+# otherwise return NA 
+adjust_q_values <- function(contrast_tbl, 
+                            power_threshold = 0.8) {
+  
+  
+  new_q_values = contrast_tbl %>% 
+    mutate(rn = row_number()) %>% 
+    filter(power >= power_threshold) %>% 
+    mutate(delta_q_value = p.adjust(delta_p_value, method = "BH")) %>% 
+    select(rn, delta_q_value)
+  
+  contrast_tbl <- contrast_tbl %>% 
+    mutate(rn = row_number()) %>% 
+    select(-delta_q_value) %>% 
+    left_join(new_q_values, by = "rn")  %>% 
+    select(-rn)
+  
+  return(contrast_tbl)
+  
 }
 
 
