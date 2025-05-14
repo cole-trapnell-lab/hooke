@@ -9,7 +9,12 @@ compare_abundances(
   cond_x,
   cond_y,
   by = "cell_group",
-  method = c("BH", "bonferroni", "hochberg", "hommel", "BY")
+  method = c("BH", "bonferroni", "hochberg", "hommel", "BY"),
+  alpha = 0.05,
+  power = 0.8,
+  convert_scale = FALSE,
+  adjust_q_values = FALSE,
+  log_scale = c("log", "log10", "log2")
 )
 }
 \arguments{
@@ -24,6 +29,14 @@ compare_abundances(
 \item{method}{string A method for correcting P-value multiple comparisons.
 This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).}
+
+\item{alpha}{Desired significance level}
+
+\item{power}{Desired power level for calculating minimum detectable fold change}
+
+\item{convert_scale}{Whether to convert to log2 scale.}
+
+\item{log_scale}{Log scale used for estimate_abundances.}
 }
 \value{
 tibble A table contrasting cond_x and cond_y (interpret as Y/X).

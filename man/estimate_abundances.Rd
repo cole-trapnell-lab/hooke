@@ -8,7 +8,8 @@ estimate_abundances(
   ccm,
   newdata,
   min_log_abund = -5,
-  cell_group = "cell_group"
+  cell_group = "cell_group",
+  scale = c("log", "log10", "log2", "per_1000")
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ estimate_abundances(
 \item{min_log_abund}{numeric Minimum log abundance value.}
 
 \item{cell_group}{string The name of the groups that are being estimated.}
+
+\item{log_scale}{Desired log scale for the output. Default is natural log.}
 }
 \value{
 A tibble of cell abundance predictions.

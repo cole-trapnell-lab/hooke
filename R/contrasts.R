@@ -549,6 +549,7 @@ compare_abundances <- function(ccm,
                                alpha = 0.05,
                                power = 0.8,
                                convert_scale = FALSE,
+                               adjust_q_values = FALSE, 
                                log_scale = c("log", "log10", "log2")) {
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(tibble::is_tibble(cond_x))
@@ -618,6 +619,10 @@ compare_abundances <- function(ccm,
       mdfc = calculate_mdfc(log_abund_se_x, log_abund_se_y, power = power)
     ) %>%
     select(-tvalue)
+  
+  if (adjust_q_values) {
+    contrast_tbl = adjust_q_values(contrast_tbl, power_threshold = power)
+  }
 
   return(contrast_tbl)
 }
