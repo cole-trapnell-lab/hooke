@@ -613,7 +613,7 @@ new_cell_count_model <- function(ccs,
     ),
     msg = paste(
       'Argument vhat_method must be one of "variational_var",',
-      '"jackknife", or "bootstrap".'
+      '"jackknife", "sandwich_var", or "bootstrap".'
     )
   )
   vhat_method <- match.arg(vhat_method)
