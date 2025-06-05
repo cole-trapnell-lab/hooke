@@ -1186,6 +1186,8 @@ plot_cells_per_sample <- function(ccs,
                                   y_col = c("count", "count_per_1000"),
                                   cell_groups = c(),
                                   batch_col = NULL,
+                                  perturbation_col = "perturbation", 
+                                  interval_col = "timepoint",
                                   color_by = "cell_group",
                                   plot_zeroes = T,
                                   plot_points = F,
@@ -1194,12 +1196,13 @@ plot_cells_per_sample <- function(ccs,
                                   nrow = 1,
                                   legend_position = "none") {
   y_col <- match.arg(y_col)
-
+  
+  colData(ccs)[[color_by]] = as.factor(colData(ccs)[[color_by]])
 
   if (is.null(batch_col) == FALSE) {
     batches_to_keep <- colData(ccs) %>%
       as.data.frame() %>%
-      group_by(!!sym(batch_col), !!sym(x_col)) %>%
+      group_by(!!sym(batch_col), !!sym(perturbation_col)) %>%
       tally() %>%
       group_by(!!sym(batch_col)) %>%
       filter(n() > 1) %>%
