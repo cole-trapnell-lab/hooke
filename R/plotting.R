@@ -1186,6 +1186,8 @@ plot_cells_per_sample <- function(ccs,
                                   y_col = c("count", "count_per_1000"),
                                   cell_groups = c(),
                                   batch_col = NULL,
+                                  perturbation_col = "perturbation", 
+                                  interval_col = "timepoint",
                                   color_by = "cell_group",
                                   plot_zeroes = T,
                                   plot_points = F,
@@ -1194,12 +1196,13 @@ plot_cells_per_sample <- function(ccs,
                                   nrow = 1,
                                   legend_position = "none") {
   y_col <- match.arg(y_col)
-
+  
+  colData(ccs)[[color_by]] = as.factor(colData(ccs)[[color_by]])
 
   if (is.null(batch_col) == FALSE) {
     batches_to_keep <- colData(ccs) %>%
       as.data.frame() %>%
-      group_by(!!sym(batch_col), !!sym(x_col)) %>%
+      group_by(!!sym(batch_col), !!sym(perturbation_col)) %>%
       tally() %>%
       group_by(!!sym(batch_col)) %>%
       filter(n() > 1) %>%
@@ -1242,7 +1245,83 @@ plot_cells_per_sample <- function(ccs,
   return(p)
 }
 
-
+plot_conditional_cells_per_sample <- function(ccm,
+                                              x_col,
+                                              y_col = c("count", "count_per_1000"),
+                                              cell_groups = c(),
+                                              batch_col = NULL, 
+                                              color_by = "cell_group",
+                                              plot_zeroes = T,
+                                              plot_points = F,
+                                              facet = T, 
+                                              log_scale = F,
+                                              nrow = 1,
+                                              legend_position = "none", 
+                                              newdata = tibble()) {
+  
+  y_col <- match.arg(y_col)
+  
+  sample_metadata <- colData(ccm@ccs) %>% tidyr::as_tibble()
+  sel_ccs_counts <- monocle3::normalized_counts(ccm@ccs, 
+                                                norm_method = "size_only", 
+                                                pseudocount = 0)
+  
+  # override the columns with the newdata columns
+  for (c in colnames(newdata)) {
+    sample_metadata[[c]] <- newdata[[c]]
+  }
+  
+  conditional_counts <- hooke::estimate_abundances_cond(ccm,
+                                                        newdata = sample_metadata,
+                                                        cond_responses = sel_ccs_counts,
+                                                        pln_model = "reduced"
+  )
+  
+  count_df <- conditional_counts %>%
+    dplyr::select(sample, cell_group, log_abund) %>%
+    mutate(num_cells = exp(log_abund)) %>%
+    select(-log_abund) %>% 
+    mutate(count = as.integer(num_cells))
+  
+  count_df <- left_join(count_df, 
+                        colData(ccm@ccs) %>% as.data.frame, by = "sample")
+  
+  cell_type_total <- Matrix::colSums(counts(ccm@ccs))
+  geometric_mean <- exp(mean(log(cell_type_total)))
+  
+  count_df <- count_df %>% mutate(count_per_1000 = count * 1000 / geometric_mean)
+  
+  if (length(cell_groups) != 0) {
+    count_df <- count_df %>% filter(cell_group %in% cell_groups)
+  }
+  
+  if (plot_zeroes) {
+    count_df <- count_df %>% mutate(count = count + 0.001)
+  }
+  
+  count_df[[x_col]] <- as.factor(count_df[[x_col]])
+  
+  p <- count_df %>%
+    ggplot(aes(x = !!sym(x_col), y = !!sym(y_col), fill = !!sym(color_by))) +
+    geom_boxplot() +
+    facet_wrap(~cell_group, nrow = nrow) +
+    theme(legend.position = legend_position) +
+    monocle3:::monocle_theme_opts()
+  
+  if (plot_points) {
+    p <- p + geom_jitter(aes(x = !!sym(x_col), y = !!sym(y_col)), size = 1)
+  }
+  
+  if (log_scale) {
+    p <- p + scale_y_log10()
+  }
+  
+  if (facet) {
+    p <- p + facet_wrap(~cell_group, scale = "free")
+  }
+  
+  return(p)
+}
 
 #' @noRd
 plot_cells_highlight <- function(ccs, group_to_highlight, colname) {

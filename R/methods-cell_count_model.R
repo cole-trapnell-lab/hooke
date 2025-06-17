@@ -87,10 +87,10 @@ get_count_df <- function(ccs, round=F, norm=F) {
 
 }
 
-#' subset ccs by cell groups
-#' #' @param ccs
-#' #' @param cell_groups
-#' #' @export
+# subset ccs by cell groups
+#' @param ccs
+#' @param cell_groups
+#' @export
 subset_ccs = function(ccs, ...) {
 
   filtered_cds_coldata = ccs@cds_coldata %>% as.data.frame %>% filter(...)

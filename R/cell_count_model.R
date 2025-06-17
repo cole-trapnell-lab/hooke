@@ -519,7 +519,7 @@ new_cell_count_model <- function(ccs,
                                  keep_ccs = TRUE,
                                  pln_min_ratio = 0.001,
                                  pln_num_penalties = 30,
-                                 vhat_method = c("bootstrap", "variational_var", "jackknife"),
+                                 vhat_method = c("bootstrap", "variational_var", "sandwich_var", "jackknife"),
                                  covariance_type = c("spherical", "full", "diagonal"),
                                  num_bootstraps = 10,
                                  inception = NULL,
@@ -613,7 +613,7 @@ new_cell_count_model <- function(ccs,
     ),
     msg = paste(
       'Argument vhat_method must be one of "variational_var",',
-      '"jackknife", or "bootstrap".'
+      '"jackknife", "sandwich_var", or "bootstrap".'
     )
   )
   vhat_method <- match.arg(vhat_method)
@@ -719,9 +719,14 @@ new_cell_count_model <- function(ccs,
   tryCatch({
     old_omp_threads = RhpcBLASctl::omp_get_num_procs()
     old_blas_threads = RhpcBLASctl::blas_get_num_procs()
-    RhpcBLASctl::omp_set_num_threads(1)
-    RhpcBLASctl::blas_set_num_threads(num_threads)
-    print(paste("fitting model with", RhpcBLASctl::blas_get_num_procs(), "threads"))
+    if (num_threads > 1 && is.na(RhpcBLASctl::omp_get_num_procs())) {
+      warning("OpenMP not available, no control over threads is possible.")
+      num_threads <- 1
+    } else {
+      RhpcBLASctl::omp_set_num_threads(1)
+      RhpcBLASctl::blas_set_num_threads(num_threads)
+    }
+    print(paste("fitting model with", num_threads, "threads"))
 
     if (backend == "torch") {
       control_optim_args <- list(
@@ -757,6 +762,10 @@ new_cell_count_model <- function(ccs,
 
     if (vhat_method == "sandwich_var") {
       sandwich_var <- TRUE
+      
+      # requires that covariance is full 
+      covariance_type <- "full"
+      
     }
 
     if (vhat_method == "jackknife") {
@@ -777,7 +786,6 @@ new_cell_count_model <- function(ccs,
       control = PLNmodels::PLNnetwork_param(
         backend = backend,
         trace = ifelse(verbose, 2, 0),
-        # inception_cov = covariance_type,
         n_penalties = pln_num_penalties,
         min_ratio = pln_min_ratio,
         penalty_weights = initial_penalties,
@@ -855,9 +863,9 @@ new_cell_count_model <- function(ccs,
   # best_full_model <- PLNmodels::getModel(full_pln_model, var=best_reduced_model$penalty)
   best_full_model <- full_pln_model
 
-  if (vhat_method == "jackknife" | vhat_method == "bootstrap") {
+  if (vhat_method == "jackknife" | vhat_method == "bootstrap" | vhat_method == "sandwich_var") {
     vhat_coef <- coef(best_full_model, type = "main")
-    var_jack_mat <- attributes(vhat_coef)[[paste0("vcov_", vhat_method)]]
+    var_jack_mat <- attributes(vhat_coef)[[paste0("vcov_", gsub("_var", "", vhat_method))]]
     # var_jack_mat = var_jack %>% as.data.frame %>%
     #   tibble::rownames_to_column("term") %>%
     #   tidyr::pivot_longer(-term, names_to = "cell_group", values_to = "var") %>%

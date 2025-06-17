@@ -29,7 +29,22 @@ my_plnnetwork_predict <- function(ccm, newdata, type = c("link", "response"), en
 
 
 
-
+#' Predict Conditional Means from PLN Model
+#'
+#' Computes conditional predictions from a PLN (Poisson Log-Normal) model, given new data and conditional responses.
+#'
+#' @param ccm An object containing the fitted PLN model and associated data structures.
+#' @param newdata A data frame or matrix of new covariate values for prediction.
+#' @param cond_responses A matrix or data frame of observed responses for the conditional species (columns must be a subset of the species in the model).
+#' @param type Character string specifying the scale of the predictions. Either \code{"link"} (default, latent scale) or \code{"response"} (mean response scale).
+#' @param var_par Logical; if \code{TRUE}, attaches the conditional mean (\code{M}) and variance (\code{S}) as attributes to the result.
+#' @param envir Environment in which to evaluate model terms (default is parent frame).
+#' @param pln_model Character string specifying which PLN model to use for prediction. Either \code{"full"} (default) or \code{"reduced"}.
+#'
+#' @return A matrix of predicted values for the unconditioned species. The type of prediction is determined by the \code{type} argument. If \code{var_par = TRUE}, the result has attributes \code{"M"} (conditional mean) and \code{"S"} (conditional variance).
+#'
+#' @details
+#' This function computes the conditional mean (and optionally variance) of the latent variables or response for a subset of species, given observed values for another subset (the conditional responses), under a fitted PLN model. It handles both the full and reduced model forms, and can return predictions on the latent or response scale.
 my_pln_predict_cond <- function(ccm,
                                 newdata,
                                 cond_responses,
@@ -53,7 +68,7 @@ my_pln_predict_cond <- function(ccm,
   # Dimensions and subsets
   n_new <- nrow(Yc)
   cond <- sp_names %in% colnames(Yc)
-
+  cond_2 <- colnames(Yc) %in% sp_names
   ## Extract the model matrices from the new data set with initial formula
   # X <- model.matrix(formula(private$formula)[-2], newdata, xlev = attr(private$formula, "xlevels"))
   # X <- model.matrix(terms(ccm@model_aux[["model_frame"]]), newdata,
@@ -96,7 +111,7 @@ my_pln_predict_cond <- function(ccm,
   VE <- model(ccm, model_to_return = pln_model)$optimize_vestep(
     covariates = X,
     offsets = O[, cond, drop = FALSE],
-    responses = Yc,
+    responses = Yc[,cond_2, drop=FALSE],
     weights = rep(1, n_new),
     B = model(ccm, model_to_return = pln_model)$model_par$B[, cond, drop = FALSE],
     Omega = prec11
@@ -142,7 +157,7 @@ my_pln_predict_cond <- function(ccm,
 #' @param newdata tibble A tibble of variables used for the prediction.
 #' @param min_log_abund numeric Minimum log abundance value.
 #' @param cell_group string The name of the groups that are being estimated.
-#' @param log_scale Desired log scale for the output. Default is natural log. 
+#' @param log_scale Desired log scale for the output. Default is natural log.
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
@@ -150,12 +165,17 @@ estimate_abundances <- function(ccm,
                                 newdata,
                                 min_log_abund = -5,
                                 cell_group = "cell_group",
-                                log_scale = c("log", "log10", "log2")) {
+                                scale = c("log", "log10", "log2", "per_1000")) {
   if (!tibble::is_tibble(newdata)) {
     newdata <- newdata %>% as_tibble()
   }
 
-  log_scale <- match.arg(log_scale)
+  scale <- match.arg(scale)
+  if (scale == "per_1000") {
+    type <- "response"
+  } else {
+    type <- "link"
+  }
 
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(tibble::is_tibble(newdata))
@@ -184,7 +204,7 @@ estimate_abundances <- function(ccm,
 
   newdata <- fill_missing_terms_with_default_values(ccm, newdata, pln_model = "full")
 
-  estimate_abundance_row <- function(ccm, model_terms, newdata, min_log_abund) {
+  estimate_abundance_row <- function(ccm, model_terms, newdata, min_log_abund, type) {
     # assertthat::assert_that(
     #   tryCatch(expr = length(missing_terms) == 0,
     #            error = function(e) FALSE),
@@ -225,7 +245,7 @@ estimate_abundances <- function(ccm,
     #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
     # }
 
-    pred_out <- my_plnnetwork_predict(ccm, newdata = newdata)
+    pred_out <- my_plnnetwork_predict(ccm, newdata = newdata, type = type)
     # pred_out = max(pred_out, -5)
     # log_abund = pred_out[1,]
     log_abund <- as.numeric(pred_out)
@@ -266,12 +286,13 @@ estimate_abundances <- function(ccm,
       .x = data,
       ccm = ccm,
       model_terms = model_terms,
-      min_log_abund = min_log_abund
+      min_log_abund = min_log_abund,
+      type = type
     )) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
 
-  if (log_scale == "log2") {
+  if (scale == "log2") {
     pred_out_tbl <- pred_out_tbl %>%
       mutate(
         log2_abund = log2(exp(log_abund)),
@@ -279,7 +300,7 @@ estimate_abundances <- function(ccm,
         log_abund_se = log2(exp(log_abund_sd))
       ) %>%
       select(-c(log_abund, log_abund_se, log_abund_sd))
-  } else if (log_scale == "log10") {
+  } else if (scale == "log10") {
     pred_out_tbl <- pred_out_tbl %>%
       mutate(
         log_abund = log10(exp(log_abund)),
@@ -318,7 +339,7 @@ estimate_abundances_cond <- function(ccm,
 
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(tibble::is_tibble(newdata))
-  assertthat::assert_that(is.numeric(min_log_abund))
+  assertthat::assert_that(is.numeric(min_log_abund) | is.null(min_log_abund))
   assertthat::assert_that(is.character(cell_group))
 
   type <- match.arg(type)
@@ -343,7 +364,6 @@ estimate_abundances_cond <- function(ccm,
                                           min_log_abund = -5) {
     newdata$Offset <- 1
 
-
     pred_out <- my_pln_predict_cond(ccm, newdata,
       cond_responses,
       type = type,
@@ -352,11 +372,15 @@ estimate_abundances_cond <- function(ccm,
     # log_abund = as.numeric(pred_out)
     log_abund <- as.numeric(t(pred_out))
     newdata$Offset <- NULL
-
-    below_thresh <- log_abund < min_log_abund
-    log_abund[below_thresh] <- min_log_abund
-    # log_abund_se[below_thresh] = 0
-
+    
+    if (is.null(min_log_abund) == FALSE) {
+      
+      below_thresh <- log_abund < min_log_abund
+      log_abund[below_thresh] <- min_log_abund
+      # log_abund_se[below_thresh] = 0
+      
+    }
+    
     # pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
     # pred_out_tbl = cbind(newdata, pred_out_tbl)
     # pred_out_tbl <- tibble::tibble(pred_out_tbl)
@@ -389,7 +413,8 @@ estimate_abundances_cond <- function(ccm,
       .y = cond_response,
       ccm = ccm,
       type = type,
-      pln_model = pln_model
+      pln_model = pln_model, 
+      min_log_abund = min_log_abund
     )) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
@@ -477,6 +502,9 @@ calculate_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
   # Compute power: 1 - Type II error probability
   power <- 1 - pnorm(Z_alpha - Z) + pnorm(-Z_alpha - Z)
 
+  # return 0 if divide by 0
+  power <- ifelse(SE_x == 0 & SE_y == 0, 0, power)
+
   return(power)
 }
 
@@ -491,6 +519,9 @@ calculate_mdfc <- function(SE_x, SE_y, alpha = 0.05, power = 0.8) {
 
   # Convert to fold change
   MDFC <- exp(delta_beta)
+
+  # if power is 0, no fold change is detectable
+  MDFC <- ifelse(power == 0 & SE_x == 0 & SE_y == 0, Inf, MDFC)
 
   return(MDFC)
 }
@@ -523,8 +554,8 @@ convert_base <- function(value, from_base, to_base) {
 #'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
 #' @param alpha Desired significance level
 #' @param power Desired power level for calculating minimum detectable fold change
-#' @param convert_scale Whether to convert to log2 scale.  
-#' @param log_scale Log scale used for estimate_abundances. 
+#' @param convert_scale Whether to convert to log2 scale.
+#' @param log_scale Log scale used for estimate_abundances.
 #' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X).
 #' @importFrom dplyr full_join
 #' @export
@@ -536,6 +567,7 @@ compare_abundances <- function(ccm,
                                alpha = 0.05,
                                power = 0.8,
                                convert_scale = FALSE,
+                               adjust_q_values = FALSE,
                                log_scale = c("log", "log10", "log2")) {
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(tibble::is_tibble(cond_x))
@@ -591,7 +623,6 @@ compare_abundances <- function(ccm,
         log_abund_sd_y = log2(exp(log_abund_sd_y))
       )
   }
-  # otherwise do nothing 
 
   contrast_tbl <- contrast_tbl %>%
     dplyr::mutate(
@@ -606,6 +637,30 @@ compare_abundances <- function(ccm,
       mdfc = calculate_mdfc(log_abund_se_x, log_abund_se_y, power = power)
     ) %>%
     select(-tvalue)
+
+  if (adjust_q_values) {
+    contrast_tbl <- adjust_q_values(contrast_tbl, power_threshold = power)
+  }
+
+  return(contrast_tbl)
+}
+
+# redo multiple hypothesis correction
+# by only including cell coutns where we have power
+# otherwise return NA
+adjust_q_values <- function(contrast_tbl,
+                            power_threshold = 0.8) {
+  new_q_values <- contrast_tbl %>%
+    mutate(rn = row_number()) %>%
+    filter(power >= power_threshold) %>%
+    mutate(delta_q_value = p.adjust(delta_p_value, method = "BH")) %>%
+    select(rn, delta_q_value)
+
+  contrast_tbl <- contrast_tbl %>%
+    mutate(rn = row_number()) %>%
+    select(-delta_q_value) %>%
+    left_join(new_q_values, by = "rn") %>%
+    select(-rn)
 
   return(contrast_tbl)
 }
@@ -640,3 +695,5 @@ compare_ko_to_wt_at_timepoint <- function(tp, perturbation_ccm, wt_pred_df, ko_p
   cond_ko <- ko_pred_df %>% filter(!!sym(interval_col) == tp)
   return(compare_abundances(perturbation_ccm, cond_wt, cond_ko))
 }
+
+
