@@ -130,7 +130,7 @@ initial_pcor_graph <- function(ccs) {
 
     cs_ccs <- new_cell_count_set(cds,
       cell_group = "cell_state",
-      sample_group = "embryo"
+      sample_group = ccs@info$sample_group
     )
     paga_graph <- paga_graph %>%
       igraph::as_data_frame() %>%
