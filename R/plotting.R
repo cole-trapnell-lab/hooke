@@ -1228,7 +1228,7 @@ plot_cells_per_sample <- function(ccs,
     geom_boxplot() +
     facet_wrap(~cell_group, nrow = nrow) +
     theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts()
+    monocle3:::monocle_theme_opts() 
 
   if (plot_points) {
     p <- p + geom_jitter(aes(x = !!sym(x_col), y = !!sym(y_col)), size = 1)
@@ -1241,7 +1241,7 @@ plot_cells_per_sample <- function(ccs,
   if (facet) {
     p <- p + facet_wrap(~cell_group, scale = "free")
   }
-
+  p = p + expand_limits(y=0)
   return(p)
 }
 
