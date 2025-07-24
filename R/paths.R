@@ -158,6 +158,10 @@ get_weighted_edges <- function(ccm,
 #' @noRd
 get_shortest_path <- function(from, to, traversal_graph) {
   # print(paste0(from, "-",to))
+  
+  if (is.null(igraph::E(traversal_graph)$weight)) {
+    igraph::E(traversal_graph)$weight= 1
+  }
   shortest_path_df <- calc_shortest_path(traversal_graph, from, to) %>%
     select(from, to, weight) %>%
     distance_to_root() %>%
