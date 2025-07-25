@@ -1167,6 +1167,8 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 #' @param x_col A string specifying the column name to be used for the x-axis.
 #' @param y_col A string specifying the column name to be used for the y-axis. Default is "count".
 #' @param cell_groups A vector of cell group names to filter the data. Default is an empty vector.
+#' @param interval_col If defined, will match timepoints to perturbation 
+#' @param batch_col If defined, will match batches to perturbation
 #' @param color_by A string specifying the column name to be used for coloring the plot. Default is "cell_group".
 #' @param plot_zeroes A logical value indicating whether to plot zero counts. Default is FALSE.
 #' @param plot_points A logical value indicating whether to plot individual points. Default is FALSE.
@@ -1209,6 +1211,18 @@ plot_cells_per_sample <- function(ccs,
       pull(!!sym(batch_col))
 
     ccs <- subset_ccs(ccs, !!sym(batch_col) %in% batches_to_keep)
+  }
+  
+  if (is.null(interval_col)== FALSE){
+    timepoints_to_keep <- colData(ccs) %>%
+      as.data.frame() %>%
+      group_by(!!sym(interval_col), !!sym(perturbation_col)) %>% 
+      tally() %>%
+      group_by(!!sym(interval_col)) %>%
+      filter(n() > 1) %>%
+      pull(!!sym(interval_col))
+    
+    ccs <- subset_ccs(ccs, !!sym(interval_col) %in% timepoints_to_keep)
   }
 
   count_df <- get_norm_df(ccs)
