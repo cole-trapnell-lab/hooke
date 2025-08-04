@@ -146,9 +146,9 @@ aggregated_expr_data <- function(cds,
     select(-cell_group) %>%
     relocate(!!!syms(group_cells_by))
 
-  if (length(group_cells_by) == 1 && group_cells_by == "cell_type") {
+  if (length(group_cells_by) == 1) {
     cluster_fraction_expressing_table <- cluster_fraction_expressing_table %>%
-      dplyr::rename(cell_group = cell_type)
+      dplyr::rename(cell_group = !!sym(group_cells_by))
   }
   
   return(cluster_fraction_expressing_table)
