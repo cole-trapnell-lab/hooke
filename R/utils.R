@@ -58,10 +58,11 @@ get_distances <- function(ccs, method = "euclidean", matrix = T) {
 #' @noRd
 #'
 aggregated_expr_data <- function(cds, 
-                                 group_cells_by = "cell_type", 
+                                 group_cells_by = "cell_type",
                                  gene_group_df = NULL,
-                                 gene_agg_fun = "sum", 
-                                 cell_agg_fun = "mean") {
+                                 gene_agg_fun = "sum",
+                                 cell_agg_fun = "mean",
+                                 calculate_specificity = TRUE) {
   
   coldata_df <- as.data.frame(colData(cds)) %>%
     filter(if_all(group_cells_by, ~ !is.na(.x) & .x != ""))
@@ -120,14 +121,17 @@ aggregated_expr_data <- function(cds,
 
   cluster_fraction_expressing_table$mean_expression <- cluster_expr_table$mean_expression
 
-  cluster_spec_mat <- monocle3:::specificity_matrix(cluster_mean_exprs)
-  cluster_spec_table <- tibble::rownames_to_column(as.data.frame(cluster_spec_mat))
-  cluster_spec_table <- tidyr::gather(
-    cluster_spec_table, "cell_group",
-    "specificity", -rowname
-  )
+  if (calculate_specificity) {
+    cluster_spec_mat <- monocle3:::specificity_matrix(cluster_mean_exprs)
+    cluster_spec_table <- tibble::rownames_to_column(as.data.frame(cluster_spec_mat))
+    cluster_spec_table <- tidyr::gather(
+      cluster_spec_table, "cell_group",
+      "specificity", -rowname
+    )
 
-  cluster_fraction_expressing_table$specificity <- cluster_spec_table$specificity
+    cluster_fraction_expressing_table$specificity <- cluster_spec_table$specificity
+  }
+  
   cluster_fraction_expressing_table <- cluster_fraction_expressing_table %>%
     dplyr::rename("gene_id" = rowname) %>%
     dplyr::left_join(
