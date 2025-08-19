@@ -54,25 +54,42 @@ get_distances <- function(ccs, method = "euclidean", matrix = T) {
 #' calculates the fraction expression, mean expression and specificity
 #' for each gene split by the specified group
 #' @param cds
-#' @param group_cells_by
+#' @param group_cells_by How to group the cells, can be multiple columns
 #' @noRd
 #'
 aggregated_expr_data <- function(cds, 
-                                 group_cells_by = "cell_type", 
+                                 group_cells_by = "cell_type",
                                  gene_group_df = NULL,
-                                 gene_agg_fun = "sum", 
-                                 cell_agg_fun = "mean") {
+                                 gene_agg_fun = "sum",
+                                 cell_agg_fun = "mean",
+                                 calculate_specificity = TRUE) {
   
-  # cds <- cds[, !is.na(colData(cds)$timepoint)]
-  cds <- cds[, !is.na(colData(cds)[[group_cells_by]])]
-  cds <- cds[, colData(cds)[[group_cells_by]] != ""]
+  coldata_df <- as.data.frame(colData(cds)) %>%
+    filter(if_all(group_cells_by, ~ !is.na(.x) & .x != ""))
+  cds <- cds[, rownames(coldata_df)]
+
+  # cds <- cds[, !is.na(colData(cds)[[group_cells_by]])]
+  # cds <- cds[, colData(cds)[[group_cells_by]] != ""]
+
+  agg_group_lookup <- coldata_df %>%
+    select(!!!syms(group_cells_by)) %>%
+    distinct() %>%
+    mutate(agg_group = paste0("agg_group_", row_number()))
+  
+  colData(cds)$agg_group <- coldata_df %>%
+    left_join(
+      agg_group_lookup,
+      by = group_cells_by
+    ) %>%
+    pull(agg_group)
 
   cell_group_df <- data.frame(
     row.names = row.names(colData(cds)),
     cell_id = row.names(colData(cds))
   )
 
-  cell_group_df$cell_group <- colData(cds)[, group_cells_by]
+  # cell_group_df$cell_group <- colData(cds)[, group_cells_by]
+  cell_group_df$cell_group <- colData(cds)$agg_group
   cell_group_df$cell_group <- as.character(cell_group_df$cell_group)
   cluster_binary_exprs <- as.matrix(aggregate_gene_expression(cds,
     cell_group_df = cell_group_df,
@@ -104,14 +121,17 @@ aggregated_expr_data <- function(cds,
 
   cluster_fraction_expressing_table$mean_expression <- cluster_expr_table$mean_expression
 
-  cluster_spec_mat <- monocle3:::specificity_matrix(cluster_mean_exprs)
-  cluster_spec_table <- tibble::rownames_to_column(as.data.frame(cluster_spec_mat))
-  cluster_spec_table <- tidyr::gather(
-    cluster_spec_table, "cell_group",
-    "specificity", -rowname
-  )
+  if (calculate_specificity) {
+    cluster_spec_mat <- monocle3:::specificity_matrix(cluster_mean_exprs)
+    cluster_spec_table <- tibble::rownames_to_column(as.data.frame(cluster_spec_mat))
+    cluster_spec_table <- tidyr::gather(
+      cluster_spec_table, "cell_group",
+      "specificity", -rowname
+    )
 
-  cluster_fraction_expressing_table$specificity <- cluster_spec_table$specificity
+    cluster_fraction_expressing_table$specificity <- cluster_spec_table$specificity
+  }
+  
   cluster_fraction_expressing_table <- cluster_fraction_expressing_table %>%
     dplyr::rename("gene_id" = rowname) %>%
     dplyr::left_join(
@@ -122,6 +142,19 @@ aggregated_expr_data <- function(cds,
     ) %>%
     dplyr::select(cell_group, gene_id, gene_short_name, everything())
 
+  cluster_fraction_expressing_table <- cluster_fraction_expressing_table %>%
+    left_join(
+      agg_group_lookup,
+      by = join_by(cell_group == agg_group)
+    ) %>%
+    select(-cell_group) %>%
+    relocate(!!!syms(group_cells_by))
+
+  if (length(group_cells_by) == 1) {
+    cluster_fraction_expressing_table <- cluster_fraction_expressing_table %>%
+      dplyr::rename(cell_group = !!sym(group_cells_by))
+  }
+  
   return(cluster_fraction_expressing_table)
 }
 
