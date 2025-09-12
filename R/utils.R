@@ -371,10 +371,14 @@ plot_sub_abundance <- function(ccs,
     select(cell_group, facet_group) %>%
     distinct()
 
-  cond_a_v_b_tbl <- left_join(cond_a_v_b_tbl,
+  cond_a_v_b_tbl <- right_join(cond_a_v_b_tbl,
     cg_to_mg,
     by = "cell_group"
   )
+
+  cond_a_v_b_tbl$delta_log_abund = ifelse(is.na(cond_a_v_b_tbl$delta_log_abund), 
+                                          0, 
+                                          cond_a_v_b_tbl$delta_log_abund)
 
   if (!is.null(selected_groups)) {
     partition_cell_groups <- cg_to_mg %>%
