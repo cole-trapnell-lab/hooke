@@ -14,7 +14,11 @@ help:
 fast: test
 
 test:
-	@$(RSCRIPT) -e 'if (!requireNamespace("testthat", quietly = TRUE)) { message("Install testthat to run tests"); quit(status = 2) }; testthat::test_local(".", reporter = "summary", stop_on_failure = TRUE)'
+	@if [ "$${HOOKE_SKIP_DEP_CHECK:-0}" = "1" ]; then \
+		echo "HOOKE_SKIP_DEP_CHECK=1 -> skipping Hooke test suite (dependency check)"; \
+	else \
+		$(RSCRIPT) -e 'if (!requireNamespace("testthat", quietly = TRUE)) { message("Install testthat to run tests"); quit(status = 2) }; testthat::test_local(".", reporter = "summary", stop_on_failure = TRUE)'; \
+	fi
 
 check:
 	@$(R_BIN) CMD check --no-manual .
