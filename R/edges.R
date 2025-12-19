@@ -6,10 +6,12 @@
 collect_pln_graph_edges <- function(ccm,
                                     cond_b_vs_a_tbl,
                                     log_abundance_thresh = -5,
-                                    model_for_pcors = "reduced") {
+                                    model_for_pcors = "reduced",
+                                    edge_allowlist = NULL,
+                                    edge_denylist = NULL) {
   pln_model <- model(ccm, model_for_pcors)
 
-  abundance_corr_tbl <- correlate_abundance_changes(pln_model, cond_b_vs_a_tbl)
+  abundance_corr_tbl <- correlate_abundance_changes(pln_model, cond_b_vs_a_tbl, edge_allowlist = edge_allowlist, edge_denylist = edge_denylist)
 
   abundance_corr_tbl <- abundance_corr_tbl %>% dplyr::filter(
     (to_log_abund_x > log_abundance_thresh | to_log_abund_y > log_abundance_thresh) & # Keep if the "to" node is above abundance thresh in at least one condition

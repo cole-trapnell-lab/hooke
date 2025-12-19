@@ -111,7 +111,7 @@ my_pln_predict_cond <- function(ccm,
   VE <- model(ccm, model_to_return = pln_model)$optimize_vestep(
     covariates = X,
     offsets = O[, cond, drop = FALSE],
-    responses = Yc[,cond_2, drop=FALSE],
+    responses = Yc[, cond_2, drop = FALSE],
     weights = rep(1, n_new),
     B = model(ccm, model_to_return = pln_model)$model_par$B[, cond, drop = FALSE],
     Omega = prec11
@@ -372,15 +372,13 @@ estimate_abundances_cond <- function(ccm,
     # log_abund = as.numeric(pred_out)
     log_abund <- as.numeric(t(pred_out))
     newdata$Offset <- NULL
-    
+
     if (is.null(min_log_abund) == FALSE) {
-      
       below_thresh <- log_abund < min_log_abund
       log_abund[below_thresh] <- min_log_abund
       # log_abund_se[below_thresh] = 0
-      
     }
-    
+
     # pred_out_tbl = tibble::tibble(cell_group=colnames(pred_out), log_abund)
     # pred_out_tbl = cbind(newdata, pred_out_tbl)
     # pred_out_tbl <- tibble::tibble(pred_out_tbl)
@@ -413,7 +411,7 @@ estimate_abundances_cond <- function(ccm,
       .y = cond_response,
       ccm = ccm,
       type = type,
-      pln_model = pln_model, 
+      pln_model = pln_model,
       min_log_abund = min_log_abund
     )) %>%
     select(timepoint_abund) %>%
@@ -667,12 +665,24 @@ adjust_q_values <- function(contrast_tbl,
 
 
 #' @noRd
-correlate_abundance_changes <- function(pln_model, cond_b_vs_a_tbl) {
+correlate_abundance_changes <- function(pln_model, cond_b_vs_a_tbl, edge_allowlist = NULL, edge_denylist = NULL) {
   cov_graph <- return_igraph(pln_model)
   cov_edges <- igraph::as_data_frame(cov_graph, what = "edges") %>% dplyr::filter(weight != 0.00)
   change_corr_tbl <- cov_edges %>%
     dplyr::select(from, to, weight) %>%
     dplyr::rename(pcor = weight)
+
+  if (!is.null(edge_allowlist)) {
+    edges_to_add <- edge_allowlist %>%
+      dplyr::anti_join(change_corr_tbl, by = c("from", "to")) %>%
+      dplyr::mutate(pcor = 0.001)
+    
+    change_corr_tbl <- dplyr::bind_rows(change_corr_tbl, edges_to_add)
+  }
+  if (!is.null(edge_denylist)) {
+    change_corr_tbl <- change_corr_tbl %>%
+      dplyr::anti_join(edge_denylist, by = c("from", "to"))
+  }
 
   # corr_edge_coords_umap_delta_abund = corr_edge_coords_umap
   change_corr_tbl <- dplyr::left_join(change_corr_tbl, cond_b_vs_a_tbl %>% setNames(paste0("to_", names(.))), by = c("to" = "to_cell_group")) # %>%
@@ -695,5 +705,3 @@ compare_ko_to_wt_at_timepoint <- function(tp, perturbation_ccm, wt_pred_df, ko_p
   cond_ko <- ko_pred_df %>% filter(!!sym(interval_col) == tp)
   return(compare_abundances(perturbation_ccm, cond_wt, cond_ko))
 }
-
-
