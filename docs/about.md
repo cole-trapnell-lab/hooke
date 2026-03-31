@@ -1,6 +1,6 @@
 # Differential abundance
 
-Hooke can identify differentially abundant cell types for a given contrast. The underlying PLN model mimics the standard (G)LM-like interface of `R::stats`. This allows users to fit a multivariate Poisson lognormal model after correcting for effects of offsets and covariates. This framework allows users to perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state. For example, you could model the effects of genotype (WT vs MT) while controlling for experimental batch. 
+Hooke can identify differentially abundant cell types for a given contrast. The underlying PLN model mimics the standard (G)LM-like interface of `R::stats`. This allows users to fit a multivariate Poisson lognormal model after correcting for the effects of offsets and covariates. This framework allows users to perform multivariate statistical regression to describe how perturbations alter the relative abundances of each cell state. For example, you could model the effects of genotype (WT vs MT) while controlling for experimental batch. 
 
 
 ## Analysis of differentially abundant cell types in silicosis with Hooke
@@ -52,7 +52,9 @@ In this case we are interested in comparing silica exposed mouse lungs to unexpo
 
 ```
 ccm  = new_cell_count_model(ccs,
-                            main_model_formula_str = "~ exposed")
+                            main_model_formula_str = "~ exposed",
+                            vhat_method = "bootstrap", 
+                            num_boostraps=10)
 ```
 
 ### Estimating abundances 
@@ -125,7 +127,9 @@ If your data contains multiple experimental batch, Hooke supports batch correcti
 ```
 ccm_rep  = new_cell_count_model(ccs,
                             main_model_formula_str = "~ exposed",
-                            nuisance_model_formula_str = "~ Rep")
+                            nuisance_model_formula_str = "~ Rep",
+                            vhat_method = "bootstrap", 
+                            num_boostraps=100)
 
 cond_exp_rep = estimate_abundances(ccm_rep, tibble::tibble(exposed = "exposed", Rep = "1"))
 cond_not_exp_rep = estimate_abundances(ccm_rep, tibble::tibble(exposed = "not exposed", Rep = "1"))
