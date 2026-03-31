@@ -335,6 +335,14 @@ plot_contrast <- function(ccm,
 
   directed_edge_df <- corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("directed_to_from", "directed_from_to"))
   undirected_edge_df <- corr_edge_coords_umap_delta_abund %>% dplyr::filter(edge_type %in% c("undirected"))
+  safe_abs_scale <- function(x) {
+    abs_x <- abs(x)
+    max_abs_x <- suppressWarnings(max(abs_x, na.rm = TRUE))
+    if (!is.finite(max_abs_x) || max_abs_x <= 0) {
+      return(rep(0, length(abs_x)))
+    }
+    abs_x / max_abs_x
+  }
 
   if (is.null(sender_cell_groups) == FALSE) {
     directed_edge_df <- directed_edge_df %>% dplyr::filter(from %in% sender_cell_groups)
@@ -359,7 +367,7 @@ plot_contrast <- function(ccm,
         scaled_weight = flow_factor / total_weight
       )
     undirected_edge_df <- undirected_edge_df %>%
-      dplyr::mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
+      dplyr::mutate(scaled_weight = safe_abs_scale(pcor))
   } else if (scale_shifts_by == "receiver") {
     directed_edge_df <- directed_edge_df %>%
       dplyr::group_by(from) %>%
@@ -369,12 +377,12 @@ plot_contrast <- function(ccm,
         scaled_weight = flow_factor / total_weight
       )
     undirected_edge_df <- undirected_edge_df %>%
-      dplyr::mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
+      dplyr::mutate(scaled_weight = safe_abs_scale(pcor))
   } else {
     directed_edge_df <- directed_edge_df %>%
-      dplyr::mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
+      dplyr::mutate(scaled_weight = safe_abs_scale(pcor))
     undirected_edge_df <- undirected_edge_df %>%
-      dplyr::mutate(scaled_weight = abs(pcor) / max(abs(pcor)))
+      dplyr::mutate(scaled_weight = safe_abs_scale(pcor))
   }
 
 
@@ -887,6 +895,15 @@ my_plot_cells <- function(cds,
 # plot a subset of labels on the plot
 # returns a label df, use as follows:
 # ggrepel::geom_text_repel(data = label_df, aes(label=cell_type, x=x, y=y), size=3)
+#' Build centroid labels for a 2D embedding
+#'
+#' @param p Unused placeholder (kept for backward compatibility).
+#' @param cds A `cell_data_set`.
+#' @param x integer Dimension index for the x-axis in UMAP coordinates.
+#' @param y integer Dimension index for the y-axis in UMAP coordinates.
+#' @param relevant_cell_types Optional character vector of cell types to keep.
+#' @return A data frame containing label coordinates.
+#' @noRd
 my_plot_labels <- function(p, cds, x = 1, y = 2, relevant_cell_types = NULL) {
   colData(cds)$umap3d_1 <- reducedDims(cds)[["UMAP"]][, x]
   colData(cds)$umap3d_2 <- reducedDims(cds)[["UMAP"]][, y]
@@ -904,260 +921,6 @@ my_plot_labels <- function(p, cds, x = 1, y = 2, relevant_cell_types = NULL) {
 }
 
 
-#' plots a path on top of
-#' @param data
-#' @param path_df
-#' @param edge_size
-#' @param path_color
-#' @param color_cells_by
-#' @param residuals
-#' @param cond_b_vs_a_tbl
-#' @noRd
-plot_path <- function(data,
-                      state_graph,
-                      edge_size = 1,
-                      path_color = "black",
-                      color_path_by = NULL,
-                      cond_b_vs_a_tbl = NULL,
-                      directed = TRUE,
-                      x = 1,
-                      y = 2,
-                      switch_label = NULL,
-                      ...) {
-  if (class(data) == "cell_count_set") {
-    ccs <- data
-  } else if (class(data) == "cell_count_model") {
-    ccs <- data@ccs
-  }
-
-  # if (is.null(switch_label) & !is.null(unique(igraph::V(state_graph)$cell_group)) & is(state_graph, "igraph")) {
-  #   switch_label = unique(igraph::V(state_graph)$cell_group)
-  # } else {
-  #   print("define a switch label grouping that matches the ccm")
-  # }
-
-  if (is(state_graph, "igraph")) {
-    path_df <- state_graph %>% igraph::as_data_frame()
-  } else {
-    path_df <- state_graph
-  }
-
-  if (is.null(switch_label)) {
-    node_intersection <- intersect(rownames(ccs), unique(path_df$from, path_df$to))
-  } else {
-    node_intersection <- intersect(ccs@colData[[switch_label]], unique(path_df$from, path_df$to))
-  }
-
-  assertthat::assert_that(
-    tryCatch(length(node_intersection) > 0,
-      error = function(e) FALSE
-    ),
-    msg = "specify a label switch, path nodes and ccm cell group do not match"
-  )
-
-
-  gp <- my_plot_cells(data, x = x, y = y, color_cells_by = switch_label, ...)
-
-  if (class(data) == "cell_count_set") {
-    umap_centers <- centroids(data, switch_group = switch_label)
-  } else if (class(data) == "cell_count_model") {
-    umap_centers <- centroids(data@ccs, switch_group = switch_label)
-  }
-
-
-
-  path_df <- add_umap_coords(path_df, umap_centers)
-
-  if (directed) {
-    if (is.null(color_path_by) == FALSE) {
-      gp <- gp +
-        ggnewscale::new_scale_color() +
-        geom_segment(
-          data = path_df,
-          aes(
-            x = get(paste0("umap_to_", x)),
-            y = get(paste0("umap_to_", y)),
-            xend = get(paste0("umap_from_", x)),
-            yend = get(paste0("umap_from_", y)),
-            color = get(color_path_by)
-          ),
-          size = edge_size
-        ) +
-        geom_segment(
-          data = path_df,
-          aes(
-            x = umap_from_1,
-            y = umap_from_2,
-            xend = (get(paste0("umap_to_", x)) + get(paste0("umap_from_", x))) / 2,
-            yend = (get(paste0("umap_to_", y)) + get(paste0("umap_from_", y))) / 2,
-            color = get(color_path_by)
-          ),
-          size = edge_size,
-          linejoin = "mitre",
-          arrow = arrow(type = "closed", angle = 30, length = unit(1, "mm"))
-        ) +
-        scale_color_gradient2(
-          low = "#122985",
-          mid = "white",
-          high = "red4",
-          na.value = "white"
-        )
-    } else {
-      gp <- gp + geom_segment(
-        data = path_df,
-        aes(
-          x = get(paste0("umap_to_", x)),
-          y = get(paste0("umap_to_", y)),
-          xend = get(paste0("umap_from_", x)),
-          yend = get(paste0("umap_from_", y))
-        ),
-        color = path_color,
-        size = edge_size
-      ) +
-        geom_segment(
-          data = path_df,
-          aes(
-            x = get(paste0("umap_from_", x)),
-            y = get(paste0("umap_from_", y)),
-            xend = (get(paste0("umap_to_", x)) + get(paste0("umap_from_", x))) / 2,
-            yend = (get(paste0("umap_to_", y)) + get(paste0("umap_from_", y))) / 2
-          ),
-          size = edge_size,
-          color = path_color,
-          linejoin = "mitre",
-          arrow = arrow(type = "closed", angle = 30, length = unit(1, "mm"))
-        )
-    }
-  } else {
-    if (is.null(color_path_by) == FALSE) {
-      gp <- gp +
-        ggnewscale::new_scale_color() +
-        geom_segment(
-          data = path_df,
-          aes(
-            x = get(paste0("umap_to_", x)),
-            y = get(paste0("umap_to_", y)),
-            xend = get(paste0("umap_from_", x)),
-            yend = get(paste0("umap_from_", y)),
-            color = get(color_path_by)
-          ),
-          size = edge_size
-        ) +
-        scale_color_gradient2(
-          low = "#122985",
-          mid = "white",
-          high = "red4",
-          na.value = "white"
-        )
-    } else {
-      gp <- gp + geom_segment(
-        data = path_df,
-        aes(
-          x = get(paste0("umap_to_", x)),
-          y = get(paste0("umap_to_", y)),
-          xend = get(paste0("umap_from_", x)),
-          yend = get(paste0("umap_from_", y))
-        ),
-        color = path_color,
-        size = edge_size
-      )
-    }
-  }
-
-
-  return(gp)
-}
-
-
-#' @noRd
-add_path_edge <- function(gp,
-                          path_df,
-                          umap_centers,
-                          size = 1,
-                          color = "black") {
-  path_df <- add_umap_coords(path_df, umap_centers)
-
-  gp <- gp +
-    geom_segment(
-      data = path_df,
-      aes(
-        x = umap_to_1,
-        y = umap_to_2,
-        xend = umap_from_1,
-        yend = umap_from_2
-      ),
-      size = size,
-      color = color
-    ) +
-    geom_segment(
-      data = path_df,
-      aes(
-        x = umap_from_1,
-        y = umap_from_2,
-        xend = (umap_to_1 + umap_from_1) / 2,
-        yend = (umap_to_2 + umap_from_2) / 2
-      ),
-      size = size,
-      color = color,
-      linejoin = "mitre",
-      arrow = arrow(type = "closed", angle = 30, length = unit(1, "mm"))
-    )
-
-  return(gp)
-}
-
-
-# plot igraph
-#' plots the resulting path as an igraph
-#' instead of as a UMAP
-#' @param data
-#' @param edges
-#' @param color_nodes_by
-#' @param arrow.gap
-#' @param scale
-#' @noRd
-plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale = F) {
-  if (class(data) == "cell_count_set") {
-    ccs <- data
-    plot_df <- as.data.frame(ccs@cds_coldata)
-  } else if (class(data) == "cell_count_model") {
-    ccs <- data@ccs
-  } else {
-    print("some error message")
-  }
-
-  umap_centers <- centroids(ccs)
-  cell_groups <- ccs@metadata[["cell_group_assignments"]] %>%
-    pull(cell_group) %>%
-    unique()
-  nodes <- data.frame(id = cell_groups)
-  if ("source" %in% colnames(edges)) {
-    edges <- edges %>% rename("from" = source, "to" = target)
-  }
-  edges <- edges %>% select(from, to)
-
-  no_edge <- setdiff(nodes$id, union(edges$from, edges$to))
-  edges <- rbind(edges, data.frame("from" = no_edge, "to" = no_edge))
-  n <- network::network(edges %>% dplyr::select(from, to), directed = T, loops = T)
-  nodes <- nodes[match(network::network.vertex.names(n), nodes$id), ]
-  n %v% "id" <- network::network.vertex.names(n)
-
-  merged_coords <- ggnetwork(n) %>%
-    select(id, vertex.names) %>%
-    unique() %>%
-    left_join(umap_centers, by = c("id" = "cell_group"))
-  rownames(merged_coords) <- merged_coords$id
-  coords <- merged_coords[network::network.vertex.names(n), ] %>% select(umap_1, umap_2)
-  geo <- as.matrix(sapply(coords, as.numeric))
-
-  g <- ggnetwork(x = n, layout = geo, arrow.gap = arrow.gap, scale = scale)
-
-  show(ggplot(g, aes(x, y, xend = xend, yend = yend)) +
-    geom_edges(arrow = arrow(length = unit(6, "pt"), type = "closed")) +
-    geom_nodes(size = 7, colour = "black", shape = 21) +
-    geom_nodetext_repel(aes(label = id), size = 3) +
-    theme_blank())
-}
 
 #' Plot Cells Per Sample
 #'
@@ -1181,7 +944,6 @@ plot_map <- function(data, edges, color_nodes_by = "", arrow.gap = 0.02, scale =
 #' @import dplyr
 #' @import ggplot2
 #' @importFrom rlang sym
-#' @importFrom monocle3 monocle_theme_opts
 #' @export
 plot_cells_per_sample <- function(ccs,
                                   x_col,
@@ -1258,122 +1020,6 @@ plot_cells_per_sample <- function(ccs,
   p = p + expand_limits(y=0)
   return(p)
 }
-
-plot_conditional_cells_per_sample <- function(ccm,
-                                              x_col,
-                                              y_col = c("count", "count_per_1000"),
-                                              cell_groups = c(),
-                                              batch_col = NULL, 
-                                              color_by = "cell_group",
-                                              plot_zeroes = T,
-                                              plot_points = F,
-                                              facet = T, 
-                                              log_scale = F,
-                                              nrow = 1,
-                                              legend_position = "none", 
-                                              newdata = tibble()) {
-  
-  y_col <- match.arg(y_col)
-  
-  sample_metadata <- colData(ccm@ccs) %>% tidyr::as_tibble()
-  sel_ccs_counts <- monocle3::normalized_counts(ccm@ccs, 
-                                                norm_method = "size_only", 
-                                                pseudocount = 0)
-  
-  # override the columns with the newdata columns
-  for (c in colnames(newdata)) {
-    sample_metadata[[c]] <- newdata[[c]]
-  }
-  
-  conditional_counts <- hooke::estimate_abundances_cond(ccm,
-                                                        newdata = sample_metadata,
-                                                        cond_responses = sel_ccs_counts,
-                                                        pln_model = "reduced"
-  )
-  
-  count_df <- conditional_counts %>%
-    dplyr::select(sample, cell_group, log_abund) %>%
-    mutate(num_cells = exp(log_abund)) %>%
-    select(-log_abund) %>% 
-    mutate(count = as.integer(num_cells))
-  
-  count_df <- left_join(count_df, 
-                        colData(ccm@ccs) %>% as.data.frame, by = "sample")
-  
-  cell_type_total <- Matrix::colSums(counts(ccm@ccs))
-  geometric_mean <- exp(mean(log(cell_type_total)))
-  
-  count_df <- count_df %>% mutate(count_per_1000 = count * 1000 / geometric_mean)
-  
-  if (length(cell_groups) != 0) {
-    count_df <- count_df %>% filter(cell_group %in% cell_groups)
-  }
-  
-  if (plot_zeroes) {
-    count_df <- count_df %>% mutate(count = count + 0.001)
-  }
-  
-  count_df[[x_col]] <- as.factor(count_df[[x_col]])
-  
-  p <- count_df %>%
-    ggplot(aes(x = !!sym(x_col), y = !!sym(y_col), fill = !!sym(color_by))) +
-    geom_boxplot() +
-    facet_wrap(~cell_group, nrow = nrow) +
-    theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts()
-  
-  if (plot_points) {
-    p <- p + geom_jitter(aes(x = !!sym(x_col), y = !!sym(y_col)), size = 1)
-  }
-  
-  if (log_scale) {
-    p <- p + scale_y_log10()
-  }
-  
-  if (facet) {
-    p <- p + facet_wrap(~cell_group, scale = "free")
-  }
-  
-  return(p)
-}
-
-#' @noRd
-plot_cells_highlight <- function(ccs, group_to_highlight, colname) {
-  plot_df <- as.data.frame(ccs@cds_coldata)
-  plot_df$cell_group <- ccs@cds_coldata[[colname]]
-
-  plot_df$cell <- row.names(plot_df)
-  plot_df$umap2D_1 <- ccs@cds_reduced_dims[["UMAP"]][plot_df$cell, x]
-  plot_df$umap2D_2 <- ccs@cds_reduced_dims[["UMAP"]][plot_df$cell, y]
-
-  gp <- ggplot() +
-    geom_point(
-      data = plot_df,
-      aes(umap2D_1, umap2D_2),
-      color = "black",
-      size = 1.5 * cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df %>% filter(!cell_group %in% c(group_to_highlight)),
-      aes(umap2D_1, umap2D_2),
-      color = "white",
-      size = cell_size,
-      stroke = 0
-    ) +
-    geom_point(
-      data = plot_df %>% filter(cell_group %in% c(group_to_highlight)),
-      aes(umap2D_1, umap2D_2),
-      color = "red",
-      size = cell_size,
-      stroke = 0
-    ) +
-    theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts()
-
-  return(gp)
-}
-
 
 #' @noRd
 plot_contrast_3d <- function(ccm,
@@ -1471,3 +1117,4 @@ hooke_theme_opts <- function() {
     theme(panel.background = element_rect(fill = "white")) +
     theme(legend.key = element_blank())
 }
+#+#+#+#+assistant to=functions.apply_patch code
