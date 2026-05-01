@@ -1041,7 +1041,7 @@ build_interval_formula <- function(ccs, num_breaks, interval_var = "timepoint", 
   }
 
   if (num_breaks < 3) {
-    interval_formula_str <- paste("~ ns(", interval_var, " df=1)")
+    interval_formula_str <- paste("~ ns(", interval_var, ", df=1)")
     return(interval_formula_str)
   } else {
     interval_breakpoints <- seq(interval_start, interval_stop, length.out = num_breaks)
