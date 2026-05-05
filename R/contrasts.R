@@ -307,6 +307,14 @@ estimate_abundances <- function(ccm,
         log_abund_se = log10(exp(log_abund_se)),
         log_abund_sd = log10(exp(log_abund_sd))
       )
+  } else if (scale == "per_1000") {
+    pred_out_tbl <- pred_out_tbl %>%
+      ## FIXME -- the output of plnnet_predict is already on the response scale. A rename may be more appropriate if it will not break any dependencies
+      mutate(
+        abund_per_1000 = log_abund,
+        abund_per_1000_se = log_abund_se,
+        abund_per_1000_sd = log_abund_sd
+      )
   }
 
   pred_out_tbl <- tibble::tibble(pred_out_tbl)
@@ -431,15 +439,24 @@ estimate_abundances_cond <- function(ccm,
 #' @param interval_stop numeric Interval stop value.
 #' @param interval_col character Interval values are taken from the interval_var data. Default is "timepoint".
 #' @param interval_step numeric Interval size. Default is 2.
+#' @inheritParams estimate_abundances
 #' @return A tibble of cell abundance predictions.
 #' @importFrom tibble tibble
 #' @export
-estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop, interval_col = "timepoint", interval_step = 2, min_log_abund = -5, newdata = tibble()) {
+estimate_abundances_over_interval <- function(ccm,
+                                              interval_start,
+                                              interval_stop,
+                                              interval_col = "timepoint",
+                                              interval_step = 2,
+                                              min_log_abund = -5,
+                                              newdata = tibble(),
+                                              scale = c("log", "log10", "log2", "per_1000")) {
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(is.numeric(interval_start))
   assertthat::assert_that(is.numeric(interval_stop))
   assertthat::assert_that(interval_stop >= interval_start)
   assertthat::assert_that(is.numeric(interval_step))
+  scale <- match.arg(scale)
 
   # assertthat::assert_that(interval_col %in% attr(terms(ccm@model_aux[['model_frame']]), 'term.labels'))
 
@@ -463,7 +480,8 @@ estimate_abundances_over_interval <- function(ccm, interval_start, interval_stop
       .f = estimate_abundances,
       .x = data,
       ccm = ccm,
-      min_log_abund = min_log_abund
+      min_log_abund = min_log_abund,
+      scale = scale
     )) %>%
     select(timepoint_abund) %>%
     tidyr::unnest(c(timepoint_abund))
