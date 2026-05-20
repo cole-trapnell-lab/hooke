@@ -930,7 +930,7 @@ my_plot_labels <- function(p, cds, x = 1, y = 2, relevant_cell_types = NULL) {
 #' @param x_col A string specifying the column name to be used for the x-axis.
 #' @param y_col A string specifying the column name to be used for the y-axis. Default is "count".
 #' @param cell_groups A vector of cell group names to filter the data. Default is an empty vector.
-#' @param interval_col If defined, will match timepoints to perturbation 
+#' @param interval_col If defined, will match timepoints to perturbation
 #' @param batch_col If defined, will match batches to perturbation
 #' @param color_by A string specifying the column name to be used for coloring the plot. Default is "cell_group".
 #' @param plot_zeroes A logical value indicating whether to plot zero counts. Default is FALSE.
@@ -950,7 +950,7 @@ plot_cells_per_sample <- function(ccs,
                                   y_col = c("count", "count_per_1000"),
                                   cell_groups = c(),
                                   batch_col = NULL,
-                                  perturbation_col = "perturbation", 
+                                  perturbation_col = "perturbation",
                                   interval_col = "timepoint",
                                   color_by = "cell_group",
                                   plot_zeroes = T,
@@ -961,8 +961,8 @@ plot_cells_per_sample <- function(ccs,
                                   legend_position = "none") {
   y_col <- match.arg(y_col)
   y_label <- ifelse(y_col == "count", "Normalized Cell Counts", "Cells per 1000")
-  
-  colData(ccs)[[color_by]] = as.factor(colData(ccs)[[color_by]])
+
+  colData(ccs)[[color_by]] <- as.factor(colData(ccs)[[color_by]])
 
   if (is.null(batch_col) == FALSE) {
     batches_to_keep <- colData(ccs) %>%
@@ -975,16 +975,16 @@ plot_cells_per_sample <- function(ccs,
 
     ccs <- subset_ccs(ccs, !!sym(batch_col) %in% batches_to_keep)
   }
-  
-  if (is.null(interval_col)== FALSE){
+
+  if (is.null(interval_col) == FALSE) {
     timepoints_to_keep <- colData(ccs) %>%
       as.data.frame() %>%
-      group_by(!!sym(interval_col), !!sym(perturbation_col)) %>% 
+      group_by(!!sym(interval_col), !!sym(perturbation_col)) %>%
       tally() %>%
       group_by(!!sym(interval_col)) %>%
       filter(n() > 1) %>%
       pull(!!sym(interval_col))
-    
+
     ccs <- subset_ccs(ccs, !!sym(interval_col) %in% timepoints_to_keep)
   }
 
@@ -1002,13 +1002,16 @@ plot_cells_per_sample <- function(ccs,
 
   p <- count_df %>%
     ggplot(aes(x = !!sym(x_col), y = !!sym(y_col), fill = !!sym(color_by))) +
-    geom_boxplot() +
-    facet_wrap(~cell_group, nrow = nrow) +
+    geom_boxplot(outlier.shape = if (plot_points) NA else 19) +
     theme(legend.position = legend_position) +
-    monocle3:::monocle_theme_opts() 
+    monocle3:::monocle_theme_opts()
 
   if (plot_points) {
-    p <- p + geom_jitter(aes(x = !!sym(x_col), y = !!sym(y_col)), size = 1)
+    p <- p + geom_jitter(
+      aes(color = !!sym(color_by)),
+      position = position_jitterdodge(seed = 1),
+      size = 1
+    )
   }
 
   if (log_scale) {
@@ -1016,10 +1019,10 @@ plot_cells_per_sample <- function(ccs,
   }
 
   if (facet) {
-    p <- p + facet_wrap(~cell_group, scale = "free")
+    p <- p + facet_wrap(~cell_group, scale = "free", nrow = nrow)
   }
-  p = p + expand_limits(y=0)
-  p = p + labs(y = y_label)
+  p <- p + expand_limits(y = 0)
+  p <- p + labs(y = y_label)
   return(p)
 }
 
