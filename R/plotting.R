@@ -960,6 +960,7 @@ plot_cells_per_sample <- function(ccs,
                                   nrow = 1,
                                   legend_position = "none") {
   y_col <- match.arg(y_col)
+  y_label <- ifelse(y_col == "count", "Normalized Cell Counts", "Cells per 1000")
   
   colData(ccs)[[color_by]] = as.factor(colData(ccs)[[color_by]])
 
@@ -1018,6 +1019,7 @@ plot_cells_per_sample <- function(ccs,
     p <- p + facet_wrap(~cell_group, scale = "free")
   }
   p = p + expand_limits(y=0)
+  p = p + labs(y = y_label)
   return(p)
 }
 
