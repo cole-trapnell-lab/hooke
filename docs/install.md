@@ -12,11 +12,19 @@ Hooke builds on top of the [Monocle3 package](https://cole-trapnell-lab.github.i
 devtools::install_github("cole-trapnell-lab/monocle3")
 ```
 
-Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html). 
+Hooke depends on the [PLNmodels package](https://pln-team.github.io/PLNmodels/index.html), which is available on CRAN. 
 You can install as follows: 
 
 ```r
-remotes::install_github("pln-team/PLNmodels")
+install.packages("PLNmodels")
+```
+
+Hooke also imports several [Bioconductor](https://www.bioconductor.org/) packages (`Biobase`, `batchelor`, `BiocGenerics`, `S4Vectors`, `Rgraphviz`), so you will need `BiocManager` to install those if they aren't already present: 
+
+```r
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install(c("Biobase", "batchelor", "BiocGenerics", "S4Vectors", "Rgraphviz"))
 ```
 
 Finally, install the hooke package as follows: 

@@ -7,7 +7,7 @@ Predict cell type abundances given a PLN model over a range of time or other int
       interval_col = "timepoint",
       interval_step = 2,
       min_log_abund = -5,
-      ...
+      newdata = tibble()
     )
 
 Arguments
@@ -32,6 +32,14 @@ character Interval values are taken from the interval\_var data. Default is "tim
 interval\_step
 
 numeric Interval size. Default is 2.
+
+min\_log\_abund
+
+numeric Minimum log abundance value.
+
+newdata
+
+tibble Additional covariate values to combine with the interval sequence (cross-joined with each interval value). If it contains the `interval_col` column, that column is dropped before joining. Defaults to an empty tibble.
 
 Value
 -----

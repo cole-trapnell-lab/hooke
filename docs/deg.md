@@ -57,18 +57,18 @@ plot_genes_by_group(wt_pb_cds,
 
 ### Running fit models
 
-We have modified the `fit_models` function in Monocle3 to take a `weights` argument which is the number of cells in each group. This allows the number of observations to reflect the number of cells, not just the number of pseudobulks. Here, we test one cell type that came up as significantly differentially abundant, `Fibr-2 Macrophages`. See the [monocle3 website](https://cole-trapnell-lab.github.io/monocle3/docs/differential/) for more in-depth documentation on how to use `fit_models()`. 
+Monocle3's `fit_models()` accepts a `weights` argument via `...`, which we set to the number of cells in each group. This allows the number of observations to reflect the number of cells, not just the number of pseudobulks. Here, we test one cell type that came up as significantly differentially abundant, `Fibr-2 Macrophages`. See the [monocle3 website](https://cole-trapnell-lab.github.io/monocle3/docs/differential/) for more in-depth documentation on how to use `fit_models()`. 
 
 ```
 # subset the pseudobulked cds to one cell type
 fm_pb_cds = pb_cds[, colData(pb_cds)$cell_group %in% c("Fibr-2 Macrophages")]
 
 # test for differentially expressed genes between silica exposed and control Fibr-2 macrophages
-gene_fits <- fit_models(fm_pb_cds, 
+gene_fits <- monocle3::fit_models(fm_pb_cds, 
                         model_formula_str = "~exposed", 
                         weights=colData(fm_pb_cds)$num_cells_in_group)
 
-fit_coefs <- coefficient_table(fm_gene_fits)  
+fit_coefs <- coefficient_table(gene_fits)  
 
 FM_genes = fit_coefs %>% 
               filter(grepl("exposed", term)) %>% 

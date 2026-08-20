@@ -22,6 +22,8 @@ Plot a UMAP colored by how cells shift in a given contrast
       switch_label = NULL,
       sub_cds = NULL,
       alpha = 1,
+      mask = list(),
+      downsample = NULL,
       x = 1,
       y = 2
     )
@@ -104,6 +106,14 @@ string A cell\_data\_set.
 alpha
 
 numeric A the ggplot opacity. A value between 0 and 1.
+
+mask
+
+list A list of cell types to gray out in the plot.
+
+downsample
+
+how much to downsample the plots
 
 x
 

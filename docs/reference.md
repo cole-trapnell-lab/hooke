@@ -36,3 +36,15 @@ Create a new cell\_data\_set object.
 [`plot_contrast()`](plot_contrast)
 
 Plot a UMAP colored by how cells shift in a given contrast
+
+
+DEG-prep functions
+-------------------------------
+
+[`pseudobulk_ccs_for_states()`](pseudobulk_ccs_for_states)
+
+Compute a pseudobulk expression matrix for a ccs
+
+[`add_covariate()`](add_covariate)
+
+add metadata to pb\_cds from cds

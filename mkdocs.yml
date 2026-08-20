@@ -1,6 +1,6 @@
 site_name: Hooke
 site_author: Maddy Duran
-site_url: https://cole-trapnell-lab.github.io/hooke
+site_url: https://cole-trapnell-lab.github.io/hooke/v2/
 nav:
   - Overview: index.md
   - Background: background.md
@@ -8,6 +8,7 @@ nav:
   - Data Type Requirements: data_type.md
   - Example Datasets: data.md
   - Differential Abundance: about.md
+  - Differential Expression: deg.md
   - Time Series Analysis: advanced.md
   - Reference: reference.md
 
