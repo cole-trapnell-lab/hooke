@@ -1,0 +1,10 @@
+[data-md-color-scheme="trapnell"] {
+    --md-primary-fg-color:        #2C3E50;
+    --md-primary-fg-color--light: #2C3E50;
+    --md-primary-fg-color--dark:  #2C3E50;
+  }
+
+body {
+    margin: 0; /* Remove default margins for the body */
+    padding: 0; /* Remove default padding for the body */
+}
