@@ -11,7 +11,8 @@ estimate_abundances_over_interval(
   interval_col = "timepoint",
   interval_step = 2,
   min_log_abund = -5,
-  newdata = tibble()
+  newdata = tibble(),
+  scale = c("log", "log10", "log2", "per_1000")
 )
 }
 \arguments{
@@ -24,6 +25,10 @@ estimate_abundances_over_interval(
 \item{interval_col}{character Interval values are taken from the interval_var data. Default is "timepoint".}
 
 \item{interval_step}{numeric Interval size. Default is 2.}
+
+\item{min_log_abund}{numeric Minimum log abundance value.}
+
+\item{newdata}{tibble A tibble of variables used for the prediction.}
 }
 \value{
 A tibble of cell abundance predictions.

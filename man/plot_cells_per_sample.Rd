@@ -10,6 +10,8 @@ plot_cells_per_sample(
   y_col = c("count", "count_per_1000"),
   cell_groups = c(),
   batch_col = NULL,
+  perturbation_col = "perturbation",
+  interval_col = "timepoint",
   color_by = "cell_group",
   plot_zeroes = T,
   plot_points = F,
@@ -27,6 +29,10 @@ plot_cells_per_sample(
 \item{y_col}{A string specifying the column name to be used for the y-axis. Default is "count".}
 
 \item{cell_groups}{A vector of cell group names to filter the data. Default is an empty vector.}
+
+\item{batch_col}{If defined, will match batches to perturbation}
+
+\item{interval_col}{If defined, will match timepoints to perturbation}
 
 \item{color_by}{A string specifying the column name to be used for coloring the plot. Default is "cell_group".}
 

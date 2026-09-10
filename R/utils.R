@@ -601,15 +601,6 @@ fit_perturb_ccm <- function(perturbation,
   return(perturb_ccm)
 }
 
-#' @noRd
-collect_genotype_effects <- function(ccm, timepoint = 24, expt = "GAP16") {
-  control_abund <- estimate_abundances(ccm, tibble(knockout = FALSE, timepoint = timepoint, expt = expt))
-  knockout_abund <- estimate_abundances(ccm, tibble(knockout = TRUE, timepoint = timepoint, expt = expt))
-  genotype_comparison_tbl <- compare_abundances(ccm, control_abund, knockout_abund)
-}
-
-
-
 #' filters a cds
 #' @param cds
 #' @param ... expressions that return a logical value

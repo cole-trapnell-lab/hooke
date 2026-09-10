@@ -20,7 +20,7 @@ new_cell_count_model(
   keep_ccs = TRUE,
   pln_min_ratio = 0.001,
   pln_num_penalties = 30,
-  vhat_method = c("bootstrap", "variational_var", "jackknife"),
+  vhat_method = c("bootstrap", "variational_var", "sandwich_var", "jackknife"),
   covariance_type = c("spherical", "full", "diagonal"),
   num_bootstraps = 10,
   inception = NULL,

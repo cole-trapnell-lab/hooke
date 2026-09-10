@@ -87,9 +87,9 @@ get_count_df <- function(ccs, round=F, norm=F) {
 
 }
 
-# subset ccs by cell groups
-#' @param ccs
-#' @param cell_groups
+#' subset ccs by cell groups
+#' @param ccs A cell_count_set object.
+#' @param ... expressions that return a logical value, used to filter the cell count set
 #' @export
 subset_ccs = function(ccs, ...) {
 
