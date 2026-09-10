@@ -263,7 +263,7 @@ new_cell_count_set <- function(cds,
         tail(names(sort(table(x, useNA = "ifany"))), 1)
       }),
       across(where(is.logical), function(x) {
-        (sum(x, na.rm = T) == 1)
+        (mean(x, na.rm = T) > 0.5)
       })
     )
 
