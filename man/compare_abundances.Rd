@@ -12,6 +12,7 @@ compare_abundances(
   method = c("BH", "bonferroni", "hochberg", "hommel", "BY"),
   alpha = 0.05,
   power = 0.8,
+  margin = 2,
   convert_scale = FALSE,
   adjust_q_values = FALSE,
   log_scale = c("log", "log10", "log2")
@@ -30,17 +31,82 @@ compare_abundances(
 This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).}
 
-\item{alpha}{Desired significance level}
+\item{alpha}{Desired significance level.}
 
-\item{power}{Desired power level for calculating minimum detectable fold change}
+\item{power}{Desired power level, used for \code{mdfc80}.}
+
+\item{margin}{The effect size to be powered against, as a \strong{fold change}
+(so \code{2} means a two-fold change), used for \code{power_at_margin}. Given as a
+fold change rather than on a log scale so that it means the same thing
+regardless of \code{log_scale}/\code{convert_scale}.}
 
 \item{convert_scale}{Whether to convert to log2 scale.}
+
+\item{adjust_q_values}{Whether to restrict multiple-testing correction to the
+rows with \code{power_at_margin >= power}. Changes what the FDR guarantee
+covers; see \code{\link[=adjust_q_values]{adjust_q_values()}}. Defaults to \code{FALSE}.}
 
 \item{log_scale}{Log scale used for estimate_abundances.}
 }
 \value{
-tibble A table contrasting cond_x and cond_y (interpret as Y/X).
+tibble A table contrasting cond_x and cond_y (interpret as Y/X), with
+one row per \code{by} group. Columns of interest:
+\describe{
+\item{\code{delta_log_abund}, \code{delta_log_abund_se}}{Difference in abundance and
+its standard error, on the log scale given by \code{log_scale}/\code{convert_scale}.}
+\item{\code{delta_p_value}, \code{delta_q_value}}{Two-sided t test and its
+multiple-testing adjustment.}
+\item{\code{delta_log_abund_lo}, \code{delta_log_abund_hi}}{Wald confidence interval
+on \code{delta_log_abund} at level \code{1 - alpha}.}
+\item{\code{df_resid}}{Residual degrees of freedom of the fit, so a caller can
+rebuild the interval or an equivalence test from the table alone.}
+\item{\code{mdfc80}}{Minimum detectable fold change at the requested \code{power}:
+the smallest change the contrast could have caught. \code{NA} where no
+detection limit is defined.}
+\item{\code{power_at_margin}}{Power to detect a change of \code{margin}: the dual
+of \code{mdfc80}, fixing the effect and reporting the power rather than the
+reverse. \code{NA} on the same rows as \code{mdfc80}.}
+\item{\code{margin_fold_change}}{The \code{margin} used, so the table records what
+it was powered for.}
+\item{\code{contrast_note}}{Why \code{mdfc80} and \code{power_at_margin} are \code{NA}:
+\code{"degenerate_fit"} (zero or non-finite SE) or \code{"insufficient_df"}.
+\code{NA} when the row is fine.}
+\item{\code{observed_power}}{Post-hoc power, bit-identical to the column that
+was called \code{power} before 0.0.3. A deterministic restatement of
+\code{delta_p_value}, not a measure of precision. Do not filter on it.}
+\item{\code{power}}{\strong{Deprecated} alias of \code{observed_power}, retained for one
+release and scheduled for removal.}
+}
+
+\code{mdfc80} and \code{power_at_margin} are functions of \code{delta_log_abund_se},
+\code{alpha}, \code{df_resid} and a declared constant only -- never of the observed
+effect. That effect-independence is what makes either of them a fair answer
+to "were we powered to see a phenotype here?", and what makes them safe to
+filter on.
 }
 \description{
 Compare two estimates of cell abundances from a Hooke model.
+}
+\details{
+\code{power} and \code{mdfc} answered a different question than their names
+suggest, which is what 0.0.3 corrects. \code{power} substitutes
+the observed Wald statistic for the true effect, making it strictly
+increasing in \verb{|Z|} and so carrying no information beyond \code{delta_p_value}
+-- \code{power >= 0.8} is exactly \code{p <= ~0.008}. It does not measure precision:
+a cell type with a huge standard error and a fluke estimate scores high,
+while a tightly measured genuine null scores the floor. \code{mdfc} inherits
+that contamination, because a \code{dplyr::mutate()} binds \code{power = power} to
+the column created on the line above rather than to the formal argument,
+making the stored value \code{exp((z_alpha + z_observed) * SE)} -- smallest
+exactly where the data are weakest, and \code{Inf} on the most significant rows.
+
+As of 0.0.3, \code{power} survives only as a deprecated alias of
+\code{observed_power}, and the \code{mdfc} \strong{column is gone}: \code{calculate_mdfc()} was
+fixed rather than frozen, and now emits \code{mdfc80}. \code{mdfc80} is therefore not
+a drop-in for \code{mdfc} -- it is a different quantity, it differs on
+essentially every row, and any threshold chosen against \code{mdfc} needs
+rechoosing. To state that a non-significant result excludes a meaningful
+change, compare \code{mdfc80} to your margin, read \code{power_at_margin}, or build
+an equivalence test from \code{delta_log_abund}, \code{delta_log_abund_se} and
+\code{df_resid}.
 }

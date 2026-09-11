@@ -506,9 +506,25 @@ estimate_abundances_over_interval <- function(ccm,
 }
 
 
-# Calculates the power to detect a significant change in a given contrast
-# Power is the probability of avoiding a Type II error
-calculate_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
+# Post-hoc ("observed") power for a contrast.
+#
+# Renamed from calculate_power() in 0.0.3 to say what it computes. The body is
+# unchanged, so the deprecated `power` column keeps its published values.
+#
+# WARNING: this is not a power calculation in the design sense. It substitutes
+# the OBSERVED Wald statistic for the true effect, which makes it strictly
+# increasing in |Z| and therefore a deterministic restatement of
+# `delta_p_value` -- `power >= 0.8` is exactly `p <= ~0.008`. It floors at
+# `alpha` when Z = 0 and saturates at 1 for |Z| >= ~10.26.
+#
+# It does not measure precision: a cell type with a huge SE and a fluke
+# estimate scores high, while a tightly measured genuine null scores the floor.
+# Filtering on it before p.adjust() selects on the statistic being adjusted and
+# is anti-conservative.
+#
+# For "were we powered to see a change here?" use calculate_power_at_margin()
+# or calculate_mdfc(), both of which are effect-independent.
+calculate_observed_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
   # Wald test statistic for comparing two groups
   Z <- (beta_x - beta_y) / sqrt(SE_x^2 + SE_y^2)
 
@@ -524,22 +540,92 @@ calculate_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
   return(power)
 }
 
-# Estimates the smallest fold change you can detect at a given power level
-calculate_mdfc <- function(SE_x, SE_y, alpha = 0.05, power = 0.8) {
-  # Z-scores for significance and power
-  Z_alpha <- qnorm(1 - alpha / 2) # Two-tailed
-  Z_power <- qnorm(power)
+# Linear-scale base implied by a log scale name.
+log_base_value <- function(log_scale) {
+  switch(log_scale,
+    log = exp(1),
+    log2 = 2,
+    log10 = 10,
+    stop("Unrecognized log scale: ", log_scale)
+  )
+}
 
-  # Compute minimum detectable effect size (beta difference)
-  delta_beta <- (Z_alpha + Z_power) * sqrt(SE_x^2 + SE_y^2)
+# Minimum detectable fold change at a REQUESTED power level.
+#
+# Fixed in 0.0.3. Before that this function was called with the OBSERVED power
+# vector rather than a requested power level, because a dplyr::mutate() bound
+# `power = power` to the column created on the line above instead of to the
+# formal argument. The stored value was therefore
+# exp((z_alpha + z_observed) * SE): understated on most rows, smallest exactly
+# where the data are weakest, and Inf on the most significant rows
+# (qnorm(1) = Inf). It also hardcoded exp(), inflating log2 SEs, and its Inf
+# guard tested `power == 0` alongside the SEs, so it only ever fired as a side
+# effect of that same contamination.
+#
+# It now depends only on the standard errors, `alpha`, the residual degrees of
+# freedom and `power` -- never on the observed effect. That effect-independence
+# is what makes it eligible as a filter, or as the basis of a "we would have
+# caught a change this large" claim.
+#
+# Uses t quantiles so that the detection limit and `delta_p_value` refer to the
+# same distribution; with 6-13 samples per arm the normal approximation is
+# optimistic. This is the normal-theory MDE formula with t quantiles
+# substituted, not an exact noncentral-t solution -- close enough at these df,
+# and slightly conservative.
+#
+# `base` is the linear-scale base matching the log scale of the SEs, so that a
+# log2 contrast yields a log2-consistent fold change rather than an exp() one.
+#
+# Returns NA (never Inf, never 1) where no detection limit is defined: a zero
+# or non-finite SE is a degenerate fit, not a 1-fold detection limit. Callers
+# get the reason in `contrast_note`.
+calculate_mdfc <- function(SE_x, SE_y, alpha = 0.05, power = 0.8,
+                                    df = NULL, base = exp(1)) {
+  se <- sqrt(SE_x^2 + SE_y^2)
 
-  # Convert to fold change
-  MDFC <- exp(delta_beta)
+  if (is.null(df) || length(df) != 1 || !is.finite(df) || df <= 0) {
+    return(rep(NA_real_, length(se)))
+  }
 
-  # if power is 0, no fold change is detectable
-  MDFC <- ifelse(power == 0 & SE_x == 0 & SE_y == 0, Inf, MDFC)
+  MDFC <- base^((qt(1 - alpha / 2, df) + qt(power, df)) * se)
+  MDFC[!is.finite(se) | se <= 0] <- NA_real_
 
   return(MDFC)
+}
+
+# Power to detect a change of a DECLARED size.
+#
+# The dual of calculate_mdfc(): that one fixes the power and reports
+# the detectable effect, this one fixes the effect and reports the power. Both
+# depend only on the standard errors, `alpha`, `df` and a declared quantity --
+# never on the observed effect -- which is what makes either of them a fair
+# answer to "were we powered to see a phenotype here?".
+#
+# `margin_log` is the effect size to be powered against, on the same log scale
+# as the standard errors. Under the alternative that the true difference equals
+# that margin, the t statistic follows a noncentral t with ncp = margin / SE,
+# so two-sided power is the mass beyond +/- tcrit.
+#
+# Returns NA where SE or df make the question meaningless, matching
+# calculate_mdfc().
+calculate_power_at_margin <- function(SE_x, SE_y, alpha = 0.05, margin_log,
+                                      df = NULL) {
+  se <- sqrt(SE_x^2 + SE_y^2)
+
+  if (is.null(df) || length(df) != 1 || !is.finite(df) || df <= 0) {
+    return(rep(NA_real_, length(se)))
+  }
+
+  usable <- is.finite(se) & se > 0
+  power <- rep(NA_real_, length(se))
+
+  tcrit <- qt(1 - alpha / 2, df)
+  ncp <- abs(margin_log) / se[usable]
+
+  power[usable] <-
+    (1 - pt(tcrit, df, ncp = ncp)) + pt(-tcrit, df, ncp = ncp)
+
+  return(power)
 }
 
 
@@ -568,11 +654,73 @@ convert_base <- function(value, from_base, to_base) {
 #' @param method string A method for correcting P-value multiple comparisons.
 #'    This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 #'    "hochberg" (Hochberg), "hommel", (Hommel), or "BYH" (Benjamini & Yekutieli).
-#' @param alpha Desired significance level
-#' @param power Desired power level for calculating minimum detectable fold change
+#' @param alpha Desired significance level.
+#' @param power Desired power level, used for `mdfc80`.
+#' @param margin The effect size to be powered against, as a **fold change**
+#'   (so `2` means a two-fold change), used for `power_at_margin`. Given as a
+#'   fold change rather than on a log scale so that it means the same thing
+#'   regardless of `log_scale`/`convert_scale`.
 #' @param convert_scale Whether to convert to log2 scale.
+#' @param adjust_q_values Whether to restrict multiple-testing correction to the
+#'   rows with `power_at_margin >= power`. Changes what the FDR guarantee
+#'   covers; see [adjust_q_values()]. Defaults to `FALSE`.
 #' @param log_scale Log scale used for estimate_abundances.
-#' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X).
+#' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X), with
+#'   one row per `by` group. Columns of interest:
+#'   \describe{
+#'     \item{`delta_log_abund`, `delta_log_abund_se`}{Difference in abundance and
+#'       its standard error, on the log scale given by `log_scale`/`convert_scale`.}
+#'     \item{`delta_p_value`, `delta_q_value`}{Two-sided t test and its
+#'       multiple-testing adjustment.}
+#'     \item{`delta_log_abund_lo`, `delta_log_abund_hi`}{Wald confidence interval
+#'       on `delta_log_abund` at level `1 - alpha`.}
+#'     \item{`df_resid`}{Residual degrees of freedom of the fit, so a caller can
+#'       rebuild the interval or an equivalence test from the table alone.}
+#'     \item{`mdfc80`}{Minimum detectable fold change at the requested `power`:
+#'       the smallest change the contrast could have caught. `NA` where no
+#'       detection limit is defined.}
+#'     \item{`power_at_margin`}{Power to detect a change of `margin`: the dual
+#'       of `mdfc80`, fixing the effect and reporting the power rather than the
+#'       reverse. `NA` on the same rows as `mdfc80`.}
+#'     \item{`margin_fold_change`}{The `margin` used, so the table records what
+#'       it was powered for.}
+#'     \item{`contrast_note`}{Why `mdfc80` and `power_at_margin` are `NA`:
+#'       `"degenerate_fit"` (zero or non-finite SE) or `"insufficient_df"`.
+#'       `NA` when the row is fine.}
+#'     \item{`observed_power`}{Post-hoc power, bit-identical to the column that
+#'       was called `power` before 0.0.3. A deterministic restatement of
+#'       `delta_p_value`, not a measure of precision. Do not filter on it.}
+#'     \item{`power`}{**Deprecated** alias of `observed_power`, retained for one
+#'       release and scheduled for removal.}
+#'   }
+#'
+#'   `mdfc80` and `power_at_margin` are functions of `delta_log_abund_se`,
+#'   `alpha`, `df_resid` and a declared constant only -- never of the observed
+#'   effect. That effect-independence is what makes either of them a fair answer
+#'   to "were we powered to see a phenotype here?", and what makes them safe to
+#'   filter on.
+#'
+#' @details `power` and `mdfc` answered a different question than their names
+#'   suggest, which is what 0.0.3 corrects. `power` substitutes
+#'   the observed Wald statistic for the true effect, making it strictly
+#'   increasing in `|Z|` and so carrying no information beyond `delta_p_value`
+#'   -- `power >= 0.8` is exactly `p <= ~0.008`. It does not measure precision:
+#'   a cell type with a huge standard error and a fluke estimate scores high,
+#'   while a tightly measured genuine null scores the floor. `mdfc` inherits
+#'   that contamination, because a `dplyr::mutate()` binds `power = power` to
+#'   the column created on the line above rather than to the formal argument,
+#'   making the stored value `exp((z_alpha + z_observed) * SE)` -- smallest
+#'   exactly where the data are weakest, and `Inf` on the most significant rows.
+#'
+#'   As of 0.0.3, `power` survives only as a deprecated alias of
+#'   `observed_power`, and the `mdfc` **column is gone**: `calculate_mdfc()` was
+#'   fixed rather than frozen, and now emits `mdfc80`. `mdfc80` is therefore not
+#'   a drop-in for `mdfc` -- it is a different quantity, it differs on
+#'   essentially every row, and any threshold chosen against `mdfc` needs
+#'   rechoosing. To state that a non-significant result excludes a meaningful
+#'   change, compare `mdfc80` to your margin, read `power_at_margin`, or build
+#'   an equivalence test from `delta_log_abund`, `delta_log_abund_se` and
+#'   `df_resid`.
 #' @importFrom dplyr full_join
 #' @export
 compare_abundances <- function(ccm,
@@ -582,6 +730,7 @@ compare_abundances <- function(ccm,
                                method = c("BH", "bonferroni", "hochberg", "hommel", "BY"),
                                alpha = 0.05,
                                power = 0.8,
+                               margin = 2,
                                convert_scale = FALSE,
                                adjust_q_values = FALSE,
                                log_scale = c("log", "log10", "log2")) {
@@ -640,6 +789,28 @@ compare_abundances <- function(ccm,
       )
   }
 
+  # These scalars are bound OUTSIDE the mutate on purpose. dplyr::mutate()
+  # evaluates sequentially against the data mask, so a line reading
+  # `f(power = power)` binds to a `power` COLUMN created earlier in the same
+  # mutate, not to the formal argument. That is precisely how `mdfc` came to be
+  # a function of the observed effect instead of the requested power level.
+  requested_power <- power
+  requested_alpha <- alpha
+
+  # Log scale the contrast columns are on once any conversion above has run,
+  # and the linear base that matches it.
+  result_log_scale <- if (convert_scale) "log2" else log_scale
+  result_base <- log_base_value(result_log_scale)
+
+  df_ok <- length(df.r) == 1 && is.finite(df.r) && df.r > 0
+  tcrit <- if (df_ok) qt(1 - requested_alpha / 2, df.r) else NA_real_
+
+  # `margin` is a FOLD CHANGE, so that it means the same thing whatever log
+  # scale the estimates arrived on. Convert it into that scale here rather than
+  # asking callers to remember whether a 2-fold change is 0.693 or 1.
+  assertthat::assert_that(is.numeric(margin), length(margin) == 1, margin > 0)
+  margin_log <- log(margin, base = result_base)
+
   contrast_tbl <- contrast_tbl %>%
     dplyr::mutate(
       delta_log_abund = log_abund_y - log_abund_x,
@@ -649,26 +820,93 @@ compare_abundances <- function(ccm,
       delta_p_value = ifelse(is.nan(delta_p_value), 1, delta_p_value),
       # delta_p_value = pnorm(abs(delta_log_abund), sd = sqrt(log_abund_se_y^2 + log_abund_se_x^2), lower.tail=FALSE),
       delta_q_value = p.adjust(delta_p_value, method = method),
-      power = calculate_power(log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y, alpha = alpha),
-      mdfc = calculate_mdfc(log_abund_se_x, log_abund_se_y, power = power)
+
+      # Residual df, published so that a consumer can rebuild a confidence
+      # interval or an equivalence test from the table alone. Previously
+      # computed here and thrown away.
+      df_resid = df.r,
+
+      # Wald CI on the abundance difference, on the same log scale as
+      # delta_log_abund.
+      delta_log_abund_lo = delta_log_abund - tcrit * delta_log_abund_se,
+      delta_log_abund_hi = delta_log_abund + tcrit * delta_log_abund_se,
+
+      # Effect-INDEPENDENT minimum detectable fold change at the requested
+      # `power`. This is the column to filter on, and the one that separates
+      # "no phenotype" from "not powered".
+      mdfc80 = calculate_mdfc(
+        log_abund_se_x, log_abund_se_y,
+        alpha = requested_alpha, power = requested_power,
+        df = df.r, base = result_base
+      ),
+
+      # Why a row has no usable detection limit; NA means the row is fine.
+      contrast_note = dplyr::case_when(
+        rep(!df_ok, dplyr::n()) ~ "insufficient_df",
+        !is.finite(delta_log_abund_se) | delta_log_abund_se <= 0 ~ "degenerate_fit",
+        TRUE ~ NA_character_
+      ),
+
+      # Power to detect a change of `margin`, the dual of mdfc80. Also
+      # effect-independent, so it is a fair answer to "were we powered here?"
+      # and is safe to filter on.
+      power_at_margin = calculate_power_at_margin(
+        log_abund_se_x, log_abund_se_y,
+        alpha = requested_alpha, margin_log = margin_log, df = df.r
+      ),
+
+      # The margin power_at_margin was computed against, so the table says what
+      # it was powered for instead of leaving a reader to guess.
+      margin_fold_change = margin,
+
+      # Post-hoc power. A deterministic restatement of delta_p_value, not a
+      # measure of precision; see the note above calculate_observed_power().
+      # Kept because callers still want the number, under a name that says
+      # what it is. Do not filter on it.
+      observed_power = calculate_observed_power(
+        log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y,
+        alpha = requested_alpha
+      ),
+
+      # DEPRECATED alias for one release, bit-identical to hooke <= 0.0.2.
+      # Scheduled for removal; use `observed_power`.
+      power = observed_power
     ) %>%
     select(-tvalue)
 
   if (adjust_q_values) {
-    contrast_tbl <- adjust_q_values(contrast_tbl, power_threshold = power)
+    warning(
+      "adjust_q_values = TRUE restricts multiple-testing correction to rows ",
+      "with power_at_margin >= ", requested_power, ". This changes what the ",
+      "FDR guarantee covers: it applies to the adequately powered subset, not ",
+      "to every row tested. Report it as such."
+    )
+    contrast_tbl <- adjust_q_values(contrast_tbl, power_threshold = requested_power)
   }
 
   return(contrast_tbl)
 }
 
-# redo multiple hypothesis correction
-# by only including cell coutns where we have power
-# otherwise return NA
+# Re-runs BH over only the rows whose `power_at_margin` clears a threshold,
+# returning NA elsewhere.
+#
+# This is a defensible filter only because `power_at_margin` is
+# effect-independent: it is a function of the standard errors, `alpha`, `df`
+# and the declared margin, never of the observed effect. The pre-0.0.3 version
+# of this function filtered on the old `power` column, which was a
+# deterministic restatement of `delta_p_value` -- that selected rows by their
+# p-value and then adjusted those same p-values, which is anti-conservative.
+#
+# It still changes the FDR guarantee: the correction now applies to the subset
+# of rows that were adequately powered, not to all rows tested. That is a
+# choice about what the guarantee covers, and callers should say so.
+#
+# Off by default and not enabled in production.
 adjust_q_values <- function(contrast_tbl,
                             power_threshold = 0.8) {
   new_q_values <- contrast_tbl %>%
     mutate(rn = row_number()) %>%
-    filter(power >= power_threshold) %>%
+    filter(power_at_margin >= power_threshold) %>%
     mutate(delta_q_value = p.adjust(delta_p_value, method = "BH")) %>%
     select(rn, delta_q_value)
 

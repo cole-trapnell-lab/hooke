@@ -18,7 +18,13 @@ make check    # R CMD check --no-manual .
 - `Depends: PLNmodels`, which is not on CRAN in a usable version — CI installs
   `PLN-team/PLNmodels@master`. Locally: `Rscript scripts/install_hooke_deps.R` from the stack root.
 - `Remotes: bioc::Rgraphviz`. `LinkingTo: Rcpp` + `src/` — changing `src/` needs a recompile.
-- `power` is post-hoc and `mdfc` is contaminated — prefer `delta_log_abund_se` and MDFC80.
+- 0.0.3 **removed the `mdfc` column**; `calculate_mdfc()` was fixed in place and now emits
+  `mdfc80`. The two are not interchangeable — the value differs on essentially every row,
+  so thresholds picked against `mdfc` need rechoosing. `calculate_power()` is now
+  `calculate_observed_power()`, published as `observed_power`, with `power` a deprecated
+  alias for one release. `observed_power` is `delta_p_value` restated (strictly increasing
+  in `|Z|`), so filtering on it before `p.adjust()` is anti-conservative. Filter on
+  `mdfc80` or `power_at_margin` — the only effect-independent columns.
 
 ## Release notes
 `NEWS.md` exists (seeded at 0.0.1, no prior history). Bump `Version:` in `DESCRIPTION` and add the
