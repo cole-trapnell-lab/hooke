@@ -38,7 +38,15 @@ This can be "BH" (Benjamini & Hochberg), "bonferroni" (Bonferroni),
 \item{margin}{The effect size to be powered against, as a \strong{fold change}
 (so \code{2} means a two-fold change), used for \code{power_at_margin}. Given as a
 fold change rather than on a log scale so that it means the same thing
-regardless of \code{log_scale}/\code{convert_scale}.}
+regardless of \code{log_scale}/\code{convert_scale}.
+
+The \code{2} default is a generic convenience, not a policy. A caller using
+\code{power_at_margin} or \code{mdfc80} to decide whether a null result is
+\emph{meaningful} should set \code{margin} to the smallest change they would have
+called a phenotype, so that "we were powered" refers to something that
+would have counted. Setting it larger than that threshold silently
+over-claims: rows whose detection limit is worse than the calling
+threshold still read as adequately powered.}
 
 \item{convert_scale}{Whether to convert to log2 scale.}
 

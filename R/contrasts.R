@@ -660,6 +660,14 @@ convert_base <- function(value, from_base, to_base) {
 #'   (so `2` means a two-fold change), used for `power_at_margin`. Given as a
 #'   fold change rather than on a log scale so that it means the same thing
 #'   regardless of `log_scale`/`convert_scale`.
+#'
+#'   The `2` default is a generic convenience, not a policy. A caller using
+#'   `power_at_margin` or `mdfc80` to decide whether a null result is
+#'   *meaningful* should set `margin` to the smallest change they would have
+#'   called a phenotype, so that "we were powered" refers to something that
+#'   would have counted. Setting it larger than that threshold silently
+#'   over-claims: rows whose detection limit is worse than the calling
+#'   threshold still read as adequately powered.
 #' @param convert_scale Whether to convert to log2 scale.
 #' @param adjust_q_values Whether to restrict multiple-testing correction to the
 #'   rows with `power_at_margin >= power`. Changes what the FDR guarantee
