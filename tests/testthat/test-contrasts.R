@@ -279,3 +279,23 @@ test_that('mdfc80 is not the old mdfc, and differs in the documented direction',
   }
   expect_true(is.na(calculate_mdfc(0, 0, alpha = 0.05, power = 0.8, df = 40)))
 })
+
+test_that("compare_abundances() margin default is the dual of a 0.5 log-fold cut", {
+  # The margin is derived from the calling threshold, not chosen alongside it:
+  # a "we were powered" claim only means something if it refers to a change
+  # that would have been CALLED. At the 0.5 log-fold cut used across the
+  # screens, that is exp(0.5). A larger margin (the old `2`) is wrong in the
+  # lenient direction, so pin the default rather than leave it to drift.
+  default_margin <- eval(formals(compare_abundances)$margin)
+  expect_equal(default_margin, exp(0.5))
+  expect_equal(log(default_margin), 0.5)
+
+  # And the hazard it guards against: with a margin above the calling
+  # threshold, a contrast whose detection limit sits between the two reads as
+  # powered even though it could not have caught a callable change.
+  se <- 0.28
+  df <- 57
+  mdfc80 <- exp((qt(0.975, df) + qt(0.8, df)) * se)
+  expect_gt(mdfc80, exp(0.5))   # could NOT detect a callable change
+  expect_lt(mdfc80, 2)          # yet the old default would have called it powered
+})
