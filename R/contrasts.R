@@ -541,6 +541,15 @@ calculate_observed_power <- function(beta_x, SE_x, beta_y, SE_y, alpha = 0.05) {
 }
 
 # Linear-scale base implied by a log scale name.
+# The margin is derived from the threshold at which a change is CALLED, not
+# chosen alongside it: "we were powered" only means something if it refers to a
+# change that would have counted. The screens call at 0.5 on the log scale, so
+# the margin that makes the claim true is exp(0.5). Declared once here because
+# compare_abundances() and decorate_contrast_detectability() must agree -- two
+# copies is exactly the drift this value exists to prevent.
+.DEFAULT_MARGIN_FOLD_CHANGE <- exp(0.5)
+
+
 log_base_value <- function(log_scale) {
   switch(log_scale,
     log = exp(1),
@@ -744,7 +753,7 @@ compare_abundances <- function(ccm,
                                method = c("BH", "bonferroni", "hochberg", "hommel", "BY"),
                                alpha = 0.05,
                                power = 0.8,
-                               margin = exp(0.5),
+                               margin = .DEFAULT_MARGIN_FOLD_CHANGE,
                                convert_scale = FALSE,
                                adjust_q_values = FALSE,
                                log_scale = c("log", "log10", "log2")) {
@@ -974,4 +983,161 @@ compare_ko_to_wt_at_timepoint <- function(tp, perturbation_ccm, wt_pred_df, ko_p
   cond_wt <- wt_pred_df %>% filter(!!sym(interval_col) == tp)
   cond_ko <- ko_pred_df %>% filter(!!sym(interval_col) == tp)
   return(compare_abundances(perturbation_ccm, cond_wt, cond_ko))
+}
+
+
+# Recover the residual degrees of freedom from a contrast table that never
+# published them.
+#
+# `delta_p_value` was produced as `2 * pt(-|t|, df)`, so inverting it for `df`
+# is just undoing that -- exact, not an approximation. Every usable row must
+# agree, because a single fit has a single residual df; scatter means the table
+# was not produced the way this assumes, and we return NA rather than guess.
+recover_df_resid <- function(delta_log_abund, delta_log_abund_se, delta_p_value,
+                             tol = 1e-4) {
+  usable <- is.finite(delta_log_abund) & is.finite(delta_log_abund_se) &
+    delta_log_abund_se > 0 & is.finite(delta_p_value) &
+    delta_p_value > 0 & delta_p_value < 1 & abs(delta_log_abund) > 0
+
+  if (!any(usable)) {
+    return(NA_real_)
+  }
+
+  tstat <- abs(delta_log_abund[usable] / delta_log_abund_se[usable])
+  pvals <- delta_p_value[usable]
+
+  est <- mapply(
+    function(tt, pp) {
+      tryCatch(
+        stats::uniroot(function(d) 2 * stats::pt(-tt, d) - pp, c(1, 1e5))$root,
+        error = function(e) NA_real_
+      )
+    },
+    tstat, pvals
+  )
+  est <- est[is.finite(est)]
+  if (length(est) == 0) {
+    return(NA_real_)
+  }
+
+  centre <- stats::median(est)
+  # A single fit has a single df. If the recovered values disagree, the premise
+  # is wrong for this table and the caller must supply `df` explicitly.
+  if (max(abs(est - centre)) > tol * max(1, centre)) {
+    return(NA_real_)
+  }
+
+  # Residual df of a fit is a whole number; snap to it when it plainly is one.
+  if (abs(centre - round(centre)) < 1e-6) round(centre) else centre
+}
+
+
+#' Add detectability columns to a contrast table that predates them
+#'
+#' `compare_abundances()` gained `mdfc80`, `power_at_margin` and the rest in
+#' 0.0.3. Tables written before that carry `power` and `mdfc`, which cannot
+#' answer "were we powered to see a phenotype here?" -- `power` is Hooke's
+#' `observed_power`, a restatement of `delta_p_value`, and `mdfc` was computed
+#' from a contaminated `power` argument. This adds the 0.0.3 columns to such a
+#' table **without refitting the model**.
+#'
+#' Nothing needs to be re-estimated because every input is already present or
+#' declared: the detectability columns are functions of `delta_log_abund_se`,
+#' `alpha`, `df_resid` and a constant, never of the observed effect.
+#' `df_resid` is the only value a legacy table lacks, and it is recovered
+#' exactly by inverting `delta_p_value = 2 * pt(-|t|, df)`. All usable rows must
+#' agree on it; if they do not, the table was not produced the way this assumes
+#' and you must pass `df` yourself.
+#'
+#' Columns already present are left alone unless `overwrite = TRUE`, so running
+#' this over a genuine 0.0.3 table is a no-op rather than a fight.
+#'
+#' @param contrast_tbl A contrast table from `compare_abundances()`. Must carry
+#'   `delta_log_abund`, `delta_log_abund_se` and `delta_p_value`.
+#' @param alpha Significance level the table was produced at. Must match, or the
+#'   intervals and detection limits will not correspond to its q-values.
+#' @param power Desired power level, used for `mdfc80`.
+#' @param margin Effect size to be powered against, as a fold change. Defaults
+#'   to the same value `compare_abundances()` uses; see there for why it is
+#'   derived from the calling threshold rather than chosen.
+#' @param df Residual degrees of freedom. Leave `NULL` to recover it from the
+#'   table, which is what you want unless recovery has refused.
+#' @param log_scale Log scale the table is on, for exponentiating `mdfc80`.
+#'   Must match how the table was produced.
+#' @param overwrite Recompute columns that are already present.
+#'
+#' @return `contrast_tbl` with `df_resid`, `delta_log_abund_lo`,
+#'   `delta_log_abund_hi`, `mdfc80`, `power_at_margin`, `margin_fold_change` and
+#'   `contrast_note` added. Existing columns are preserved; `mdfc` and `power`
+#'   are left untouched so nothing downstream breaks mid-migration.
+#'
+#' @export
+decorate_contrast_detectability <- function(contrast_tbl,
+                                            alpha = 0.05,
+                                            power = 0.8,
+                                            margin = .DEFAULT_MARGIN_FOLD_CHANGE,
+                                            df = NULL,
+                                            log_scale = c("log", "log10", "log2"),
+                                            overwrite = FALSE) {
+  log_scale <- match.arg(log_scale)
+  base <- log_base_value(log_scale)
+
+  assertthat::assert_that(is.data.frame(contrast_tbl))
+  assertthat::assert_that(is.numeric(alpha), length(alpha) == 1, alpha > 0, alpha < 1)
+  assertthat::assert_that(is.numeric(power), length(power) == 1, power > 0, power < 1)
+  assertthat::assert_that(is.numeric(margin), length(margin) == 1, margin > 0)
+
+  required <- c("delta_log_abund", "delta_log_abund_se", "delta_p_value")
+  missing_cols <- setdiff(required, names(contrast_tbl))
+  if (length(missing_cols) > 0) {
+    stop(
+      "contrast_tbl is missing column(s): ", paste(missing_cols, collapse = ", "),
+      ". Detectability cannot be derived without them.",
+      call. = FALSE
+    )
+  }
+
+  added <- c("df_resid", "delta_log_abund_lo", "delta_log_abund_hi",
+             "mdfc80", "power_at_margin", "margin_fold_change", "contrast_note")
+  if (!overwrite && all(added %in% names(contrast_tbl))) {
+    message("contrast_tbl already carries the detectability columns; nothing to do.")
+    return(contrast_tbl)
+  }
+
+  if (is.null(df)) {
+    df <- recover_df_resid(
+      contrast_tbl$delta_log_abund,
+      contrast_tbl$delta_log_abund_se,
+      contrast_tbl$delta_p_value
+    )
+    if (!is.finite(df)) {
+      stop(
+        "Could not recover df_resid from this table: the value implied by ",
+        "delta_p_value is not consistent across rows, so it was not produced ",
+        "as 2 * pt(-|t|, df) with a single df. Pass `df` explicitly.",
+        call. = FALSE
+      )
+    }
+  }
+  assertthat::assert_that(is.numeric(df), length(df) == 1, is.finite(df), df > 0)
+
+  se <- contrast_tbl$delta_log_abund_se
+  tcrit <- stats::qt(1 - alpha / 2, df)
+  margin_log <- log(margin, base = base)
+  degenerate <- !is.finite(se) | se <= 0
+
+  contrast_tbl$df_resid <- df
+  contrast_tbl$delta_log_abund_lo <- contrast_tbl$delta_log_abund - tcrit * se
+  contrast_tbl$delta_log_abund_hi <- contrast_tbl$delta_log_abund + tcrit * se
+  contrast_tbl$mdfc80 <- calculate_mdfc(se, 0, alpha = alpha, power = power,
+                                        df = df, base = base)
+  contrast_tbl$power_at_margin <- calculate_power_at_margin(se, 0, alpha = alpha,
+                                                            margin_log = margin_log,
+                                                            df = df)
+  contrast_tbl$margin_fold_change <- margin
+  # Mirrors compare_abundances(): NA means the row is fine. `insufficient_df`
+  # cannot arise here -- recovery would have refused first.
+  contrast_tbl$contrast_note <- ifelse(degenerate, "degenerate_fit", NA_character_)
+
+  contrast_tbl
 }

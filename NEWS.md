@@ -1,5 +1,22 @@
 # hooke 0.0.4
 
+### Changes
+
+* New `decorate_contrast_detectability()` adds the 0.0.3 detectability columns
+  to a contrast table written before they existed, **without refitting the
+  model**. Nothing needs re-estimating: `mdfc80`, `power_at_margin` and the Wald
+  interval are functions of `delta_log_abund_se`, `alpha`, `df_resid` and a
+  declared constant only.
+  * `df_resid` is the one value a legacy table lacks. It is recovered exactly
+    by inverting `delta_p_value = 2 * pt(-|t|, df)` -- not an approximation.
+    Every usable row must agree, since one fit has one residual df; on scatter
+    the function refuses rather than guessing, and asks for `df` explicitly.
+  * Rows with a degenerate standard error get `NA` and
+    `contrast_note = "degenerate_fit"`, matching `compare_abundances()`.
+  * `mdfc` and `power` are left untouched, and a table that already carries the
+    new columns is returned unchanged unless `overwrite = TRUE`, so the
+    function is safe to run mid-migration.
+
 ### Breaking changes
 
 * `compare_abundances()`'s `margin` default changes from `2` to `exp(0.5)`
