@@ -661,13 +661,19 @@ convert_base <- function(value, from_base, to_base) {
 #'   fold change rather than on a log scale so that it means the same thing
 #'   regardless of `log_scale`/`convert_scale`.
 #'
-#'   The `2` default is a generic convenience, not a policy. A caller using
-#'   `power_at_margin` or `mdfc80` to decide whether a null result is
-#'   *meaningful* should set `margin` to the smallest change they would have
-#'   called a phenotype, so that "we were powered" refers to something that
-#'   would have counted. Setting it larger than that threshold silently
-#'   over-claims: rows whose detection limit is worse than the calling
-#'   threshold still read as adequately powered.
+#'   Defaults to `exp(0.5)` (1.649-fold), the dual of a 0.5 log-fold calling
+#'   threshold: a caller that calls a change at `|delta_log_abund| > 0.5` is
+#'   powered for something that would have counted only if the margin is
+#'   `exp(0.5)`. Set it to `exp(lfc_cut)` for whatever threshold you actually
+#'   call phenotypes at; it is derived from that threshold, not chosen
+#'   alongside it.
+#'
+#'   A margin LARGER than the calling threshold is not conservative, it is
+#'   wrong in the lenient direction: every row whose detection limit falls
+#'   between the two reads as adequately powered even though its limit is
+#'   worse than the smallest change that would have counted, so "no phenotype,
+#'   and we would have caught one" is false for exactly those rows. The
+#'   previous `2` default did this against a 0.5 threshold.
 #' @param convert_scale Whether to convert to log2 scale.
 #' @param adjust_q_values Whether to restrict multiple-testing correction to the
 #'   rows with `power_at_margin >= power`. Changes what the FDR guarantee
@@ -738,7 +744,7 @@ compare_abundances <- function(ccm,
                                method = c("BH", "bonferroni", "hochberg", "hommel", "BY"),
                                alpha = 0.05,
                                power = 0.8,
-                               margin = 2,
+                               margin = exp(0.5),
                                convert_scale = FALSE,
                                adjust_q_values = FALSE,
                                log_scale = c("log", "log10", "log2")) {

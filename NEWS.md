@@ -1,3 +1,26 @@
+# hooke 0.0.4
+
+### Breaking changes
+
+* `compare_abundances()`'s `margin` default changes from `2` to `exp(0.5)`
+  (1.649-fold). `power_at_margin` and the published `margin_fold_change` change
+  for every caller that did not pass `margin` explicitly. `mdfc80` is
+  unaffected -- it depends on `power`, not `margin`.
+  * The margin is not a free parameter. A caller asking "were we powered to
+    see a phenotype here?" is claiming it could have detected a change it
+    would have *called* a phenotype, so the margin has to be the calling
+    threshold expressed as a fold change. At the 0.5 log-fold cut used
+    throughout the zebrafish screens, that is exactly `exp(0.5)`.
+  * A margin larger than the calling threshold is not conservative, it is
+    wrong in the lenient direction. Against a 0.5 cut, the old `2` default
+    certified every row with `mdfc80` in (1.649, 2.0] as adequately powered
+    even though its detection limit was worse than the smallest change that
+    would have counted -- around 15% of cell types in a representative
+    contrast, not a corner case.
+  * Callers who want the old behaviour, or who call phenotypes at a different
+    threshold, should pass `margin = exp(lfc_cut)` explicitly rather than rely
+    on the default. It is derived from that threshold, not chosen alongside it.
+
 # hooke 0.0.3
 
 ### Breaking changes
