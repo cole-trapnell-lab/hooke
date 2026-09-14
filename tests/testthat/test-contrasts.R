@@ -293,8 +293,13 @@ test_that("compare_abundances() margin default is the dual of a 0.5 log-fold cut
   # And the hazard it guards against: with a margin above the calling
   # threshold, a contrast whose detection limit sits between the two reads as
   # powered even though it could not have caught a callable change.
-  se <- 0.28
+  #
+  # At df = 57, mdfc80 = exp(2.8504 * se), so the (exp(0.5), 2] window is
+  # se in (0.1754, 0.2432). Pick from the middle of it rather than near an
+  # edge, and assert the window itself so a df change cannot silently move
+  # the example out of the band it is supposed to illustrate.
   df <- 57
+  se <- 0.21
   mdfc80 <- exp((qt(0.975, df) + qt(0.8, df)) * se)
   expect_gt(mdfc80, exp(0.5))   # could NOT detect a callable change
   expect_lt(mdfc80, 2)          # yet the old default would have called it powered
