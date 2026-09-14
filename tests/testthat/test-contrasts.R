@@ -299,3 +299,84 @@ test_that("compare_abundances() margin default is the dual of a 0.5 log-fold cut
   expect_gt(mdfc80, exp(0.5))   # could NOT detect a callable change
   expect_lt(mdfc80, 2)          # yet the old default would have called it powered
 })
+
+# decorate_contrast_detectability(): add 0.0.3 columns without refitting
+
+make_legacy_tbl <- function(df = 57, se = c(0.05, 0.2, 0.5), effect = c(-0.1, 0.3, 0.9)) {
+  tstat <- effect / se
+  tibble::tibble(
+    cell_group = paste0("c", seq_along(se)),
+    delta_log_abund = effect,
+    delta_log_abund_se = se,
+    delta_p_value = 2 * pt(-abs(tstat), df)
+  )
+}
+
+test_that("df_resid is recovered exactly from delta_p_value", {
+  for (true_df in c(10, 33, 57, 150)) {
+    tbl <- make_legacy_tbl(df = true_df)
+    expect_equal(recover_df_resid(tbl$delta_log_abund, tbl$delta_log_abund_se,
+                                  tbl$delta_p_value), true_df)
+  }
+})
+
+test_that("recovery refuses when rows disagree on df", {
+  # Two rows produced under different df cannot come from one fit.
+  a <- make_legacy_tbl(df = 20, se = 0.2, effect = 0.4)
+  b <- make_legacy_tbl(df = 200, se = 0.2, effect = 0.4)
+  mixed <- rbind(a, b)
+  expect_true(is.na(recover_df_resid(mixed$delta_log_abund, mixed$delta_log_abund_se,
+                                     mixed$delta_p_value)))
+  expect_error(decorate_contrast_detectability(mixed), "Pass `df` explicitly")
+})
+
+test_that("decoration matches compare_abundances' own formulas", {
+  tbl <- make_legacy_tbl(df = 57)
+  out <- decorate_contrast_detectability(tbl, alpha = 0.05, power = 0.8,
+                                         margin = exp(0.5))
+  expect_equal(unique(out$df_resid), 57)
+  expect_equal(unique(out$margin_fold_change), exp(0.5))
+  expect_equal(out$mdfc80,
+               calculate_mdfc(tbl$delta_log_abund_se, 0, alpha = 0.05,
+                              power = 0.8, df = 57, base = exp(1)))
+  expect_equal(out$power_at_margin,
+               calculate_power_at_margin(tbl$delta_log_abund_se, 0, alpha = 0.05,
+                                         margin_log = 0.5, df = 57))
+  tcrit <- qt(0.975, 57)
+  expect_equal(out$delta_log_abund_lo,
+               tbl$delta_log_abund - tcrit * tbl$delta_log_abund_se)
+})
+
+test_that("decorated power_at_margin does not depend on the observed effect", {
+  # Same standard errors, different effects -> identical detectability. This is
+  # the whole point: `power` would move, power_at_margin must not.
+  a <- decorate_contrast_detectability(make_legacy_tbl(df = 57, effect = c(-0.1, 0.3, 0.9)))
+  b <- decorate_contrast_detectability(make_legacy_tbl(df = 57, effect = c(2.0, -1.5, 0.05)))
+  expect_equal(a$power_at_margin, b$power_at_margin)
+  expect_equal(a$mdfc80, b$mdfc80)
+})
+
+test_that("degenerate rows get NA and a reason, not a number", {
+  tbl <- make_legacy_tbl(df = 57)
+  tbl$delta_log_abund_se[2] <- 0
+  out <- decorate_contrast_detectability(tbl, df = 57)
+  expect_true(is.na(out$mdfc80[2]))
+  expect_true(is.na(out$power_at_margin[2]))
+  expect_equal(out$contrast_note[2], "degenerate_fit")
+  expect_true(is.na(out$contrast_note[1]))
+})
+
+test_that("a table that already has the columns is left alone unless overwritten", {
+  tbl <- decorate_contrast_detectability(make_legacy_tbl(df = 57))
+  tbl$mdfc80 <- 999                       # pretend a real 0.0.3 run wrote these
+  expect_message(again <- decorate_contrast_detectability(tbl), "nothing to do")
+  expect_equal(again$mdfc80, rep(999, nrow(tbl)))
+  forced <- decorate_contrast_detectability(tbl, overwrite = TRUE)
+  expect_false(any(forced$mdfc80 == 999))
+})
+
+test_that("missing inputs fail loudly", {
+  tbl <- make_legacy_tbl(df = 57)
+  expect_error(decorate_contrast_detectability(tbl[, c("cell_group", "delta_log_abund")]),
+               "missing column")
+})
