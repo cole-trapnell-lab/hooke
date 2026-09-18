@@ -119,7 +119,7 @@ my_pln_predict_cond <- function(ccm,
 
   M <- tcrossprod(VE$M, A)
 
-  S <- map(1:n_new, ~ crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
+  S <- purrr::map(1:n_new, ~ crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
 
   ## mean latent positions in the parameter space
 
