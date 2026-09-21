@@ -3,6 +3,7 @@
 my_plnnetwork_predict <- function(ccm, newdata, type = c("link", "response"), envir = parent.frame()) {
   type <- match.arg(type)
   n_new <- nrow(newdata)
+  newdata <- coerce_newdata_to_xlevels(newdata, ccm@model_aux[["full_model_xlevels"]])
   X <- model.matrix(ccm@model_aux[["full_model_terms"]], newdata,
     xlev = ccm@model_aux[["full_model_xlevels"]]
   )
@@ -77,10 +78,12 @@ my_pln_predict_cond <- function(ccm,
   if (pln_model == "full") {
     # X <- model.matrix(terms(ccm@model_aux[["full_model_frame"]]), newdata,
     #                   xlev = ccm@model_aux[["full_model_xlevels"]])
+    newdata <- coerce_newdata_to_xlevels(newdata, ccm@model_aux[["full_model_xlevels"]])
     X <- model.matrix(ccm@model_aux[["full_model_terms"]], newdata,
       xlev = ccm@model_aux[["full_model_xlevels"]]
     )
   } else if (pln_model == "reduced") {
+    newdata <- coerce_newdata_to_xlevels(newdata, ccm@model_aux[["reduced_model_xlevels"]])
     # X <- model.matrix(terms(ccm@model_aux[["reduced_model_frame"]]), newdata,
     #                   xlev = ccm@model_aux[["reduced_model_xlevels"]])
     X <- model.matrix(ccm@model_aux[["reduced_model_terms"]], newdata,
@@ -119,7 +122,7 @@ my_pln_predict_cond <- function(ccm,
 
   M <- tcrossprod(VE$M, A)
 
-  S <- map(1:n_new, ~ crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
+  S <- purrr::map(1:n_new, ~ crossprod(VE$S[., ] * t(A)) + Sigma21) %>% simplify2array()
 
   ## mean latent positions in the parameter space
 
@@ -215,6 +218,7 @@ estimate_abundances <- function(ccm,
 
     # model_terms = terms(ccm@model_aux[["full_model_frame"]])
     model_terms <- ccm@model_aux[["full_model_terms"]]
+    newdata <- coerce_newdata_to_xlevels(newdata, ccm@model_aux[["full_model_xlevels"]])
     base_X <- Matrix::sparse.model.matrix(model_terms, newdata,
       xlev = ccm@model_aux[["full_model_xlevels"]]
     )

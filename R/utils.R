@@ -774,6 +774,24 @@ get_norm_df <- function(ccs) {
 
 
 
+# Coerce the columns of `newdata` that the fitted model treats as factors to factors with the model's
+# levels. model.matrix() only honours `xlev` for factor/character columns: an integer column such as
+# `collection_batch` taken straight from colData is treated as numeric, giving a design row with one
+# column for that term instead of (levels - 1) and a "matrix multiplication: incompatible matrix
+# dimensions" error against B (portal issue #53, the WT kinetics QC plot). A value that is not one of
+# the model's levels is an error here, not a silent NA row.
+coerce_newdata_to_xlevels <- function(newdata, xlev) {
+  for (nm in intersect(names(xlev), colnames(newdata))) {
+    vals <- as.character(newdata[[nm]])
+    unknown <- setdiff(unique(vals[!is.na(vals)]), xlev[[nm]])
+    if (length(unknown) > 0) {
+      stop("newdata column '", nm, "' has level(s) not in the fitted model: ", paste(unknown, collapse = ", "))
+    }
+    newdata[[nm]] <- factor(vals, levels = xlev[[nm]])
+  }
+  newdata
+}
+
 fill_missing_terms_with_default_values <- function(ccm, newdata, pln_model = c("full", "reduced"), verbose = FALSE) {
   pln_model <- match.arg(pln_model)
 
