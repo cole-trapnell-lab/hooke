@@ -82,6 +82,12 @@ of \code{mdfc80}, fixing the effect and reporting the power rather than the
 reverse. \code{NA} on the same rows as \code{mdfc80}.}
 \item{\code{margin_fold_change}}{The \code{margin} used, so the table records what
 it was powered for.}
+\item{\code{power_status}}{\code{power_at_margin} thresholded at the requested
+\code{power}: \code{"Powered"} or \code{"Underpowered"}, never \code{NA}. Written so that
+consumers stop reimplementing the comparison and drifting apart.}
+\item{\code{powered_thresh}}{The threshold behind \code{power_status}. With
+\code{power_at_margin} beside it, \code{\link[=calculate_power_status]{calculate_power_status()}} reproduces the
+column, or recomputes it at any other cutoff, from the table alone.}
 \item{\code{contrast_note}}{Why \code{mdfc80} and \code{power_at_margin} are \code{NA}:
 \code{"degenerate_fit"} (zero or non-finite SE) or \code{"insufficient_df"}.
 \code{NA} when the row is fine.}

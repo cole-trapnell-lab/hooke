@@ -641,6 +641,46 @@ calculate_power_at_margin <- function(SE_x, SE_y, alpha = 0.05, margin_log,
   return(power)
 }
 
+#' Label whether a contrast was adequately powered
+#'
+#' Thresholds `power_at_margin`, the effect-independent power to detect a change
+#' of `margin_fold_change`. `compare_abundances()` and
+#' `decorate_contrast_detectability()` call this to write the `power_status`
+#' column, and publish the threshold they used as `powered_thresh`, so the
+#' column can be reproduced -- or recomputed at a different cutoff -- from the
+#' table alone:
+#'
+#' \preformatted{
+#' # reproduce the stored column
+#' calculate_power_status(tbl$power_at_margin, tbl$powered_thresh[1])
+#'
+#' # ask a stricter question of the same table
+#' calculate_power_status(tbl$power_at_margin, 0.9)
+#' }
+#'
+#' At the default threshold this is the exact dual of `mdfc80 <=
+#' margin_fold_change`, because `mdfc80` is computed at the same requested
+#' `power`. Consumers that label off either column therefore agree, and stop
+#' agreeing if the threshold is moved away from the `power` the table was
+#' written with.
+#'
+#' @param power_at_margin Numeric power to detect a change of the declared
+#'   margin, as published by `compare_abundances()`.
+#' @param powered_thresh Power at or above which a contrast counts as powered.
+#' @return A character vector of `"Powered"` / `"Underpowered"`. `NA` input --
+#'   a degenerate fit, insufficient df, or a table predating 0.0.3 -- is
+#'   `"Underpowered"`, never `NA`: a contrast we cannot certify must not be
+#'   reported as one. `contrast_note` says which of those it was.
+#' @export
+calculate_power_status <- function(power_at_margin, powered_thresh = 0.8) {
+  assertthat::assert_that(is.numeric(powered_thresh), length(powered_thresh) == 1,
+                          powered_thresh > 0, powered_thresh < 1)
+
+  power_at_margin <- as.numeric(power_at_margin)
+  ifelse(!is.na(power_at_margin) & power_at_margin >= powered_thresh,
+         "Powered", "Underpowered")
+}
+
 
 get_current_base <- function(cond_a) {
   colnames <- colnames(cond_a)[grepl("log", colnames(cond_a))]
@@ -711,6 +751,12 @@ convert_base <- function(value, from_base, to_base) {
 #'       reverse. `NA` on the same rows as `mdfc80`.}
 #'     \item{`margin_fold_change`}{The `margin` used, so the table records what
 #'       it was powered for.}
+#'     \item{`power_status`}{`power_at_margin` thresholded at the requested
+#'       `power`: `"Powered"` or `"Underpowered"`, never `NA`. Written so that
+#'       consumers stop reimplementing the comparison and drifting apart.}
+#'     \item{`powered_thresh`}{The threshold behind `power_status`. With
+#'       `power_at_margin` beside it, [calculate_power_status()] reproduces the
+#'       column, or recomputes it at any other cutoff, from the table alone.}
 #'     \item{`contrast_note`}{Why `mdfc80` and `power_at_margin` are `NA`:
 #'       `"degenerate_fit"` (zero or non-finite SE) or `"insufficient_df"`.
 #'       `NA` when the row is fine.}
@@ -885,6 +931,16 @@ compare_abundances <- function(ccm,
       # The margin power_at_margin was computed against, so the table says what
       # it was powered for instead of leaving a reader to guess.
       margin_fold_change = margin,
+
+      # The thresholded form, so consumers stop reimplementing it and drifting.
+      # Thresholded at the requested `power`, which makes it the exact dual of
+      # `mdfc80 <= margin_fold_change`.
+      power_status = calculate_power_status(power_at_margin, requested_power),
+
+      # Published so `power_status` is reproducible from the table alone rather
+      # than being a bare assertion. `mdfc` was unreadable precisely because the
+      # argument behind it was never recorded; do not drop this column.
+      powered_thresh = requested_power,
 
       # Post-hoc power. A deterministic restatement of delta_p_value, not a
       # measure of precision; see the note above calculate_observed_power().
@@ -1071,8 +1127,8 @@ recover_df_resid <- function(delta_log_abund, delta_log_abund_se, delta_p_value,
 #' @param overwrite Recompute columns that are already present.
 #'
 #' @return `contrast_tbl` with `df_resid`, `delta_log_abund_lo`,
-#'   `delta_log_abund_hi`, `mdfc80`, `power_at_margin`, `margin_fold_change` and
-#'   `contrast_note` added. Existing columns are preserved; `mdfc` and `power`
+#'   `delta_log_abund_hi`, `mdfc80`, `power_at_margin`, `margin_fold_change`,
+#'   `power_status`, `powered_thresh` and `contrast_note` added. Existing columns are preserved; `mdfc` and `power`
 #'   are left untouched so nothing downstream breaks mid-migration.
 #'
 #' @export
@@ -1102,7 +1158,8 @@ decorate_contrast_detectability <- function(contrast_tbl,
   }
 
   added <- c("df_resid", "delta_log_abund_lo", "delta_log_abund_hi",
-             "mdfc80", "power_at_margin", "margin_fold_change", "contrast_note")
+             "mdfc80", "power_at_margin", "margin_fold_change", "power_status",
+             "powered_thresh", "contrast_note")
   if (!overwrite && all(added %in% names(contrast_tbl))) {
     message("contrast_tbl already carries the detectability columns; nothing to do.")
     return(contrast_tbl)
@@ -1139,6 +1196,8 @@ decorate_contrast_detectability <- function(contrast_tbl,
                                                             margin_log = margin_log,
                                                             df = df)
   contrast_tbl$margin_fold_change <- margin
+  contrast_tbl$power_status <- calculate_power_status(contrast_tbl$power_at_margin, power)
+  contrast_tbl$powered_thresh <- power
   # Mirrors compare_abundances(): NA means the row is fine. `insufficient_df`
   # cannot arise here -- recovery would have refused first.
   contrast_tbl$contrast_note <- ifelse(degenerate, "degenerate_fit", NA_character_)
