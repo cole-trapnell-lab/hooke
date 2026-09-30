@@ -1,3 +1,26 @@
+# hooke 0.0.5
+
+### Changes
+
+* `compare_abundances()` and `decorate_contrast_detectability()` now publish
+  `power_status` (`"Powered"` / `"Underpowered"`) and `powered_thresh`.
+  * `power_status` is `power_at_margin` thresholded at the requested `power`,
+    which makes it the exact dual of `mdfc80 <= margin_fold_change`. Three
+    downstream copies of this comparison had drifted -- two keyed on `power`
+    (observed_power), which is `delta_p_value` restated, so they labelled by
+    effect size rather than by precision.
+  * `NA` is `"Underpowered"`, never `NA`. A degenerate fit or insufficient df
+    means the contrast cannot be certified, and must not be reported as if it
+    were; `contrast_note` says which it was.
+  * `powered_thresh` records the cutoff behind the label, so the column is
+    reproducible from the table alone rather than being a bare assertion --
+    the property `mdfc` lacked. New exported `calculate_power_status()`
+    reproduces the stored column, or recomputes it at any other cutoff,
+    without refitting:
+    `calculate_power_status(tbl$power_at_margin, tbl$powered_thresh[1])`.
+  * Existing columns are unchanged. Tables written before 0.0.5 gain both
+    columns from `decorate_contrast_detectability()`.
+
 # hooke 0.0.4
 
 ### Changes

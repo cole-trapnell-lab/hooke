@@ -37,8 +37,8 @@ Must match how the table was produced.}
 }
 \value{
 \code{contrast_tbl} with \code{df_resid}, \code{delta_log_abund_lo},
-\code{delta_log_abund_hi}, \code{mdfc80}, \code{power_at_margin}, \code{margin_fold_change} and
-\code{contrast_note} added. Existing columns are preserved; \code{mdfc} and \code{power}
+\code{delta_log_abund_hi}, \code{mdfc80}, \code{power_at_margin}, \code{margin_fold_change},
+\code{power_status}, \code{powered_thresh} and \code{contrast_note} added. Existing columns are preserved; \code{mdfc} and \code{power}
 are left untouched so nothing downstream breaks mid-migration.
 }
 \description{

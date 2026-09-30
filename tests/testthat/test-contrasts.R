@@ -385,3 +385,82 @@ test_that("missing inputs fail loudly", {
   expect_error(decorate_contrast_detectability(tbl[, c("cell_group", "delta_log_abund")]),
                "missing column")
 })
+
+
+# power_status: the thresholded column, and its recomputability
+
+test_that('calculate_power_status never returns NA', {
+
+  # A contrast we could not assess must not be reported as powered, and must
+  # not be reported as an unknown that a downstream ifelse might coerce. NA in,
+  # "Underpowered" out; contrast_note carries the reason.
+  expect_equal(calculate_power_status(NA_real_), "Underpowered")
+  expect_equal(
+    calculate_power_status(c(0.95, NA_real_, 0.1)),
+    c("Powered", "Underpowered", "Underpowered")
+  )
+  expect_false(any(is.na(calculate_power_status(c(NA_real_, NA_real_)))))
+
+  # The boundary is inclusive, matching mdfc80 <= margin.
+  expect_equal(calculate_power_status(0.8, 0.8), "Powered")
+  expect_equal(calculate_power_status(0.8 - 1e-12, 0.8), "Underpowered")
+
+  expect_error(calculate_power_status(0.9, powered_thresh = 1))
+  expect_error(calculate_power_status(0.9, powered_thresh = c(0.5, 0.8)))
+})
+
+
+test_that('power_status keys on precision, not on the observed effect', {
+
+  # The distinction the column exists to make. Both rows are equally
+  # significant by construction; only the second was measured precisely enough
+  # to certify. A label keyed on observed_power would call them the same.
+  loose  <- calculate_power_at_margin(0.9, 0.9, margin_log = 0.5, df = 40)
+  tight  <- calculate_power_at_margin(0.1, 0.1, margin_log = 0.5, df = 40)
+
+  expect_equal(calculate_power_status(loose), "Underpowered")
+  expect_equal(calculate_power_status(tight), "Powered")
+})
+
+
+test_that('power_status is recomputable from the columns beside it', {
+
+  # The point of publishing powered_thresh: the stored label is reproducible
+  # from the table alone, so it is an assertion a reader can check rather than
+  # one they must trust. This is what `mdfc` lacked.
+  se <- c(0.05, 0.15, 0.30, 0.60)
+  tbl <- data.frame(
+    power_at_margin = calculate_power_at_margin(se, 0, margin_log = 0.5, df = 40)
+  )
+  tbl$powered_thresh <- 0.8
+  tbl$power_status <- calculate_power_status(tbl$power_at_margin, 0.8)
+
+  expect_equal(
+    calculate_power_status(tbl$power_at_margin, tbl$powered_thresh[1]),
+    tbl$power_status
+  )
+
+  # And recomputable at a different cutoff without refitting anything.
+  stricter <- calculate_power_status(tbl$power_at_margin, 0.95)
+  expect_true(all(stricter[stricter == "Powered"] == "Powered"))
+  expect_true(sum(stricter == "Powered") <= sum(tbl$power_status == "Powered"))
+})
+
+
+test_that('power_status is the dual of mdfc80 at the threshold the table used', {
+
+  # Consumers label off either column; at the requested power they must agree,
+  # which is what lets platt/zscape_portal size a node by one and caption it
+  # with the other.
+  se_x <- c(0.05, 0.10, 0.20, 0.40, 0.80)
+  se_y <- rep(0, length(se_x))
+  margin_fc <- exp(0.5)
+
+  mdfc80 <- calculate_mdfc(se_x, se_y, power = 0.8, df = 40)
+  pam    <- calculate_power_at_margin(se_x, se_y, margin_log = 0.5, df = 40)
+
+  via_mdfc  <- ifelse(!is.na(mdfc80) & mdfc80 <= margin_fc, "Powered", "Underpowered")
+  via_power <- calculate_power_status(pam, 0.8)
+
+  expect_equal(via_power, via_mdfc)
+})
