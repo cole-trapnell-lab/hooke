@@ -35,6 +35,7 @@ Imports:
     methods,
     purrr (>= 0.3.2),
     RColorBrewer,
+    rlang,
     Rcpp (>= 1.0.1),
     S4Vectors,
     splines,
