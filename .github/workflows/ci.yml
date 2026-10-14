@@ -1,8 +1,9 @@
 name: ci 
+# Retired: the published site is built from the gh-pages-src-v2 branch
+# (see ci-v2.yml there). This workflow no longer runs on push; it can only
+# be started by hand and would overwrite the live site if it were.
 on:
-  push:
-    branches:
-      - gh-pages-src 
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
