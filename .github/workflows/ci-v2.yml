@@ -1,4 +1,7 @@
 name: ci-v2
+# Builds the site from gh-pages-src-v2 and publishes it to the root of the
+# gh-pages branch (https://cole-trapnell-lab.github.io/hooke/). This branch is
+# the source of the published documentation; gh-pages-src is retired.
 on:
   push:
     branches:
@@ -21,10 +24,4 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install mkdocs-material
-      - run: mkdocs build --site-dir site
-      - uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          destination_dir: v2
-          keep_files: true
+      - run: mkdocs gh-deploy --force
