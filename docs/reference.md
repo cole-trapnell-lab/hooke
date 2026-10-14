@@ -21,6 +21,10 @@ Helper function to plot kinetics
 
 Predict cell type abundances given a PLN model and a set of inputs for its covariates
 
+[`estimate_abundances_cond()`](estimate_abundances_cond)
+
+Predict cell type abundances given a PLN model and a set of inputs for its covariates and observed counts
+
 [`estimate_abundances_over_interval()`](estimate_abundances_over_interval)
 
 Predict cell type abundances given a PLN model over a range of time or other interval
