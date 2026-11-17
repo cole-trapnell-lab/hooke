@@ -1,6 +1,6 @@
 Package: hooke
 Title: Differential analysis of cell counts in single-cell experiments
-Version: 0.0.5
+Version: 0.0.6
 Authors@R: 
     person(given = "Madeleine",
            family = "Duran",
@@ -32,6 +32,7 @@ Imports:
     igraph (>= 1.2.4),
     Matrix (>= 1.2-17),
     methods,
+    parallel,
     purrr (>= 0.3.2),
     RColorBrewer,
     rlang,

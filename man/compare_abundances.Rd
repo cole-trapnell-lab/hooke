@@ -15,7 +15,13 @@ compare_abundances(
   margin = exp(0.5),
   convert_scale = FALSE,
   adjust_q_values = FALSE,
-  log_scale = c("log", "log10", "log2")
+  log_scale = c("log", "log10", "log2"),
+  contrast_se = c("independent", "covariance"),
+  test = c("wald", "lrt_shared", "lrt_diagonal"),
+  lrt_reference = c("F", "chisq"),
+  support_by = NULL,
+  q_value_groups = NULL,
+  cores = 1
 )
 }
 \arguments{
@@ -61,6 +67,51 @@ rows with \code{power_at_margin >= power}. Changes what the FDR guarantee
 covers; see \code{\link[=adjust_q_values]{adjust_q_values()}}. Defaults to \code{FALSE}.}
 
 \item{log_scale}{Log scale used for estimate_abundances.}
+
+\item{contrast_se}{How the standard error of the difference is computed.
+\code{"independent"} (the default, and the only behaviour before 0.0.6) is
+\code{sqrt(se_x^2 + se_y^2)}, which treats the two estimates as independent.
+\code{"covariance"} takes the standard error of the difference itself from the
+model's coefficient covariance, so uncertainty the two estimates share
+cancels. The two agree when the estimates share nothing; they differ most
+when the model has a batch term and the contrast is outside the reference
+batch, where \code{"independent"} counts the batch term's uncertainty twice.
+Rows where either estimate sits at the \code{min_log_abund} floor keep the
+\code{"independent"} rule. With a bootstrap \code{vhat}, use at least 100 bootstraps
+with \code{"covariance"}: at 10 the standard errors are too noisy.}
+
+\item{test}{How \code{delta_p_value} is computed. \code{"wald"} (the default, and the
+only behaviour before 0.0.6) is the t test of
+\code{delta_log_abund / delta_log_abund_se}. \code{"lrt_shared"} and \code{"lrt_diagonal"}
+replace it with a likelihood-ratio test of the same contrast: each cell
+group is refitted with and without the difference between \code{cond_y} and
+\code{cond_x}, on its exact Poisson log-normal likelihood. \code{"lrt_shared"} holds
+each cell group's variance at the value in the fitted model (one shared
+value under a spherical covariance); \code{"lrt_diagonal"} estimates a variance
+per cell group in both fits. Unlike the Wald test, a likelihood-ratio test
+does not lose power when a cell group nearly disappears. Estimates,
+standard errors and the detectability columns are not changed. Needs a
+model fitted with \code{keep_ccs = TRUE}.}
+
+\item{lrt_reference}{Reference distribution for the likelihood-ratio
+statistic: \code{"F"} (the default; \code{F(1, df)} with the residual degrees of
+freedom, which is better calibrated with few samples) or \code{"chisq"}
+(chi-square with 1 df).}
+
+\item{support_by}{\code{NULL} (the default: every row is tested) or the names of
+the columns that identify the samples behind each condition, for example
+\code{c("knockout", "timepoint")}. When given, a row is recorded as not tested,
+with \code{NA} p- and q-values, if either condition has no samples or the cell
+group has no cells in either condition, since the model can only be
+interpolating there. Needs a model fitted with \code{keep_ccs = TRUE}.}
+
+\item{q_value_groups}{\code{NULL} (the default: correct over every row) or a
+character vector of \code{by} values. When given, multiple-testing correction
+covers only those rows and the others get an \code{NA} \code{delta_q_value}. The
+groups must be chosen without looking at the contrast, for example cell
+types a reference says are present at that stage.}
+
+\item{cores}{Number of cores for the likelihood-ratio refits.}
 }
 \value{
 tibble A table contrasting cond_x and cond_y (interpret as Y/X), with
@@ -96,6 +147,15 @@ was called \code{power} before 0.0.3. A deterministic restatement of
 \code{delta_p_value}, not a measure of precision. Do not filter on it.}
 \item{\code{power}}{\strong{Deprecated} alias of \code{observed_power}, retained for one
 release and scheduled for removal.}
+\item{\code{wald_p_value}, \code{lrt_statistic}, \code{lrt_note}, \code{delta_test}}{Only with
+\code{test = "lrt_*"}: the Wald p-value that \code{delta_p_value} replaced, the
+likelihood-ratio statistic, why a row has no likelihood-ratio p-value
+(\code{"no_counts"}, \code{"fit_failed"}, \code{"not_estimable"}, \code{"insufficient_df"};
+\code{NA} when it has one), and the test and reference used.}
+\item{\code{support_samples_x}, \code{support_samples_y}, \code{support_cells_x},
+\code{support_cells_y}, \code{test_status}}{Only with \code{support_by}: the samples
+and cells behind each condition, and \code{"tested"},
+\code{"not_tested_no_samples"} or \code{"not_tested_no_cells"}.}
 }
 
 \code{mdfc80} and \code{power_at_margin} are functions of \code{delta_log_abund_se},

@@ -732,6 +732,45 @@ convert_base <- function(value, from_base, to_base) {
 #'   rows with `power_at_margin >= power`. Changes what the FDR guarantee
 #'   covers; see [adjust_q_values()]. Defaults to `FALSE`.
 #' @param log_scale Log scale used for estimate_abundances.
+#' @param contrast_se How the standard error of the difference is computed.
+#'   `"independent"` (the default, and the only behaviour before 0.0.6) is
+#'   `sqrt(se_x^2 + se_y^2)`, which treats the two estimates as independent.
+#'   `"covariance"` takes the standard error of the difference itself from the
+#'   model's coefficient covariance, so uncertainty the two estimates share
+#'   cancels. The two agree when the estimates share nothing; they differ most
+#'   when the model has a batch term and the contrast is outside the reference
+#'   batch, where `"independent"` counts the batch term's uncertainty twice.
+#'   Rows where either estimate sits at the `min_log_abund` floor keep the
+#'   `"independent"` rule. With a bootstrap `vhat`, use at least 100 bootstraps
+#'   with `"covariance"`: at 10 the standard errors are too noisy.
+#' @param test How `delta_p_value` is computed. `"wald"` (the default, and the
+#'   only behaviour before 0.0.6) is the t test of
+#'   `delta_log_abund / delta_log_abund_se`. `"lrt_shared"` and `"lrt_diagonal"`
+#'   replace it with a likelihood-ratio test of the same contrast: each cell
+#'   group is refitted with and without the difference between `cond_y` and
+#'   `cond_x`, on its exact Poisson log-normal likelihood. `"lrt_shared"` holds
+#'   each cell group's variance at the value in the fitted model (one shared
+#'   value under a spherical covariance); `"lrt_diagonal"` estimates a variance
+#'   per cell group in both fits. Unlike the Wald test, a likelihood-ratio test
+#'   does not lose power when a cell group nearly disappears. Estimates,
+#'   standard errors and the detectability columns are not changed. Needs a
+#'   model fitted with `keep_ccs = TRUE`.
+#' @param lrt_reference Reference distribution for the likelihood-ratio
+#'   statistic: `"F"` (the default; `F(1, df)` with the residual degrees of
+#'   freedom, which is better calibrated with few samples) or `"chisq"`
+#'   (chi-square with 1 df).
+#' @param support_by `NULL` (the default: every row is tested) or the names of
+#'   the columns that identify the samples behind each condition, for example
+#'   `c("knockout", "timepoint")`. When given, a row is recorded as not tested,
+#'   with `NA` p- and q-values, if either condition has no samples or the cell
+#'   group has no cells in either condition, since the model can only be
+#'   interpolating there. Needs a model fitted with `keep_ccs = TRUE`.
+#' @param q_value_groups `NULL` (the default: correct over every row) or a
+#'   character vector of `by` values. When given, multiple-testing correction
+#'   covers only those rows and the others get an `NA` `delta_q_value`. The
+#'   groups must be chosen without looking at the contrast, for example cell
+#'   types a reference says are present at that stage.
+#' @param cores Number of cores for the likelihood-ratio refits.
 #' @return tibble A table contrasting cond_x and cond_y (interpret as Y/X), with
 #'   one row per `by` group. Columns of interest:
 #'   \describe{
@@ -765,6 +804,15 @@ convert_base <- function(value, from_base, to_base) {
 #'       `delta_p_value`, not a measure of precision. Do not filter on it.}
 #'     \item{`power`}{**Deprecated** alias of `observed_power`, retained for one
 #'       release and scheduled for removal.}
+#'     \item{`wald_p_value`, `lrt_statistic`, `lrt_note`, `delta_test`}{Only with
+#'       `test = "lrt_*"`: the Wald p-value that `delta_p_value` replaced, the
+#'       likelihood-ratio statistic, why a row has no likelihood-ratio p-value
+#'       (`"no_counts"`, `"fit_failed"`, `"not_estimable"`, `"insufficient_df"`;
+#'       `NA` when it has one), and the test and reference used.}
+#'     \item{`support_samples_x`, `support_samples_y`, `support_cells_x`,
+#'       `support_cells_y`, `test_status`}{Only with `support_by`: the samples
+#'       and cells behind each condition, and `"tested"`,
+#'       `"not_tested_no_samples"` or `"not_tested_no_cells"`.}
 #'   }
 #'
 #'   `mdfc80` and `power_at_margin` are functions of `delta_log_abund_se`,
@@ -806,7 +854,13 @@ compare_abundances <- function(ccm,
                                margin = .DEFAULT_MARGIN_FOLD_CHANGE,
                                convert_scale = FALSE,
                                adjust_q_values = FALSE,
-                               log_scale = c("log", "log10", "log2")) {
+                               log_scale = c("log", "log10", "log2"),
+                               contrast_se = c("independent", "covariance"),
+                               test = c("wald", "lrt_shared", "lrt_diagonal"),
+                               lrt_reference = c("F", "chisq"),
+                               support_by = NULL,
+                               q_value_groups = NULL,
+                               cores = 1) {
   assertthat::assert_that(is(ccm, "cell_count_model"))
   assertthat::assert_that(tibble::is_tibble(cond_x))
   assertthat::assert_that(tibble::is_tibble(cond_y))
@@ -824,6 +878,25 @@ compare_abundances <- function(ccm,
   )
   method <- match.arg(method)
   log_scale <- match.arg(log_scale)
+  contrast_se <- match.arg(contrast_se)
+  test <- match.arg(test)
+  lrt_reference <- match.arg(lrt_reference)
+  assertthat::assert_that(is.null(support_by) || is.character(support_by))
+  assertthat::assert_that(is.null(q_value_groups) || is.character(q_value_groups))
+  assertthat::assert_that(assertthat::is.count(cores))
+
+  # The options below all default to the behaviour of hooke <= 0.0.5. They need
+  # the design row behind each condition, which the single `by` column keys.
+  uses_design <- contrast_se == "covariance" || test != "wald"
+  if (uses_design || !is.null(support_by) || !is.null(q_value_groups)) {
+    assertthat::assert_that(length(by) == 1,
+      msg = "contrast_se, test, support_by and q_value_groups need a single `by` column."
+    )
+  }
+  contrast_row <- NULL
+  if (uses_design) {
+    contrast_row <- condition_design_row(ccm, cond_y, "cond_y") - condition_design_row(ccm, cond_x, "cond_x")
+  }
 
   contrast_tbl <- dplyr::full_join(cond_x, cond_y, suffix = c("_x", "_y"), by = by)
 
@@ -884,10 +957,30 @@ compare_abundances <- function(ccm,
   assertthat::assert_that(is.numeric(margin), length(margin) == 1, margin > 0)
   margin_log <- log(margin, base = result_base)
 
+  # contrast_se = "covariance": the standard error of the difference itself,
+  # from the coefficient covariance, on the scale of the result. NULL keeps
+  # sqrt(se_x^2 + se_y^2). Where either estimate sits at the `min_log_abund`
+  # floor of estimate_abundances() (its SE is reported as 0), the existing rule
+  # is kept, so floored rows are unchanged.
+  covariance_se <- NULL
+  if (contrast_se == "covariance") {
+    covariance_se <- contrast_se_from_vhat(ccm, contrast_row) / log(result_base)
+    covariance_se <- unname(covariance_se[as.character(contrast_tbl[[by]])])
+  }
+
   contrast_tbl <- contrast_tbl %>%
     dplyr::mutate(
       delta_log_abund = log_abund_y - log_abund_x,
       delta_log_abund_se = sqrt(log_abund_se_y^2 + log_abund_se_x^2),
+      delta_log_abund_se = if (is.null(covariance_se)) {
+        delta_log_abund_se
+      } else {
+        ifelse(log_abund_se_x == 0 | log_abund_se_y == 0 | is.na(covariance_se), delta_log_abund_se, covariance_se)
+      },
+      # The pair of SEs the detectability columns below combine as
+      # sqrt(a^2 + b^2): the two arms' SEs, or the contrast SE and 0.
+      .se_a = if (is.null(covariance_se)) log_abund_se_x else delta_log_abund_se,
+      .se_b = if (is.null(covariance_se)) log_abund_se_y else 0,
       tvalue = delta_log_abund / delta_log_abund_se,
       delta_p_value = 2 * pt(-abs(tvalue), df.r),
       delta_p_value = ifelse(is.nan(delta_p_value), 1, delta_p_value),
@@ -908,7 +1001,7 @@ compare_abundances <- function(ccm,
       # `power`. This is the column to filter on, and the one that separates
       # "no phenotype" from "not powered".
       mdfc80 = calculate_mdfc(
-        log_abund_se_x, log_abund_se_y,
+        .se_a, .se_b,
         alpha = requested_alpha, power = requested_power,
         df = df.r, base = result_base
       ),
@@ -924,7 +1017,7 @@ compare_abundances <- function(ccm,
       # effect-independent, so it is a fair answer to "were we powered here?"
       # and is safe to filter on.
       power_at_margin = calculate_power_at_margin(
-        log_abund_se_x, log_abund_se_y,
+        .se_a, .se_b,
         alpha = requested_alpha, margin_log = margin_log, df = df.r
       ),
 
@@ -947,7 +1040,7 @@ compare_abundances <- function(ccm,
       # Kept because callers still want the number, under a name that says
       # what it is. Do not filter on it.
       observed_power = calculate_observed_power(
-        log_abund_x, log_abund_se_x, log_abund_y, log_abund_se_y,
+        log_abund_x, .se_a, log_abund_y, .se_b,
         alpha = requested_alpha
       ),
 
@@ -955,7 +1048,62 @@ compare_abundances <- function(ccm,
       # Scheduled for removal; use `observed_power`.
       power = observed_power
     ) %>%
-    select(-tvalue)
+    select(-tvalue, -.se_a, -.se_b)
+
+  # ---- opt-in calling options; with the defaults nothing below runs ----------
+  groups <- if (length(by) == 1) as.character(contrast_tbl[[by]]) else NULL
+
+  # test = "lrt_*": replace the Wald p-value with a likelihood-ratio test of the
+  # same contrast, refitting each cell group with and without it. Estimates,
+  # standard errors and the detectability columns are untouched.
+  if (test != "wald") {
+    md <- ccm_full_model_data(ccm)
+    sigma_fixed <- NULL
+    if (test == "lrt_shared") {
+      sigma_fixed <- sqrt(Matrix::diag(model(ccm)$model_par$Sigma))
+      names(sigma_fixed) <- colnames(model(ccm)$model_par$Sigma)
+    }
+    lrt <- pln_contrast_lrt(md$Y, md$X, md$off, contrast_row,
+      sigma_fixed = sigma_fixed, reference = lrt_reference, cores = cores
+    )
+    i <- match(groups, lrt$cell_group)
+    contrast_tbl$wald_p_value <- contrast_tbl$delta_p_value
+    contrast_tbl$delta_p_value <- lrt$lrt_p_value[i]
+    contrast_tbl$lrt_statistic <- lrt$lrt_statistic[i]
+    contrast_tbl$lrt_note <- ifelse(is.na(i), "not_in_model", lrt$lrt_note[i])
+    contrast_tbl$delta_test <- paste0(test, "_", lrt_reference)
+  }
+
+  # support_by: a contrast with no samples on one side, or no cells on either
+  # side, has no data behind it and is recorded as not tested.
+  if (!is.null(support_by)) {
+    sx <- condition_support(ccm, cond_x, support_by, "cond_x")
+    sy <- condition_support(ccm, cond_y, support_by, "cond_y")
+    cells_x <- unname(sx$cells[groups])
+    cells_y <- unname(sy$cells[groups])
+    cells_x[is.na(cells_x)] <- 0
+    cells_y[is.na(cells_y)] <- 0
+    contrast_tbl$support_samples_x <- sx$n_samples
+    contrast_tbl$support_samples_y <- sy$n_samples
+    contrast_tbl$support_cells_x <- cells_x
+    contrast_tbl$support_cells_y <- cells_y
+    contrast_tbl$test_status <- dplyr::case_when(
+      rep(sx$n_samples == 0 | sy$n_samples == 0, nrow(contrast_tbl)) ~ "not_tested_no_samples",
+      cells_x + cells_y == 0 ~ "not_tested_no_cells",
+      TRUE ~ "tested"
+    )
+    contrast_tbl$delta_p_value[contrast_tbl$test_status != "tested"] <- NA_real_
+  }
+
+  # Multiple-testing correction over the rows that were tested (p.adjust skips
+  # NA), restricted to `q_value_groups` when given. Rows left out get NA.
+  if (test != "wald" || !is.null(support_by) || !is.null(q_value_groups)) {
+    p_for_q <- contrast_tbl$delta_p_value
+    if (!is.null(q_value_groups)) {
+      p_for_q[!groups %in% q_value_groups] <- NA_real_
+    }
+    contrast_tbl$delta_q_value <- p.adjust(p_for_q, method = method)
+  }
 
   if (adjust_q_values) {
     warning(

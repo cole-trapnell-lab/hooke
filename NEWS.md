@@ -1,3 +1,32 @@
+# hooke 0.0.6
+
+### Changes
+
+* `compare_abundances()` gains opt-in options for how a change is called. Every
+  one defaults to the behaviour of 0.0.5, and with the defaults the output is
+  unchanged.
+  * `contrast_se = "covariance"` takes the standard error of the difference
+    from the model's coefficient covariance instead of
+    `sqrt(se_x^2 + se_y^2)`. The default treats the two estimates as
+    independent, which counts a batch term's uncertainty twice: outside the
+    reference batch the error bars come out several times too wide. Use it with
+    at least 100 bootstraps; at 10 the standard errors are too noisy.
+  * `test = "lrt_shared"` / `"lrt_diagonal"` replace the Wald p-value with a
+    likelihood-ratio test of the same contrast, refitting each cell group with
+    and without it on its exact Poisson log-normal likelihood. A Wald test
+    loses power as a cell group approaches a total loss (its standard error
+    grows without limit); a likelihood-ratio test does not. `"lrt_shared"`
+    holds each cell group's variance at the fitted model's value,
+    `"lrt_diagonal"` estimates one per cell group. `lrt_reference` chooses an
+    F (default) or chi-square reference. Only `delta_p_value` and
+    `delta_q_value` change; the Wald p-value is kept as `wald_p_value`.
+  * `support_by` records a contrast as not tested (`test_status`, `NA` p- and
+    q-values) when a condition has no samples or the cell group has no cells in
+    either condition.
+  * `q_value_groups` restricts multiple-testing correction to the given cell
+    groups.
+* New columns appear only when the option that produces them is used.
+
 # hooke 0.0.5
 
 ### Changes
