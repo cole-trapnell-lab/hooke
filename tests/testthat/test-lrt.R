@@ -133,6 +133,42 @@ test_that('the covariance standard error cancels what the two estimates share', 
   expect_error(contrast_se_blocks(v_hat, c(1, 0), p = 2), "does not match")
 })
 
+# The vhat a bootstrap leaves when one resample had no samples of one condition
+# (hooke#65): the knockout coefficient's row and column are NA in every block.
+na_knockout_vhat <- function() {
+  v <- diag(c(0.04, 0.09))                      # coefficients (intercept, knockout)
+  v[2, ] <- NA
+  v[, 2] <- NA
+  methods::as(Matrix::bdiag(v, v), "CsparseMatrix")   # two cell groups, sparse like a ccm's vhat
+}
+
+test_that('a contrast whose coefficient has no variance gets an NA standard error, not 0', {
+  v_hat <- na_knockout_vhat()
+  expect_equal(contrast_se_blocks(v_hat, c(0, 1), p = 2), c(NA_real_, NA_real_))
+  # a contrast that does not use the NA coefficient keeps its standard error
+  expect_equal(contrast_se_blocks(v_hat, c(1, 0), p = 2), c(0.2, 0.2))
+})
+
+test_that('only the predictions that use an NA coefficient are flagged', {
+  v_hat <- na_knockout_vhat()
+  expect_equal(uses_na_coefficient(v_hat, c(1, 0), p = 2), c(FALSE, FALSE))   # control arm
+  expect_equal(uses_na_coefficient(v_hat, c(1, 1), p = 2), c(TRUE, TRUE))     # perturbed arm
+  expect_equal(uses_na_coefficient(v_hat, c(0, 0), p = 2), c(FALSE, FALSE))
+  # an NA in one cell group's block flags that group only
+  v <- as.matrix(Matrix::bdiag(diag(c(0.04, 0.09)), diag(c(0.01, 0.16))))
+  v[4, 4] <- NA
+  expect_equal(uses_na_coefficient(v, c(1, 1), p = 2), c(FALSE, TRUE))
+  expect_equal(contrast_se_blocks(v, c(0, 1), p = 2), c(0.3, NA_real_))
+  expect_error(uses_na_coefficient(v, c(1, 0, 0), p = 2), "does not match")
+})
+
+test_that('a covariance without NA gives the same standard errors as before', {
+  v1 <- matrix(c(0.04, 0, 0, 0, 1.00, 0, 0, 0, 0.09), 3)
+  v_hat <- as.matrix(Matrix::bdiag(v1, diag(c(0.01, 0.25, 0.16))))
+  expect_equal(uses_na_coefficient(v_hat, c(1, 1, 1), p = 2), c(FALSE, FALSE))
+  expect_equal(contrast_se_blocks(v_hat, c(0, 0, 1), p = 2), c(0.3, 0.4))
+})
+
 test_that('the new compare_abundances() arguments default to the old behaviour', {
   f <- formals(compare_abundances)
   expect_equal(eval(f$contrast_se)[1], "independent")

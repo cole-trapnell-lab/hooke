@@ -304,15 +304,47 @@ contrast_se_from_vhat <- function(ccm, contrast) {
 
 # v_hat: (groups x coefficients)-square covariance, one block of coefficients
 # per cell group, in cell-group order (the layout of a cell_count_model's vhat).
+# A cell group whose contrast uses a coefficient with no variance estimate gets
+# NA, not 0 (hooke#65; see uses_na_coefficient()).
 contrast_se_blocks <- function(v_hat, contrast, p) {
-  v_hat[is.na(v_hat)] <- 0
   k <- length(contrast)
   if (nrow(v_hat) != p * k) {
     stop("The model's coefficient covariance does not match its design (", nrow(v_hat), " vs ", p, " x ", k, ").")
   }
+  no_variance <- uses_na_coefficient(v_hat, contrast, p)
+  v_hat[is.na(v_hat)] <- 0
   C <- Matrix::bdiag(rep.int(list(Matrix::Matrix(matrix(contrast, nrow = 1), sparse = TRUE)), p))
   v <- Matrix::diag(as.matrix(C %*% v_hat %*% Matrix::t(C)))
-  sqrt(pmax(v, 0))
+  se <- sqrt(pmax(v, 0))
+  se[no_variance] <- NA_real_
+  se
+}
+
+# Which cell groups' prediction (or contrast) x' beta has an unknown variance:
+# an NA among the entries of v_hat it reads, i.e. the cell group's own block,
+# restricted to the coefficients x uses (x != 0). A bootstrap vhat has NA for a
+# coefficient in every cell group when one resample could not estimate it, e.g.
+# a resample that drew no control (or no perturbed) samples, so the knockout
+# column was constant (hooke#65). Replacing that NA with 0 made such standard
+# errors look exact: 0 for the covariance contrast SE, and the control's SE for
+# the perturbed arm. A prediction that does not use the NA coefficient (the
+# control arm) keeps its standard error.
+# v_hat: (p * k)-square, one block of k coefficients per cell group; x: length k.
+uses_na_coefficient <- function(v_hat, x, p) {
+  x <- as.numeric(x)
+  k <- length(x)
+  if (nrow(v_hat) != p * k) {
+    stop("The model's coefficient covariance does not match its design (", nrow(v_hat), " vs ", p, " x ", k, ").")
+  }
+  used <- which(x != 0)
+  if (length(used) == 0) {
+    return(rep(FALSE, p))
+  }
+  na_entries <- is.na(v_hat)
+  vapply(seq_len(p), function(g) {
+    i <- (g - 1) * k + used
+    any(as.matrix(na_entries[i, i, drop = FALSE]))
+  }, logical(1))
 }
 
 # Samples and cells behind one condition: the samples whose values in the

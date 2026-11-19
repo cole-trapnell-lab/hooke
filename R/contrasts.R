@@ -238,10 +238,16 @@ estimate_abundances <- function(ccm,
 
     # vcov_type <- grep('vcov', names(attributes(vhat_coef)), value=TRUE)
     v_hat <- ccm@vhat
+    # A cell group whose prediction uses a coefficient with no variance
+    # estimate (an NA in vhat, e.g. a bootstrap resample that lacked one
+    # condition) gets an NA standard error, not the one left after zeroing
+    # that coefficient's variance (hooke#65).
+    no_variance <- uses_na_coefficient(v_hat, base_X[1, ], model(ccm)$p)
     v_hat[is.na(v_hat)] <- 0
     v_hat_method <- ccm@vhat_method
 
     se_fit <- sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X))))
+    se_fit[no_variance] <- NA_real_
 
     # if (v_hat_method == "wald") {
     #   se_fit = sqrt(Matrix::diag(as.matrix(X %*% v_hat %*% Matrix::t(X)))) / sqrt(model(ccm)$n)
@@ -961,7 +967,10 @@ compare_abundances <- function(ccm,
   # from the coefficient covariance, on the scale of the result. NULL keeps
   # sqrt(se_x^2 + se_y^2). Where either estimate sits at the `min_log_abund`
   # floor of estimate_abundances() (its SE is reported as 0), the existing rule
-  # is kept, so floored rows are unchanged.
+  # is kept, so floored rows are unchanged. A contrast that uses a coefficient
+  # with no variance estimate gets NA from both rules (hooke#65); an arm whose
+  # SE is NA only through a coefficient the contrast cancels keeps the
+  # covariance SE (hence %in% 0, not == 0, below).
   covariance_se <- NULL
   if (contrast_se == "covariance") {
     covariance_se <- contrast_se_from_vhat(ccm, contrast_row) / log(result_base)
@@ -975,7 +984,7 @@ compare_abundances <- function(ccm,
       delta_log_abund_se = if (is.null(covariance_se)) {
         delta_log_abund_se
       } else {
-        ifelse(log_abund_se_x == 0 | log_abund_se_y == 0 | is.na(covariance_se), delta_log_abund_se, covariance_se)
+        ifelse(log_abund_se_x %in% 0 | log_abund_se_y %in% 0 | is.na(covariance_se), delta_log_abund_se, covariance_se)
       },
       # The pair of SEs the detectability columns below combine as
       # sqrt(a^2 + b^2): the two arms' SEs, or the contrast SE and 0.
@@ -1009,6 +1018,10 @@ compare_abundances <- function(ccm,
       # Why a row has no usable detection limit; NA means the row is fine.
       contrast_note = dplyr::case_when(
         rep(!df_ok, dplyr::n()) ~ "insufficient_df",
+        # The model's coefficient covariance (vhat) has no variance for a
+        # coefficient this contrast uses, e.g. a bootstrap resample that drew
+        # no samples of one condition (hooke#65).
+        is.na(delta_log_abund_se) & !is.na(log_abund_x) & !is.na(log_abund_y) ~ "variance_unavailable",
         !is.finite(delta_log_abund_se) | delta_log_abund_se <= 0 ~ "degenerate_fit",
         TRUE ~ NA_character_
       ),
@@ -1049,6 +1062,18 @@ compare_abundances <- function(ccm,
       power = observed_power
     ) %>%
     select(-tvalue, -.se_a, -.se_b)
+
+  n_no_variance <- sum(contrast_tbl$contrast_note %in% "variance_unavailable")
+  if (n_no_variance > 0) {
+    warning(
+      n_no_variance, " of ", nrow(contrast_tbl), " contrasts have no standard error: the model's coefficient ",
+      "covariance (vhat, method '", ccm@vhat_method, "') is NA for a coefficient they use, e.g. a bootstrap ",
+      "resample that drew no samples of one condition. Their SE, CI, Wald p-value, mdfc80, power_at_margin and ",
+      "observed_power are NA, power_status reads 'Underpowered' (contrast_note = 'variance_unavailable'); a ",
+      "likelihood-ratio test (test = 'lrt_*') does not use vhat, so its p-values are unaffected. ",
+      "See hooke#65."
+    )
+  }
 
   # ---- opt-in calling options; with the defaults nothing below runs ----------
   groups <- if (length(by) == 1) as.character(contrast_tbl[[by]]) else NULL
