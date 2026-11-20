@@ -1,3 +1,28 @@
+# hooke 0.0.7
+
+### Changes
+
+* A standard error whose coefficient has no variance estimate is now `NA`, not
+  a number (#65). A bootstrap `vhat` is `NA` for a coefficient in every cell
+  group when one resample could not estimate it, e.g. a resample of a small
+  design that drew no control (or no perturbed) samples. Hooke replaced that
+  `NA` with 0, so the perturbed arm's `log_abund_se` silently equalled the
+  control's and, with `contrast_se = "covariance"`, `delta_log_abund_se` was
+  exactly 0. Now:
+  * `estimate_abundances()` reports `NA` for a prediction that uses such a
+    coefficient; predictions that do not use it are unchanged.
+  * `compare_abundances()` gives those contrasts an `NA` standard error, CI,
+    Wald p-value, `mdfc80`, `power_at_margin` and `observed_power`,
+    `contrast_note = "variance_unavailable"` (a new value), and warns once. A
+    likelihood-ratio test (`test = "lrt_*"`) does not use `vhat`, so its
+    p-values and q-values are unchanged.
+  * A model whose `vhat` has no `NA` gives exactly the same output as 0.0.6.
+* The chance of such a resample grows with the number of bootstraps, so it
+  matters most at the 100 recommended for `contrast_se = "covariance"`, and
+  only for small designs: with 7 perturbed and 3 control samples, a fit with
+  100 bootstraps has a 94% chance of at least one such resample (25% with 10);
+  with 22 or more samples the chance is small.
+
 # hooke 0.0.6
 
 ### Changes
