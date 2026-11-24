@@ -55,7 +55,6 @@ Suggests:
     knitr,
     rmarkdown,
     spelling
-Remotes:
-    bioc::Rgraphviz
+biocViews:
 VignetteBuilder: knitr
 Language: en-US
